@@ -467,8 +467,12 @@ let mapAnalysis = null;
 let arcgisData = null;
 let tacticalSectionCanvasCache = new Map();
 let tacticalHoverAreas = { regions: [], sectors: [] };
+const TACTICAL_DEBUG = false;
 let tacticalDebugArcgisLogged = false;
 let tacticalDebugRenderCount = 0;
+let tacticalBaseReady = false;
+let tacticalBuildQueued = false;
+let tacticalBuildVersion = 0;
 let mapAnalysisUnavailable = false;
 const hyperspaceStartAudio = new Audio('assets/Hyperspace Start.ogg');
 const hyperspaceFinishAudio = new Audio('assets/Hyperspace Finish.ogg');
@@ -554,6 +558,7 @@ function getZoomLimit() {
 }
 
 function logTacticalDebug(label, details) {
+  if (!TACTICAL_DEBUG) return;
   console.groupCollapsed(`[TACTICAL] ${label}`);
   console.log(details);
   console.groupEnd();
@@ -563,6 +568,10 @@ function syncWorldSizeToMap() {
   const logicalWidth = WORLD_SIZE;
   const logicalHeight = WORLD_SIZE;
   tacticalSectionCanvasCache.clear();
+  tacticalHoverAreas = { regions: [], sectors: [] };
+  tacticalBaseReady = false;
+  tacticalBuildQueued = false;
+  tacticalBuildVersion += 1;
   dirtyInfluence = true;
   world.style.width = logicalWidth + 'px';
   world.style.height = logicalHeight + 'px';
@@ -1079,7 +1088,7 @@ function prepareArcgisData() {
     bounds: { minArcX, maxArcX, minArcY, maxArcY },
     imageTransform: imageTransform || fitAffineTransform(fallbackImagePairs)
   };
-  if (!tacticalDebugArcgisLogged) {
+  if (TACTICAL_DEBUG && !tacticalDebugArcgisLogged) {
     tacticalDebugArcgisLogged = true;
     logTacticalDebug('prepareArcgisData', {
       counts: {
@@ -1251,11 +1260,13 @@ function initMapAnalysis() {
       ctx,
       data: ctx.getImageData(0, 0, WORLD_SIZE, WORLD_SIZE).data
     };
-    logTacticalDebug('initMapAnalysis ready', {
-      naturalWidth: mapEl.naturalWidth,
-      naturalHeight: mapEl.naturalHeight,
-      src: mapEl.currentSrc || mapEl.src
-    });
+    if (TACTICAL_DEBUG) {
+      logTacticalDebug('initMapAnalysis ready', {
+        naturalWidth: mapEl.naturalWidth,
+        naturalHeight: mapEl.naturalHeight,
+        src: mapEl.currentSrc || mapEl.src
+      });
+    }
   } catch (error) {
     mapAnalysisUnavailable = true;
     mapAnalysis = null;
@@ -1676,6 +1687,7 @@ function connectServerSocket() {
   if (!serverSync.enabled || serverSync.offlineMode || typeof io === 'undefined' || serverSync.socket) return;
   serverSync.socket = io({
     withCredentials: true,
+    transports: ['websocket'],
     reconnection: false,
     timeout: 2500
   });
@@ -3782,6 +3794,10 @@ function renderInfluenceClouds() {
   const height = influenceCanvas.height || WORLD_SIZE;
   influenceCtx.clearRect(0, 0, width, height);
   if (!layers.influence) return;
+  if (!tacticalBaseReady && viewMode !== 'schematic') {
+    scheduleTacticalBaseBuild();
+    return;
+  }
   const adjacency = getInfluenceAdjacency();
   const drawCloudPass = (predicate, strokeStyle, lineWidth, blur, alpha) => {
     influenceCtx.save();
@@ -3986,65 +4002,121 @@ function drawHull(parent, points, className) {
   parent.appendChild(polygon);
 }
 
+function scheduleTacticalBaseBuild() {
+  if (viewMode === 'schematic') {
+    tacticalBaseReady = true;
+    return;
+  }
+  if (tacticalBaseReady || tacticalBuildQueued) return;
+  const data = prepareArcgisData();
+  if (!data) {
+    tacticalBaseReady = true;
+    return;
+  }
+  tacticalBuildQueued = true;
+  const buildVersion = tacticalBuildVersion;
+  const width = tacticalCanvas.width || WORLD_SIZE;
+  const height = tacticalCanvas.height || WORLD_SIZE;
+  const projectionMode = 'image';
+  const runStep = (step) => {
+    window.setTimeout(() => {
+      if (buildVersion !== tacticalBuildVersion) return;
+      try {
+        step();
+      } catch (error) {
+        tacticalBuildQueued = false;
+        console.error('scheduleTacticalBaseBuild failed', error);
+        setStatus('ArcGIS-Overlay konnte nicht vorbereitet werden. Fallback aktiv.');
+      }
+    }, 0);
+  };
+  const finishBuild = () => {
+    if (buildVersion !== tacticalBuildVersion) return;
+    tacticalBuildQueued = false;
+    tacticalBaseReady = true;
+    markDirty({ tacticalBase: true, influence: true, layers: true });
+  };
+  runStep(() => {
+    rebuildTacticalRouteCache(data, projectionMode);
+    runStep(() => {
+      if (layers.grid) getTacticalSectionCanvas('grid', data, projectionMode, width, height);
+      runStep(() => {
+        if (layers.sectorLabels) getTacticalSectionCanvas('sectors', data, projectionMode, width, height);
+        runStep(() => {
+          if (layers.hyperlanes) getTacticalSectionCanvas('hyperlanes', data, projectionMode, width, height);
+          runStep(() => {
+            tacticalHoverAreas = buildTacticalHoverAreas(data, projectionMode, 'image');
+            finishBuild();
+          });
+        });
+      });
+    });
+  });
+}
+
 function renderTacticalBase() {
   const width = tacticalCanvas.width || WORLD_SIZE;
   const height = tacticalCanvas.height || WORLD_SIZE;
   tacticalCtx.clearRect(0, 0, width, height);
   tacticalOverlay.innerHTML = '';
   const data = prepareArcgisData();
-  const canvasRect = tacticalCanvas.getBoundingClientRect();
-  const overlayRect = tacticalOverlay.getBoundingClientRect();
-  const worldRect = world.getBoundingClientRect();
-  const viewportRect = viewport.getBoundingClientRect();
-  const canvasStyle = getComputedStyle(tacticalCanvas);
-  const overlayStyle = getComputedStyle(tacticalOverlay);
-  const sampleArcPlanet = data?.planets?.[0] || null;
-  const sampleProjected = sampleArcPlanet ? {
-    image: projectArcgisToWorld(sampleArcPlanet.x, sampleArcPlanet.y, 'image'),
-    schematic: projectArcgisToWorld(sampleArcPlanet.x, sampleArcPlanet.y, 'schematic')
-  } : null;
   tacticalDebugRenderCount += 1;
-  logTacticalDebug(`renderTacticalBase #${tacticalDebugRenderCount}`, {
-    viewMode,
-    layers: { ...layers },
-    hasArcgisData: Boolean(data),
-    mapAnalysisUnavailable,
-    mapAnalysisReady: Boolean(mapAnalysis),
-    canvas: {
-      width,
-      height,
-      clientWidth: tacticalCanvas.clientWidth,
-      clientHeight: tacticalCanvas.clientHeight,
-      rect: { left: canvasRect.left, top: canvasRect.top, width: canvasRect.width, height: canvasRect.height },
-      display: canvasStyle.display,
-      visibility: canvasStyle.visibility,
-      opacity: canvasStyle.opacity,
-      zIndex: canvasStyle.zIndex
-    },
-    overlay: {
-      childCount: tacticalOverlay.childNodes.length,
-      rect: { left: overlayRect.left, top: overlayRect.top, width: overlayRect.width, height: overlayRect.height },
-      display: overlayStyle.display,
-      visibility: overlayStyle.visibility,
-      opacity: overlayStyle.opacity,
-      zIndex: overlayStyle.zIndex
-    },
-    world: {
-      className: world.className,
-      transform: world.style.transform,
-      rect: { left: worldRect.left, top: worldRect.top, width: worldRect.width, height: worldRect.height }
-    },
-    viewport: {
-      rect: { left: viewportRect.left, top: viewportRect.top, width: viewportRect.width, height: viewportRect.height }
-    },
-    sampleArcPlanet,
-    sampleProjected
-  });
+  if (TACTICAL_DEBUG) {
+    const canvasRect = tacticalCanvas.getBoundingClientRect();
+    const overlayRect = tacticalOverlay.getBoundingClientRect();
+    const worldRect = world.getBoundingClientRect();
+    const viewportRect = viewport.getBoundingClientRect();
+    const canvasStyle = getComputedStyle(tacticalCanvas);
+    const overlayStyle = getComputedStyle(tacticalOverlay);
+    const sampleArcPlanet = data?.planets?.[0] || null;
+    const sampleProjected = sampleArcPlanet ? {
+      image: projectArcgisToWorld(sampleArcPlanet.x, sampleArcPlanet.y, 'image'),
+      schematic: projectArcgisToWorld(sampleArcPlanet.x, sampleArcPlanet.y, 'schematic')
+    } : null;
+    logTacticalDebug(`renderTacticalBase #${tacticalDebugRenderCount}`, {
+      viewMode,
+      layers: { ...layers },
+      hasArcgisData: Boolean(data),
+      mapAnalysisUnavailable,
+      mapAnalysisReady: Boolean(mapAnalysis),
+      canvas: {
+        width,
+        height,
+        clientWidth: tacticalCanvas.clientWidth,
+        clientHeight: tacticalCanvas.clientHeight,
+        rect: { left: canvasRect.left, top: canvasRect.top, width: canvasRect.width, height: canvasRect.height },
+        display: canvasStyle.display,
+        visibility: canvasStyle.visibility,
+        opacity: canvasStyle.opacity,
+        zIndex: canvasStyle.zIndex
+      },
+      overlay: {
+        childCount: tacticalOverlay.childNodes.length,
+        rect: { left: overlayRect.left, top: overlayRect.top, width: overlayRect.width, height: overlayRect.height },
+        display: overlayStyle.display,
+        visibility: overlayStyle.visibility,
+        opacity: overlayStyle.opacity,
+        zIndex: overlayStyle.zIndex
+      },
+      world: {
+        className: world.className,
+        transform: world.style.transform,
+        rect: { left: worldRect.left, top: worldRect.top, width: worldRect.width, height: worldRect.height }
+      },
+      viewport: {
+        rect: { left: viewportRect.left, top: viewportRect.top, width: viewportRect.width, height: viewportRect.height }
+      },
+      sampleArcPlanet,
+      sampleProjected
+    });
+  }
   if (data) {
+    const projectionMode = 'image';
+    if (!tacticalBaseReady) {
+      scheduleTacticalBaseBuild();
+      return;
+    }
     try {
-      const projectionMode = 'image';
-      rebuildTacticalRouteCache(data, projectionMode);
-      tacticalHoverAreas = buildTacticalHoverAreas(data, projectionMode, 'image');
       if (layers.grid) tacticalCtx.drawImage(getTacticalSectionCanvas('grid', data, projectionMode, width, height), 0, 0);
       if (layers.sectorLabels) tacticalCtx.drawImage(getTacticalSectionCanvas('sectors', data, projectionMode, width, height), 0, 0);
       if (layers.hyperlanes) tacticalCtx.drawImage(getTacticalSectionCanvas('hyperlanes', data, projectionMode, width, height), 0, 0);
@@ -4178,20 +4250,22 @@ function applyLayers() {
   const showInfluenceCanvas = layers.influence;
   const showTacticalCanvas = layers.grid || layers.sectorLabels || layers.hyperlanes;
   const showTacticalOverlay = layers.hyperlanes || layers.sectorLabels;
-  logTacticalDebug('applyLayers', {
-    viewMode,
-    isSchematic,
-    zoom,
-    layers: { ...layers },
-    showInfluenceCanvas,
-    showTacticalCanvas,
-    showTacticalOverlay,
-    mapDisplay: getComputedStyle(mapEl).display,
-    mapOpacity: getComputedStyle(mapEl).opacity,
-    influenceDisplayBefore: getComputedStyle(influenceCanvas).display,
-    canvasDisplayBefore: getComputedStyle(tacticalCanvas).display,
-    overlayDisplayBefore: getComputedStyle(tacticalOverlay).display
-  });
+  if (TACTICAL_DEBUG) {
+    logTacticalDebug('applyLayers', {
+      viewMode,
+      isSchematic,
+      zoom,
+      layers: { ...layers },
+      showInfluenceCanvas,
+      showTacticalCanvas,
+      showTacticalOverlay,
+      mapDisplay: getComputedStyle(mapEl).display,
+      mapOpacity: getComputedStyle(mapEl).opacity,
+      influenceDisplayBefore: getComputedStyle(influenceCanvas).display,
+      canvasDisplayBefore: getComputedStyle(tacticalCanvas).display,
+      overlayDisplayBefore: getComputedStyle(tacticalOverlay).display
+    });
+  }
   influenceCanvas.classList.toggle('hidden', !showInfluenceCanvas);
   influenceCanvas.style.display = showInfluenceCanvas ? 'block' : 'none';
   tacticalCanvas.classList.toggle('hidden', !showTacticalCanvas);
@@ -4199,15 +4273,17 @@ function applyLayers() {
   tacticalOverlay.classList.toggle('hidden', !showTacticalOverlay);
   tacticalOverlay.style.display = showTacticalOverlay ? 'block' : 'none';
   renderTacticalHoverLabels();
-  logTacticalDebug('applyLayers result', {
-    influenceClass: influenceCanvas.className,
-    influenceDisplayAfter: getComputedStyle(influenceCanvas).display,
-    canvasClass: tacticalCanvas.className,
-    canvasDisplayAfter: getComputedStyle(tacticalCanvas).display,
-    overlayClass: tacticalOverlay.className,
-    overlayDisplayAfter: getComputedStyle(tacticalOverlay).display,
-    overlayChildren: tacticalOverlay.childNodes.length
-  });
+  if (TACTICAL_DEBUG) {
+    logTacticalDebug('applyLayers result', {
+      influenceClass: influenceCanvas.className,
+      influenceDisplayAfter: getComputedStyle(influenceCanvas).display,
+      canvasClass: tacticalCanvas.className,
+      canvasDisplayAfter: getComputedStyle(tacticalCanvas).display,
+      overlayClass: tacticalOverlay.className,
+      overlayDisplayAfter: getComputedStyle(tacticalOverlay).display,
+      overlayChildren: tacticalOverlay.childNodes.length
+    });
+  }
 }
 
 function flushRender() {
