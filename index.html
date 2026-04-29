@@ -3113,7 +3113,8 @@ function needsRouteNetwork() {
 }
 
 function needsArcgisTacticalData() {
-  return viewMode !== 'schematic' && Boolean(layers.hyperlanes || layers.sectorLabels);
+  if (viewMode === 'schematic') return Boolean(layers.hyperlanes || layers.sectorLabels);
+  return Boolean(layers.hyperlanes || layers.sectorLabels);
 }
 
 function markDirty(options = {}) {
@@ -4061,11 +4062,12 @@ function drawHull(parent, points, className) {
 }
 
 function scheduleTacticalBaseBuild() {
-  if (viewMode === 'schematic') {
+  if (tacticalBaseReady || tacticalBuildQueued) return;
+  const projectionMode = viewMode === 'schematic' ? 'schematic' : 'image';
+  if (!needsArcgisTacticalData()) {
     tacticalBaseReady = true;
     return;
   }
-  if (tacticalBaseReady || tacticalBuildQueued) return;
   const data = prepareArcgisData();
   if (!data) {
     tacticalBaseReady = true;
@@ -4075,7 +4077,6 @@ function scheduleTacticalBaseBuild() {
   const buildVersion = tacticalBuildVersion;
   const width = tacticalCanvas.width || WORLD_SIZE;
   const height = tacticalCanvas.height || WORLD_SIZE;
-  const projectionMode = 'image';
   const runStep = (step) => {
     window.setTimeout(() => {
       if (buildVersion !== tacticalBuildVersion) return;
@@ -4095,7 +4096,12 @@ function scheduleTacticalBaseBuild() {
     markDirty({ tacticalBase: true, influence: true, layers: true });
   };
   runStep(() => {
-    rebuildTacticalRouteCache(data, projectionMode);
+    if (layers.hyperlanes || layers.influence || layers.contested) {
+      rebuildTacticalRouteCache(data, projectionMode);
+    } else {
+      tacticalRouteCache = [];
+      tacticalTravelEdges = [];
+    }
     runStep(() => {
       if (layers.grid) getTacticalSectionCanvas('grid', data, projectionMode, width, height);
       runStep(() => {
@@ -4103,7 +4109,9 @@ function scheduleTacticalBaseBuild() {
         runStep(() => {
           if (layers.hyperlanes) getTacticalSectionCanvas('hyperlanes', data, projectionMode, width, height);
           runStep(() => {
-            tacticalHoverAreas = buildTacticalHoverAreas(data, projectionMode, 'image');
+            tacticalHoverAreas = layers.sectorLabels
+              ? buildTacticalHoverAreas(data, projectionMode, viewMode)
+              : { regions: [], sectors: [] };
             finishBuild();
           });
         });
@@ -4118,6 +4126,7 @@ function renderTacticalBase() {
   tacticalCtx.clearRect(0, 0, width, height);
   tacticalOverlay.innerHTML = '';
   const data = needsArcgisTacticalData() ? prepareArcgisData() : null;
+  const projectionMode = viewMode === 'schematic' ? 'schematic' : 'image';
   tacticalDebugRenderCount += 1;
   if (TACTICAL_DEBUG) {
     const canvasRect = tacticalCanvas.getBoundingClientRect();
@@ -4169,7 +4178,6 @@ function renderTacticalBase() {
     });
   }
   if (data) {
-    const projectionMode = 'image';
     if (!tacticalBaseReady) {
       scheduleTacticalBaseBuild();
       return;
@@ -4195,53 +4203,59 @@ function renderTacticalBase() {
   const colWidth = WORLD_SIZE / columnCount;
   const rowHeight = WORLD_SIZE / rowCount;
 
-  for (let col = 0; col <= columnCount; col += 1) {
-    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-    line.setAttribute('x1', col * colWidth);
-    line.setAttribute('y1', 0);
-    line.setAttribute('x2', col * colWidth);
-    line.setAttribute('y2', WORLD_SIZE);
-    line.setAttribute('class', 'grid-line');
-    frag.appendChild(line);
-  }
-  for (let row = 0; row <= rowCount; row += 1) {
-    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-    line.setAttribute('x1', 0);
-    line.setAttribute('y1', row * rowHeight);
-    line.setAttribute('x2', WORLD_SIZE);
-    line.setAttribute('y2', row * rowHeight);
-    line.setAttribute('class', 'grid-line');
-    frag.appendChild(line);
+  if (layers.grid) {
+    for (let col = 0; col <= columnCount; col += 1) {
+      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      line.setAttribute('x1', col * colWidth);
+      line.setAttribute('y1', 0);
+      line.setAttribute('x2', col * colWidth);
+      line.setAttribute('y2', WORLD_SIZE);
+      line.setAttribute('class', 'grid-line');
+      frag.appendChild(line);
+    }
+    for (let row = 0; row <= rowCount; row += 1) {
+      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      line.setAttribute('x1', 0);
+      line.setAttribute('y1', row * rowHeight);
+      line.setAttribute('x2', WORLD_SIZE);
+      line.setAttribute('y2', row * rowHeight);
+      line.setAttribute('class', 'grid-line');
+      frag.appendChild(line);
+    }
+
+    for (let col = 0; col < columnCount; col += 1) {
+      const label = String.fromCharCode(65 + col);
+      addSvgText(frag, { x: col * colWidth + colWidth / 2, y: 34, class: 'grid-label', 'text-anchor': 'middle' }, label);
+    }
+    for (let row = 0; row < rowCount; row += 1) {
+      addSvgText(frag, { x: 18, y: row * rowHeight + rowHeight / 2 + 8, class: 'grid-label' }, String(row + 1));
+    }
   }
 
-  for (let col = 0; col < columnCount; col += 1) {
-    const label = String.fromCharCode(65 + col);
-    addSvgText(frag, { x: col * colWidth + colWidth / 2, y: 34, class: 'grid-label', 'text-anchor': 'middle' }, label);
-  }
-  for (let row = 0; row < rowCount; row += 1) {
-    addSvgText(frag, { x: 18, y: row * rowHeight + rowHeight / 2 + 8, class: 'grid-label' }, String(row + 1));
+  if (layers.grid) {
+    [0.24, 0.39, 0.57, 0.76].forEach((scale) => {
+      const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      circle.setAttribute('cx', WORLD_SIZE / 2);
+      circle.setAttribute('cy', WORLD_SIZE / 2);
+      circle.setAttribute('r', WORLD_SIZE * scale);
+      circle.setAttribute('class', 'schematic-ring');
+      frag.appendChild(circle);
+    });
   }
 
-  [0.24, 0.39, 0.57, 0.76].forEach((scale) => {
-    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-    circle.setAttribute('cx', WORLD_SIZE / 2);
-    circle.setAttribute('cy', WORLD_SIZE / 2);
-    circle.setAttribute('r', WORLD_SIZE * scale);
-    circle.setAttribute('class', 'schematic-ring');
-    frag.appendChild(circle);
-  });
-
-  routeCache.forEach(({ a, b }) => {
-    const start = getSchematicPlanetPosition(a);
-    const end = getSchematicPlanetPosition(b);
-    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-    line.setAttribute('x1', start.x);
-    line.setAttribute('y1', start.y);
-    line.setAttribute('x2', end.x);
-    line.setAttribute('y2', end.y);
-    line.setAttribute('class', 'tactical-hyperlane');
-    frag.appendChild(line);
-  });
+  if (layers.hyperlanes) {
+    routeCache.forEach(({ a, b }) => {
+      const start = getSchematicPlanetPosition(a);
+      const end = getSchematicPlanetPosition(b);
+      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      line.setAttribute('x1', start.x);
+      line.setAttribute('y1', start.y);
+      line.setAttribute('x2', end.x);
+      line.setAttribute('y2', end.y);
+      line.setAttribute('class', 'tactical-hyperlane');
+      frag.appendChild(line);
+    });
+  }
 
   const regionGroups = new Map();
   const sectorGroups = new Map();
@@ -4258,19 +4272,21 @@ function renderTacticalBase() {
     }
   });
 
-  regionGroups.forEach((planets, region) => {
-    if (planets.length < 6) return;
-    const displayPlanets = planets.map(getSchematicPlanetPosition);
-    const outline = expandHull(convexHull(displayPlanets), 1.06, 40);
-    drawHull(frag, outline, 'region-outline');
-  });
+  if (layers.sectorLabels) {
+    regionGroups.forEach((planets, region) => {
+      if (planets.length < 6) return;
+      const displayPlanets = planets.map(getSchematicPlanetPosition);
+      const outline = expandHull(convexHull(displayPlanets), 1.06, 40);
+      drawHull(frag, outline, 'region-outline');
+    });
 
-  sectorGroups.forEach(({ sector, planets }) => {
-    if (planets.length < 3) return;
-    const displayPlanets = planets.map(getSchematicPlanetPosition);
-    const outline = expandHull(convexHull(displayPlanets), 1.03, 20);
-    drawHull(frag, outline, 'sector-outline');
-  });
+    sectorGroups.forEach(({ sector, planets }) => {
+      if (planets.length < 3) return;
+      const displayPlanets = planets.map(getSchematicPlanetPosition);
+      const outline = expandHull(convexHull(displayPlanets), 1.03, 20);
+      drawHull(frag, outline, 'sector-outline');
+    });
+  }
 
   tacticalOverlay.appendChild(frag);
   renderTacticalHoverLabels();
@@ -4306,8 +4322,10 @@ function applyLayers() {
     el.classList.toggle('hidden', !isVisible);
   });
   const showInfluenceCanvas = layers.influence;
-  const showTacticalCanvas = layers.grid || layers.sectorLabels || layers.hyperlanes;
-  const showTacticalOverlay = layers.hyperlanes || layers.sectorLabels;
+  const showTacticalCanvas = !isSchematic && (layers.grid || layers.sectorLabels || layers.hyperlanes);
+  const showTacticalOverlay = isSchematic
+    ? (layers.grid || layers.hyperlanes || layers.sectorLabels)
+    : (layers.hyperlanes || layers.sectorLabels);
   if (TACTICAL_DEBUG) {
     logTacticalDebug('applyLayers', {
       viewMode,
@@ -5616,6 +5634,11 @@ document.getElementById('zoomOut').onclick = () => {
 document.getElementById('homeBtn').onclick = () => setView(0.56, -590, -520);
 document.getElementById('viewModeBtn').onclick = () => {
   viewMode = viewMode === 'image' ? 'schematic' : 'image';
+  tacticalSectionCanvasCache.clear();
+  tacticalHoverAreas = { regions: [], sectors: [] };
+  tacticalBaseReady = false;
+  tacticalBuildQueued = false;
+  tacticalBuildVersion += 1;
   saveClientUiPrefs();
   applyViewMode();
   render({ layers: true, frontline: true });
