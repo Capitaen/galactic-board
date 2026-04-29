@@ -771,7 +771,7 @@ function spawnFxRing(x, y, options = {}) {
 
 function spawnGarVictoryFirework(x, y) {
   const colors = ['#2cd66b', '#ff9d2f', '#4eb8ff'];
-  spawnFxRing(x, y, { color: 'rgba(255,255,255,.85)', size: 20, scaleTo: 5.5, duration: 1000 });
+  spawnFxRing(x, y, { color: 'rgba(255,255,255,.45)', size: 20, scaleTo: 5.5, duration: 1000, opacity: 0.55 });
   for (let i = 0; i < 26; i += 1) {
     const angle = (Math.PI * 2 * i) / 26;
     const speed = 70 + Math.random() * 90;
@@ -782,20 +782,21 @@ function spawnGarVictoryFirework(x, y) {
       dx: Math.cos(angle) * speed,
       dy: Math.sin(angle) * speed,
       rotate: (Math.random() - 0.5) * 300,
-      duration: 900 + Math.random() * 500
+      duration: 900 + Math.random() * 500,
+      opacity: 0.62
     });
   }
 }
 
 function triggerGarVictoryCelebration(x, y) {
   playAudioCue(garVictoryAudio);
-  [0, 900, 1800, 2700, 3600].forEach((delay, index) => {
+  for (let delay = 0; delay <= 12600; delay += 900) {
     setTimeout(() => {
       const offsetX = (Math.random() - 0.5) * 42;
       const offsetY = (Math.random() - 0.5) * 42;
       spawnGarVictoryFirework(x + offsetX, y + offsetY);
     }, delay);
-  });
+  }
 }
 
 function spawnFleetExplosion(x, y) {
@@ -2647,7 +2648,12 @@ function ensureFleetTravelNetwork() {
   const data = prepareArcgisData();
   if (!data) return false;
   const projectionMode = viewMode === 'schematic' ? 'schematic' : 'image';
+  rebuildTacticalRouteCache(data, projectionMode);
+  if (tacticalTravelEdges.length) return true;
   getTacticalSectionCanvas('hyperlanes', data, projectionMode, tacticalCanvas.width || WORLD_SIZE, tacticalCanvas.height || WORLD_SIZE);
+  if (tacticalTravelEdges.length) return true;
+  const fallbackMode = projectionMode === 'schematic' ? 'image' : 'schematic';
+  rebuildTacticalRouteCache(data, fallbackMode);
   return tacticalTravelEdges.length > 0;
 }
 
