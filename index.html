@@ -265,6 +265,17 @@ const CLUSTER_PLANET_RADIUS = 118;
 const CLUSTER_MIN_PLANETS = 8;
 const CLUSTER_RELEASE_ZOOM = 3.15;
 const LABEL_ZOOM_THRESHOLD = 0.9;
+const STARTUP_LAYERS = {
+  planets: true,
+  planetLabels: false,
+  influence: false,
+  hyperlanes: false,
+  contested: false,
+  garFleets: true,
+  kusFleets: true,
+  grid: true,
+  sectorLabels: false
+};
 const AUTO_PLACEMENT_VERSION = 3;
 const POSITION_CALIBRATION_VERSION = 1;
 const ARCGIS_IMPORT_VERSION = 1;
@@ -389,10 +400,10 @@ function loadInitialCampaignState() {
   }
 }
 let state = loadInitialCampaignState();
-let layers = {planets:true, planetLabels:false, influence:true, hyperlanes:true, contested:true, garFleets:true, kusFleets:true, grid:true, sectorLabels:true};
+let layers = { ...STARTUP_LAYERS };
 let selected = null;
 let zoom = 0.56, panX = -590, panY = -520;
-let viewMode = 'image';
+let viewMode = 'schematic';
 let applyingRemoteState = false;
 let serverSyncReady = false;
 let serverRevision = 0;
@@ -1192,21 +1203,31 @@ function createPlanetFromArcgisRecord(record, overrides = {}) {
 }
 
 function ensureImportantCampaignPlanets() {
-  const existingKeys = new Set(state.planets.map((planet) => normalizePlanetKey(planet.id || planet.name)));
-  const additions = [];
   const arcgisDataSet = prepareArcgisData();
   const coruscantRecord = arcgisDataSet?.planetMap?.get('coruscant');
-  if (coruscantRecord && !existingKeys.has('coruscant')) {
-    additions.push(createPlanetFromArcgisRecord(coruscantRecord, {
-      id: 'coruscant',
-      name: 'Coruscant',
-      owner: 'GAR',
-      wiki: 'https://starwars.fandom.com/wiki/Coruscant'
-    }));
+  if (!coruscantRecord) return;
+  const existingCoruscant = state.planets.find((planet) => {
+    const key = normalizePlanetKey(planet.id || planet.name);
+    return key === 'coruscant' || key === 'imperial_center';
+  });
+  if (existingCoruscant) {
+    const projected = projectArcgisToWorld(coruscantRecord.x, coruscantRecord.y, 'image');
+    existingCoruscant.id = 'coruscant';
+    existingCoruscant.name = 'Coruscant';
+    existingCoruscant.owner = existingCoruscant.owner || 'GAR';
+    existingCoruscant.grid = existingCoruscant.grid || compactGridName(coruscantRecord.grid);
+    existingCoruscant.sector = existingCoruscant.sector || String(coruscantRecord.sector || '').trim();
+    existingCoruscant.region = existingCoruscant.region || coruscantRecord.cRegion || coruscantRecord.region || '';
+    existingCoruscant.wiki = existingCoruscant.wiki || 'https://starwars.fandom.com/wiki/Coruscant';
+    setPlanetWorldPosition(existingCoruscant, projected.x, projected.y);
+    return;
   }
-  if (additions.length) {
-    state.planets.push(...additions.filter(Boolean));
-  }
+  state.planets.push(createPlanetFromArcgisRecord(coruscantRecord, {
+    id: 'coruscant',
+    name: 'Coruscant',
+    owner: 'GAR',
+    wiki: 'https://starwars.fandom.com/wiki/Coruscant'
+  }));
 }
 
 function buildGridModel() {
@@ -1599,11 +1620,9 @@ function saveClientUiPrefs() {
 function loadClientUiPrefs() {
   try {
     const raw = JSON.parse(localStorage.getItem(CLIENT_UI_PREFS_KEY) || '{}');
-    if (raw.layers && typeof raw.layers === 'object') layers = { ...layers, ...raw.layers };
     if (Number.isFinite(raw.zoom)) zoom = raw.zoom;
     if (Number.isFinite(raw.panX)) panX = raw.panX;
     if (Number.isFinite(raw.panY)) panY = raw.panY;
-    if (raw.viewMode === 'image' || raw.viewMode === 'schematic') viewMode = raw.viewMode;
   } catch (error) {
     console.warn('UI prefs could not be restored', error);
   }
@@ -1694,10 +1713,13 @@ async function bootstrapFromServer() {
     serverSync.session = payload.me || { id: null, username: '', role: 'Viewer' };
     currentAuthenticatedUsername = payload.me?.username || '';
     roleSelect.value = payload.me?.role || 'Viewer';
+    const nextRevision = Number(payload.revision || 0);
     console.log('bootstrap received');
-    applyServerCampaign(payload.campaign || DEFAULT_DATA, payload.revision || 0);
+    if (!(nextRevision > 0 && nextRevision === serverRevision && state?.planets?.length)) {
+      applyServerCampaign(payload.campaign || DEFAULT_DATA, nextRevision);
+    }
     serverSyncReady = true;
-    serverRevision = Number(payload.revision || 0);
+    serverRevision = nextRevision;
     serverSync.revision = serverRevision;
     refreshRoleChrome();
     window.setTimeout(() => connectServerSocket(), 250);
@@ -1730,9 +1752,11 @@ function connectServerSocket() {
   });
   serverSync.socket.on('campaign:bulk-sync', (payload) => {
     if (!payload?.campaign) return;
+    const nextRevision = Number(payload.revision || 0);
+    if (nextRevision > 0 && nextRevision <= serverRevision) return;
     console.log('bulk sync received');
-    applyServerCampaign(payload.campaign, payload.revision || 0);
-    serverRevision = Number(payload.revision || 0);
+    applyServerCampaign(payload.campaign, nextRevision);
+    serverRevision = nextRevision;
     serverSync.revision = serverRevision;
     if (payload.me) {
       serverSync.session = payload.me;
@@ -3059,6 +3083,7 @@ function nearestDisplayedRoute(x, y, maxDistance = 18) {
 }
 
 function rebuildIndexes() {
+  ensureImportantCampaignPlanets();
   planetIndex.clear();
   fleetIndex.clear();
   state.planets.forEach((planet) => {
@@ -3081,6 +3106,14 @@ function rebuildIndexes() {
   });
   buildGridModel();
   rebuildFleetRenderPositions();
+}
+
+function needsRouteNetwork() {
+  return Boolean(layers.hyperlanes || layers.contested || layers.influence);
+}
+
+function needsArcgisTacticalData() {
+  return viewMode !== 'schematic' && Boolean(layers.hyperlanes || layers.sectorLabels);
 }
 
 function markDirty(options = {}) {
@@ -4084,7 +4117,7 @@ function renderTacticalBase() {
   const height = tacticalCanvas.height || WORLD_SIZE;
   tacticalCtx.clearRect(0, 0, width, height);
   tacticalOverlay.innerHTML = '';
-  const data = prepareArcgisData();
+  const data = needsArcgisTacticalData() ? prepareArcgisData() : null;
   tacticalDebugRenderCount += 1;
   if (TACTICAL_DEBUG) {
     const canvasRect = tacticalCanvas.getBoundingClientRect();
@@ -4325,11 +4358,17 @@ function flushRender() {
       dirtyPositions = false;
     }
     if (dirtyFrontline) {
-      buildRouteCache();
-      renderFrontline();
+      if (needsRouteNetwork()) {
+        buildRouteCache();
+        renderFrontline();
+      } else {
+        routeCache = [];
+        tacticalRouteCache = [];
+        tacticalTravelEdges = [];
+        overlay.innerHTML = '';
+      }
       renderTacticalBase();
-      renderInfluenceClouds();
-      tacticalOverlay.classList.remove('hidden');
+      if (layers.influence) renderInfluenceClouds();
       dirtyFrontline = false;
       dirtyInfluence = false;
       dirtyTacticalBase = false;
@@ -5587,12 +5626,20 @@ document.getElementById('layersBtn').onclick = () => {
   panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
 };
 document.querySelectorAll('[data-layer]').forEach((cb) => {
+  cb.checked = Boolean(layers[cb.dataset.layer]);
   cb.onchange = () => {
     layers[cb.dataset.layer] = cb.checked;
     saveClientUiPrefs();
     const affectsTacticalCanvas = ['grid', 'hyperlanes', 'sectorLabels'].includes(cb.dataset.layer);
     const affectsInfluence = ['influence', 'contested'].includes(cb.dataset.layer);
-    markDirty({ layers: true, tacticalBase: affectsTacticalCanvas, influence: affectsInfluence });
+    const affectsRouteNetwork = ['hyperlanes', 'contested', 'influence'].includes(cb.dataset.layer);
+    markDirty({
+      layers: true,
+      tacticalBase: affectsTacticalCanvas,
+      influence: affectsInfluence,
+      frontline: affectsRouteNetwork,
+      routeOverlay: affectsRouteNetwork
+    });
   };
 });
 roleSelect.onchange = () => {
