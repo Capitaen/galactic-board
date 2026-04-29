@@ -1711,6 +1711,20 @@ function applyServerCampaign(campaign, revision = serverRevision) {
   }
 }
 
+function syncAuthUsersFromCampaign(campaign) {
+  if (!campaign || typeof campaign !== 'object') return;
+  if (!Array.isArray(campaign.authUsers)) return;
+  state.authUsers = campaign.authUsers
+    .map((user) => ({
+      id: user.id || `auth_${Math.random().toString(36).slice(2, 10)}`,
+      username: String(user.username || '').trim(),
+      password: String(user.password || ''),
+      role: ['Admin', 'Eventleiter / KUS', 'Republic Navy / GAR', 'Viewer'].includes(user.role) ? user.role : 'Viewer'
+    }))
+    .filter((user) => user.username);
+  if (activeMainTab === 'loginManager' && isAdminRole()) renderLoginManagerView();
+}
+
 function clearServerReconnectTimer() {
   if (!serverSync.reconnectTimer) return;
   window.clearTimeout(serverSync.reconnectTimer);
@@ -1773,6 +1787,8 @@ async function refreshCampaignFromServer() {
     const nextRevision = Number(payload.revision || 0);
     if (nextRevision > serverRevision) {
       applyServerCampaign(payload.campaign || DEFAULT_DATA, nextRevision);
+    } else {
+      syncAuthUsersFromCampaign(payload.campaign);
     }
   } catch (error) {
     console.warn('Server refresh failed', error);
@@ -1809,6 +1825,8 @@ async function bootstrapFromServer() {
     console.log('bootstrap received');
     if (!(nextRevision > 0 && nextRevision === serverRevision && state?.planets?.length)) {
       applyServerCampaign(payload.campaign || DEFAULT_DATA, nextRevision);
+    } else {
+      syncAuthUsersFromCampaign(payload.campaign);
     }
     serverSyncReady = true;
     serverRevision = nextRevision;
