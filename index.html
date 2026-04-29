@@ -367,6 +367,11 @@ let layers = {planets:true, planetLabels:false, influence:true, hyperlanes:true,
 let selected = null;
 let zoom = 0.56, panX = -590, panY = -520;
 let viewMode = 'image';
+let applyingRemoteState = false;
+let serverSyncReady = false;
+let serverRevision = 0;
+let saveSyncTimer = null;
+let isRendering = false;
 const world = document.getElementById('world'), viewport = document.getElementById('viewport'), overlay = document.getElementById('overlay'), tacticalOverlay = document.getElementById('tacticalOverlay'), influenceCanvas = document.getElementById('influenceCanvas'), tacticalCanvas = document.getElementById('tacticalCanvas'), mapEl = document.getElementById('map');
 const planetLayer = document.getElementById('planetLayer'), fleetLayer = document.getElementById('fleetLayer'), fxLayer = document.getElementById('fxLayer');
 const influenceCtx = influenceCanvas.getContext('2d');
@@ -1500,10 +1505,19 @@ function getFleetDisplayPosition(fleet) {
 
 function saveLocal() {
   saveClientUiPrefs();
+  localStorage.setItem('gcb_state_v1', JSON.stringify(state));
   if (!serverSync.enabled) {
-    localStorage.setItem('gcb_state_v1', JSON.stringify(state));
     return;
   }
+  if (applyingRemoteState) {
+    console.log('saveLocal skipped: applyingRemoteState');
+    return;
+  }
+  if (isRendering) {
+    console.log('saveLocal skipped: isRendering');
+    return;
+  }
+  if (!serverSyncReady) return;
   queueCampaignSync();
 }
 
@@ -1531,24 +1545,39 @@ function loadClientUiPrefs() {
   }
 }
 
-function extractCampaignForServer() {
-  const { authUsers, ...campaign } = state;
-  return JSON.parse(JSON.stringify(campaign));
+function makeServerCampaignPayload(nextState) {
+  const payload = {
+    planets: Array.isArray(nextState?.planets) ? nextState.planets : [],
+    fleets: Array.isArray(nextState?.fleets) ? nextState.fleets : [],
+    ships: Array.isArray(nextState?.ships) ? nextState.ships : [],
+    buildJobs: Array.isArray(nextState?.buildJobs) ? nextState.buildJobs : [],
+    resources: nextState?.resources && typeof nextState.resources === 'object' ? nextState.resources : {},
+    planetResources: nextState?.planetResources && typeof nextState.planetResources === 'object' ? nextState.planetResources : {},
+    importWarnings: Array.isArray(nextState?.importWarnings) ? nextState.importWarnings : [],
+    meta: nextState?.meta && typeof nextState.meta === 'object' ? nextState.meta : {}
+  };
+  return JSON.parse(JSON.stringify(payload));
 }
 
-function applyServerCampaign(campaign, revision = serverSync.revision) {
+function applyServerCampaign(campaign, revision = serverRevision) {
   if (!campaign || typeof campaign !== 'object') return;
+  applyingRemoteState = true;
   serverSync.isApplyingRemoteState = true;
-  state = JSON.parse(JSON.stringify({
-    ...DEFAULT_DATA,
-    ...campaign,
-    authUsers: Array.isArray(campaign.authUsers) ? campaign.authUsers : []
-  }));
-  normalizeCampaignState();
-  rebuildIndexes();
-  serverSync.revision = Number(revision || 0);
-  serverSync.isApplyingRemoteState = false;
-  render({ transform: true, positions: true, frontline: true, influence: true, layers: true });
+  try {
+    state = JSON.parse(JSON.stringify({
+      ...DEFAULT_DATA,
+      ...campaign,
+      authUsers: Array.isArray(campaign.authUsers) ? campaign.authUsers : []
+    }));
+    normalizeCampaignState();
+    rebuildIndexes();
+    renderAll();
+    serverRevision = Number(revision || 0);
+    serverSync.revision = serverRevision;
+  } finally {
+    applyingRemoteState = false;
+    serverSync.isApplyingRemoteState = false;
+  }
 }
 
 async function bootstrapFromServer() {
@@ -1560,7 +1589,11 @@ async function bootstrapFromServer() {
     serverSync.session = payload.me || { id: null, username: '', role: 'Viewer' };
     currentAuthenticatedUsername = payload.me?.username || '';
     roleSelect.value = payload.me?.role || 'Viewer';
+    console.log('bootstrap received');
     applyServerCampaign(payload.campaign || DEFAULT_DATA, payload.revision || 0);
+    serverSyncReady = true;
+    serverRevision = Number(payload.revision || 0);
+    serverSync.revision = serverRevision;
     refreshRoleChrome();
     connectServerSocket();
   } catch (error) {
@@ -1581,7 +1614,10 @@ function connectServerSocket() {
   });
   serverSync.socket.on('campaign:bulk-sync', (payload) => {
     if (!payload?.campaign) return;
+    console.log('bulk sync received');
     applyServerCampaign(payload.campaign, payload.revision || 0);
+    serverRevision = Number(payload.revision || 0);
+    serverSync.revision = serverRevision;
     if (payload.me) {
       serverSync.session = payload.me;
       currentAuthenticatedUsername = payload.me.username || '';
@@ -1592,21 +1628,41 @@ function connectServerSocket() {
 }
 
 function queueCampaignSync() {
-  if (!serverSync.enabled || serverSync.isApplyingRemoteState) return;
+  if (!serverSync.enabled || applyingRemoteState || serverSync.isApplyingRemoteState || isRendering || !serverSyncReady) return;
   if (!serverSync.session?.role || serverSync.session.role === 'Viewer') return;
-  if (serverSync.syncQueued || serverSync.syncInFlight) {
+  if (saveSyncTimer) window.clearTimeout(saveSyncTimer);
+  if (serverSync.syncInFlight) {
     serverSync.syncQueued = true;
     return;
   }
   serverSync.syncQueued = true;
-  window.setTimeout(() => {
+  saveSyncTimer = window.setTimeout(() => {
+    saveSyncTimer = null;
     pushCampaignStateToServer();
-  }, 50);
+  }, 1000);
 }
 
 async function pushCampaignStateToServer() {
   if (!serverSync.enabled || serverSync.syncInFlight) return;
+  if (applyingRemoteState || serverSync.isApplyingRemoteState) {
+    serverSync.syncQueued = false;
+    return;
+  }
+  if (isRendering || !serverSyncReady) {
+    serverSync.syncQueued = true;
+    if (!saveSyncTimer) {
+      saveSyncTimer = window.setTimeout(() => {
+        saveSyncTimer = null;
+        pushCampaignStateToServer();
+      }, 1000);
+    }
+    return;
+  }
   if (!serverSync.session?.role || serverSync.session.role === 'Viewer') return;
+  const payload = makeServerCampaignPayload(state);
+  const kb = Math.round(JSON.stringify(payload).length / 1024);
+  console.log('server sync payload KB', kb);
+  console.log('server sync PUT');
   serverSync.syncQueued = false;
   serverSync.syncInFlight = true;
   try {
@@ -1615,8 +1671,8 @@ async function pushCampaignStateToServer() {
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        expectedRevision: serverSync.revision,
-        campaign: extractCampaignForServer()
+        expectedRevision: serverRevision,
+        campaign: payload
       })
     });
     const payload = await response.json();
@@ -1626,13 +1682,14 @@ async function pushCampaignStateToServer() {
       }
       throw new Error(payload.error || `sync failed (${response.status})`);
     }
-    serverSync.revision = payload.revision || serverSync.revision;
+    serverRevision = Number(payload.revision || serverRevision);
+    serverSync.revision = serverRevision;
   } catch (error) {
     console.warn('Campaign sync failed', error);
     setStatus(`Server-Sync fehlgeschlagen: ${error.message}`);
   } finally {
     serverSync.syncInFlight = false;
-    if (serverSync.syncQueued) pushCampaignStateToServer();
+    if (serverSync.syncQueued) queueCampaignSync();
   }
 }
 
@@ -4073,50 +4130,60 @@ function applyLayers() {
 
 function flushRender() {
   renderQueued = false;
-  if (dirtyTransform) {
-    applyTransform();
-    dirtyTransform = false;
-  }
-  if (dirtyPositions) {
-    ensurePlanetElements();
-    ensureFleetElements();
-    dirtyPositions = false;
-  }
-  if (dirtyFrontline) {
-    buildRouteCache();
-    renderFrontline();
-    renderTacticalBase();
-    renderInfluenceClouds();
-    tacticalOverlay.classList.remove('hidden');
-    dirtyFrontline = false;
-    dirtyInfluence = false;
-    dirtyTacticalBase = false;
-    dirtyRouteOverlay = false;
-  }
-  if (dirtyTacticalBase) {
-    renderTacticalBase();
+  isRendering = true;
+  try {
+    if (dirtyTransform) {
+      applyTransform();
+      dirtyTransform = false;
+    }
+    if (dirtyPositions) {
+      ensurePlanetElements();
+      ensureFleetElements();
+      dirtyPositions = false;
+    }
+    if (dirtyFrontline) {
+      buildRouteCache();
+      renderFrontline();
+      renderTacticalBase();
+      renderInfluenceClouds();
+      tacticalOverlay.classList.remove('hidden');
+      dirtyFrontline = false;
+      dirtyInfluence = false;
+      dirtyTacticalBase = false;
+      dirtyRouteOverlay = false;
+    }
+    if (dirtyTacticalBase) {
+      renderTacticalBase();
+      if (dirtyInfluence) {
+        renderInfluenceClouds();
+        dirtyInfluence = false;
+      }
+      dirtyTacticalBase = false;
+    }
     if (dirtyInfluence) {
       renderInfluenceClouds();
       dirtyInfluence = false;
     }
-    dirtyTacticalBase = false;
-  }
-  if (dirtyInfluence) {
-    renderInfluenceClouds();
-    dirtyInfluence = false;
-  }
-  if (dirtyRouteOverlay) {
-    renderFrontline();
-    dirtyRouteOverlay = false;
-  }
-  if (dirtyLayers) {
-    applyLayers();
-    dirtyLayers = false;
+    if (dirtyRouteOverlay) {
+      renderFrontline();
+      dirtyRouteOverlay = false;
+    }
+    if (dirtyLayers) {
+      applyLayers();
+      dirtyLayers = false;
+    }
+  } finally {
+    isRendering = false;
   }
 }
 
 function render(options = { transform: true, positions: true, frontline: true, influence: true, layers: true }) {
   markDirty(options);
+}
+
+function renderAll(options = { transform: true, positions: true, frontline: true, influence: true, layers: true }) {
+  render(options);
+  if (renderQueued) flushRender();
 }
 
 function refreshFleetSelectionState() {
@@ -5444,16 +5511,16 @@ rebuildIndexes();
 runCampaignMaintenance();
 rebuildIndexes();
 syncWorldSizeToMap();
-render({ transform: true, positions: true, frontline: true, layers: true });
+renderAll({ transform: true, positions: true, frontline: true, layers: true });
 if (mapEl.complete) {
   syncWorldSizeToMap();
   initMapAnalysis();
-  render({ frontline: true, layers: true });
+  renderAll({ frontline: true, layers: true });
 } else {
   mapEl.addEventListener('load', () => {
     syncWorldSizeToMap();
     initMapAnalysis();
-    render({ frontline: true, layers: true });
+    renderAll({ frontline: true, layers: true });
   }, { once: true });
 }
 if ((state.meta?.positionCalibrationVersion ?? 0) < POSITION_CALIBRATION_VERSION) {

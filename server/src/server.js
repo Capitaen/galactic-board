@@ -71,6 +71,19 @@ function sanitizeStateForRole(state, role) {
   };
 }
 
+function sanitizeIncomingCampaignPayload(nextState) {
+  return {
+    planets: Array.isArray(nextState?.planets) ? nextState.planets : [],
+    fleets: Array.isArray(nextState?.fleets) ? nextState.fleets : [],
+    ships: Array.isArray(nextState?.ships) ? nextState.ships : [],
+    buildJobs: Array.isArray(nextState?.buildJobs) ? nextState.buildJobs : [],
+    resources: nextState?.resources && typeof nextState.resources === 'object' ? nextState.resources : {},
+    planetResources: nextState?.planetResources && typeof nextState.planetResources === 'object' ? nextState.planetResources : {},
+    importWarnings: Array.isArray(nextState?.importWarnings) ? nextState.importWarnings : [],
+    meta: nextState?.meta && typeof nextState.meta === 'object' ? nextState.meta : {}
+  };
+}
+
 function parseCookieHeader(rawCookieHeader) {
   return String(rawCookieHeader || '')
     .split(';')
@@ -176,10 +189,10 @@ app.post('/api/auth/logout', (req, res) => {
 });
 
 app.put('/api/campaign/state', requireAuth, (req, res) => {
-  const nextState = req.body?.campaign;
+  const nextState = sanitizeIncomingCampaignPayload(req.body?.campaign);
   const expectedRevision = Number(req.body?.expectedRevision || 0);
 
-  if (!nextState || typeof nextState !== 'object') {
+  if (!req.body?.campaign || typeof req.body.campaign !== 'object') {
     return res.status(400).json({ error: 'campaign payload missing' });
   }
 
