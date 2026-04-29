@@ -4127,6 +4127,8 @@ function renderTacticalBase() {
   tacticalOverlay.innerHTML = '';
   const data = needsArcgisTacticalData() ? prepareArcgisData() : null;
   const projectionMode = viewMode === 'schematic' ? 'schematic' : 'image';
+  const needsRouteCacheBuild = layers.hyperlanes && !tacticalRouteCache.length;
+  const needsHoverAreaBuild = layers.sectorLabels && !tacticalHoverAreas.sectors.length && !tacticalHoverAreas.regions.length;
   tacticalDebugRenderCount += 1;
   if (TACTICAL_DEBUG) {
     const canvasRect = tacticalCanvas.getBoundingClientRect();
@@ -4178,7 +4180,8 @@ function renderTacticalBase() {
     });
   }
   if (data) {
-    if (!tacticalBaseReady) {
+    if (!tacticalBaseReady || needsRouteCacheBuild || needsHoverAreaBuild) {
+      tacticalBaseReady = false;
       scheduleTacticalBaseBuild();
       return;
     }
