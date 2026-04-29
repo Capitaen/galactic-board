@@ -1799,8 +1799,8 @@ async function pushCampaignStateToServer() {
     return;
   }
   if (!serverSync.session?.role || serverSync.session.role === 'Viewer') return;
-  const payload = makeServerCampaignPayload(state);
-  const kb = Math.round(JSON.stringify(payload).length / 1024);
+  const campaignPayload = makeServerCampaignPayload(state);
+  const kb = Math.round(JSON.stringify(campaignPayload).length / 1024);
   console.log('server sync payload KB', kb);
   console.log('server sync PUT');
   serverSync.syncQueued = false;
@@ -1812,17 +1812,17 @@ async function pushCampaignStateToServer() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         expectedRevision: serverRevision,
-        campaign: payload
+        campaign: campaignPayload
       })
     });
-    const payload = await response.json();
+    const responsePayload = await response.json();
     if (!response.ok) {
       if (response.status === 409) {
         await bootstrapFromServer();
       }
-      throw new Error(payload.error || `sync failed (${response.status})`);
+      throw new Error(responsePayload.error || `sync failed (${response.status})`);
     }
-    serverRevision = Number(payload.revision || serverRevision);
+    serverRevision = Number(responsePayload.revision || serverRevision);
     serverSync.revision = serverRevision;
   } catch (error) {
     console.warn('Campaign sync failed', error);

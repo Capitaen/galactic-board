@@ -37,9 +37,21 @@ function findIndexHtml() {
 
 app.use(express.json({ limit: '50mb' }));
 app.use(cookieParser());
+app.use((req, res, next) => {
+  if (req.path === '/' || req.path.endsWith('.html')) {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+  }
+  next();
+});
 app.use(express.static(path.join(projectRoot, 'public')));
 app.use('/assets', express.static(path.join(projectRoot, 'assets')));
 app.use('/public/assets', express.static(path.join(projectRoot, 'public', 'assets')));
+
+app.get('/favicon.ico', (_req, res) => {
+  res.status(204).end();
+});
 
 function readUsersWithSecrets() {
   return db.prepare(`
