@@ -362,7 +362,33 @@ const SHIP_CLASS_IMPORT_PATTERNS = [
   { classId: 'dreadnaught', patterns: ['dreadnaught'] },
   { classId: 'golan_1', patterns: ['golan-1', 'golan 1', 'kampfstation'] }
 ];
-let state = JSON.parse(localStorage.getItem('gcb_state_v1') || JSON.stringify(DEFAULT_DATA));
+const LOCAL_STATE_MAX_BYTES = 2.5 * 1024 * 1024;
+let deferredFullRenderTimer = null;
+function makeLocalCampaignSnapshot(nextState) {
+  const payload = makeServerCampaignPayload(nextState);
+  payload.authUsers = Array.isArray(nextState?.authUsers) ? nextState.authUsers : [];
+  payload.lastResourceTickAt = Number(nextState?.lastResourceTickAt) || Date.now();
+  return JSON.parse(JSON.stringify(payload));
+}
+function loadInitialCampaignState() {
+  try {
+    const raw = localStorage.getItem('gcb_state_v1');
+    if (!raw) return JSON.parse(JSON.stringify(DEFAULT_DATA));
+    if (raw.length > LOCAL_STATE_MAX_BYTES) {
+      console.warn('Stored campaign state too large, ignoring local fallback', { kb: Math.round(raw.length / 1024) });
+      localStorage.removeItem('gcb_state_v1');
+      return JSON.parse(JSON.stringify(DEFAULT_DATA));
+    }
+    return {
+      ...JSON.parse(JSON.stringify(DEFAULT_DATA)),
+      ...makeLocalCampaignSnapshot(JSON.parse(raw))
+    };
+  } catch (error) {
+    console.warn('Campaign state could not be restored; falling back to defaults', error);
+    return JSON.parse(JSON.stringify(DEFAULT_DATA));
+  }
+}
+let state = loadInitialCampaignState();
 let layers = {planets:true, planetLabels:false, influence:true, hyperlanes:true, contested:true, garFleets:true, kusFleets:true, grid:true, sectorLabels:true};
 let selected = null;
 let zoom = 0.56, panX = -590, panY = -520;
@@ -427,7 +453,8 @@ const serverSync = {
   session: { id: null, username: '', role: 'Viewer' },
   isApplyingRemoteState: false,
   syncQueued: false,
-  syncInFlight: false
+  syncInFlight: false,
+  offlineMode: false
 };
 let fleetManagementFactionFilter = 'all';
 let searchResultsState = [];
@@ -1505,7 +1532,7 @@ function getFleetDisplayPosition(fleet) {
 
 function saveLocal() {
   saveClientUiPrefs();
-  localStorage.setItem('gcb_state_v1', JSON.stringify(state));
+  localStorage.setItem('gcb_state_v1', JSON.stringify(makeLocalCampaignSnapshot(state)));
   if (!serverSync.enabled) {
     return;
   }
@@ -1545,6 +1572,36 @@ function loadClientUiPrefs() {
   }
 }
 
+function sanitizeCampaignMeta(meta) {
+  const source = meta && typeof meta === 'object' ? meta : {};
+  const blockedKeys = new Set([
+    'arcgisCompact',
+    'arcgisRaw',
+    'hyperlanes',
+    'grid',
+    'regions',
+    'sectors',
+    'mapAnalysis',
+    'routeCache',
+    'tacticalRouteCache',
+    'searchState',
+    'layerState',
+    'viewState',
+    'zoom',
+    'panX',
+    'panY',
+    'viewMode',
+    'ui',
+    'animationState',
+    'renderCache',
+    'indexCache',
+    'domCache'
+  ]);
+  return Object.fromEntries(
+    Object.entries(source).filter(([key]) => !blockedKeys.has(key))
+  );
+}
+
 function makeServerCampaignPayload(nextState) {
   const payload = {
     planets: Array.isArray(nextState?.planets) ? nextState.planets : [],
@@ -1554,7 +1611,7 @@ function makeServerCampaignPayload(nextState) {
     resources: nextState?.resources && typeof nextState.resources === 'object' ? nextState.resources : {},
     planetResources: nextState?.planetResources && typeof nextState.planetResources === 'object' ? nextState.planetResources : {},
     importWarnings: Array.isArray(nextState?.importWarnings) ? nextState.importWarnings : [],
-    meta: nextState?.meta && typeof nextState.meta === 'object' ? nextState.meta : {}
+    meta: sanitizeCampaignMeta(nextState?.meta)
   };
   return JSON.parse(JSON.stringify(payload));
 }
@@ -1571,7 +1628,7 @@ function applyServerCampaign(campaign, revision = serverRevision) {
     }));
     normalizeCampaignState();
     rebuildIndexes();
-    renderAll();
+    renderBaseThenDeferHeavy();
     serverRevision = Number(revision || 0);
     serverSync.revision = serverRevision;
   } finally {
@@ -1580,12 +1637,23 @@ function applyServerCampaign(campaign, revision = serverRevision) {
   }
 }
 
+function disableLiveSync(reason) {
+  if (serverSync.socket) {
+    serverSync.socket.removeAllListeners();
+    serverSync.socket.disconnect();
+    serverSync.socket = null;
+  }
+  serverSync.offlineMode = true;
+  setStatus(reason || 'Server nicht erreichbar. Lokaler Offline-Modus aktiv.');
+}
+
 async function bootstrapFromServer() {
   if (!serverSync.enabled) return;
   try {
     const response = await fetch('/api/bootstrap', { credentials: 'include' });
     if (!response.ok) throw new Error(`bootstrap failed (${response.status})`);
     const payload = await response.json();
+    serverSync.offlineMode = false;
     serverSync.session = payload.me || { id: null, username: '', role: 'Viewer' };
     currentAuthenticatedUsername = payload.me?.username || '';
     roleSelect.value = payload.me?.role || 'Viewer';
@@ -1600,17 +1668,27 @@ async function bootstrapFromServer() {
     console.warn('Server bootstrap unavailable, falling back to local state', error);
     applyDefaultAnonymousRole();
     refreshRoleChrome();
+    disableLiveSync('Server-Bootstrap fehlgeschlagen. Lokaler Offline-Modus aktiv.');
   }
 }
 
 function connectServerSocket() {
-  if (!serverSync.enabled || typeof io === 'undefined' || serverSync.socket) return;
-  serverSync.socket = io({ withCredentials: true });
+  if (!serverSync.enabled || serverSync.offlineMode || typeof io === 'undefined' || serverSync.socket) return;
+  serverSync.socket = io({
+    withCredentials: true,
+    reconnection: false,
+    timeout: 2500
+  });
   serverSync.socket.on('connect', () => {
+    serverSync.offlineMode = false;
     setStatus('Live-Sync mit Server verbunden.');
   });
-  serverSync.socket.on('disconnect', () => {
-    setStatus('Live-Sync getrennt. Lokale Aenderungen warten auf den Server.');
+  serverSync.socket.on('disconnect', (reason) => {
+    disableLiveSync(`Live-Sync getrennt (${reason || 'unbekannt'}). Lokaler Offline-Modus aktiv.`);
+  });
+  serverSync.socket.on('connect_error', (error) => {
+    console.warn('socket connect error', error);
+    disableLiveSync('Live-Sync Server nicht erreichbar. Lokaler Offline-Modus aktiv.');
   });
   serverSync.socket.on('campaign:bulk-sync', (payload) => {
     if (!payload?.campaign) return;
@@ -2768,6 +2846,10 @@ async function attemptLogin() {
     serverSync.session = { id: null, username: '', role: 'Viewer' };
     roleSelect.value = 'Viewer';
     refreshRoleChrome();
+    if (String(error.message || '').includes('Failed to fetch')) {
+      disableLiveSync('Login fehlgeschlagen: Server nicht erreichbar. Lokaler Offline-Modus aktiv.');
+      return;
+    }
     setStatus(`Login fehlgeschlagen: ${error.message}`);
   }
 }
@@ -4186,6 +4268,19 @@ function renderAll(options = { transform: true, positions: true, frontline: true
   if (renderQueued) flushRender();
 }
 
+function scheduleDeferredFullRender(delay = 60) {
+  if (deferredFullRenderTimer) window.clearTimeout(deferredFullRenderTimer);
+  deferredFullRenderTimer = window.setTimeout(() => {
+    deferredFullRenderTimer = null;
+    renderAll({ frontline: true, influence: true, layers: true });
+  }, delay);
+}
+
+function renderBaseThenDeferHeavy() {
+  renderAll({ transform: true, positions: true, layers: true });
+  scheduleDeferredFullRender();
+}
+
 function refreshFleetSelectionState() {
   state.fleets.forEach((fleet) => updateFleetElement(fleet));
 }
@@ -5511,16 +5606,16 @@ rebuildIndexes();
 runCampaignMaintenance();
 rebuildIndexes();
 syncWorldSizeToMap();
-renderAll({ transform: true, positions: true, frontline: true, layers: true });
+renderBaseThenDeferHeavy();
 if (mapEl.complete) {
   syncWorldSizeToMap();
   initMapAnalysis();
-  renderAll({ frontline: true, layers: true });
+  scheduleDeferredFullRender(20);
 } else {
   mapEl.addEventListener('load', () => {
     syncWorldSizeToMap();
     initMapAnalysis();
-    renderAll({ frontline: true, layers: true });
+    scheduleDeferredFullRender(20);
   }, { once: true });
 }
 if ((state.meta?.positionCalibrationVersion ?? 0) < POSITION_CALIBRATION_VERSION) {

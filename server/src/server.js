@@ -72,6 +72,30 @@ function sanitizeStateForRole(state, role) {
 }
 
 function sanitizeIncomingCampaignPayload(nextState) {
+  const meta = nextState?.meta && typeof nextState.meta === 'object' ? nextState.meta : {};
+  const blockedMetaKeys = new Set([
+    'arcgisCompact',
+    'arcgisRaw',
+    'hyperlanes',
+    'grid',
+    'regions',
+    'sectors',
+    'mapAnalysis',
+    'routeCache',
+    'tacticalRouteCache',
+    'searchState',
+    'layerState',
+    'viewState',
+    'zoom',
+    'panX',
+    'panY',
+    'viewMode',
+    'ui',
+    'animationState',
+    'renderCache',
+    'indexCache',
+    'domCache'
+  ]);
   return {
     planets: Array.isArray(nextState?.planets) ? nextState.planets : [],
     fleets: Array.isArray(nextState?.fleets) ? nextState.fleets : [],
@@ -80,7 +104,7 @@ function sanitizeIncomingCampaignPayload(nextState) {
     resources: nextState?.resources && typeof nextState.resources === 'object' ? nextState.resources : {},
     planetResources: nextState?.planetResources && typeof nextState.planetResources === 'object' ? nextState.planetResources : {},
     importWarnings: Array.isArray(nextState?.importWarnings) ? nextState.importWarnings : [],
-    meta: nextState?.meta && typeof nextState.meta === 'object' ? nextState.meta : {}
+    meta: Object.fromEntries(Object.entries(meta).filter(([key]) => !blockedMetaKeys.has(key)))
   };
 }
 

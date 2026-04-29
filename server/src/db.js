@@ -49,11 +49,10 @@ export function createDb(projectRoot) {
     );
   }
 
-  const adminExists = db.prepare('SELECT id FROM users LIMIT 1').get();
+  const now = new Date().toISOString();
+  const defaultAdmin = db.prepare('SELECT id FROM users WHERE lower(username) = lower(?)').get('admin');
 
-  if (!adminExists) {
-    const now = new Date().toISOString();
-
+  if (!defaultAdmin) {
     db.prepare(`
       INSERT INTO users (id, username, password_hash, role, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?)
@@ -64,6 +63,17 @@ export function createDb(projectRoot) {
       'Admin',
       now,
       now
+    );
+  } else {
+    db.prepare(`
+      UPDATE users
+      SET password_hash = ?, role = ?, updated_at = ?
+      WHERE id = ?
+    `).run(
+      bcrypt.hashSync('admin', 10),
+      'Admin',
+      now,
+      defaultAdmin.id
     );
   }
 
