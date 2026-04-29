@@ -113,6 +113,7 @@ function sanitizeIncomingCampaignPayload(nextState) {
     fleets: Array.isArray(nextState?.fleets) ? nextState.fleets : [],
     ships: Array.isArray(nextState?.ships) ? nextState.ships : [],
     buildJobs: Array.isArray(nextState?.buildJobs) ? nextState.buildJobs : [],
+    fleetMotions: Array.isArray(nextState?.fleetMotions) ? nextState.fleetMotions : [],
     resources: nextState?.resources && typeof nextState.resources === 'object' ? nextState.resources : {},
     planetResources: nextState?.planetResources && typeof nextState.planetResources === 'object' ? nextState.planetResources : {},
     importWarnings: Array.isArray(nextState?.importWarnings) ? nextState.importWarnings : [],
@@ -161,17 +162,13 @@ function requireAdmin(req, res, next) {
   next();
 }
 
-function broadcastCampaignState() {
-  const { state, revision, updatedAt } = readCampaignState(db);
-  for (const socket of io.sockets.sockets.values()) {
-    const session = syncSocketSession(socket);
-    socket.emit('campaign:bulk-sync', {
-      campaign: sanitizeStateForRole(state, session.role),
-      revision,
-      updatedAt,
-      me: session
-    });
-  }
+function detectChangedCampaignKeys(previousState, nextState) {
+  const keys = ['planets', 'fleets', 'ships', 'buildJobs', 'fleetMotions', 'resources', 'planetResources', 'meta'];
+  return keys.filter((key) => JSON.stringify(previousState?.[key] ?? null) !== JSON.stringify(nextState?.[key] ?? null));
+}
+
+function broadcastCampaignChange(payload) {
+  io.emit('campaign:state-changed', payload);
 }
 
 app.get('/api/bootstrap', (req, res) => {
@@ -241,16 +238,26 @@ app.put('/api/campaign/state', requireAuth, (req, res) => {
   try {
     validateNextCampaignState(req.user.role, previousState, nextState);
 
-    const sanitized = {
+    const mergedState = {
       ...previousState,
       ...nextState,
       authUsers: previousState.authUsers || []
     };
+    const changedKeys = detectChangedCampaignKeys(previousState, mergedState);
 
     const nextRevision = revision + 1;
-    const updatedAt = writeCampaignState(db, sanitized, nextRevision);
+    const updatedAt = writeCampaignState(db, mergedState, nextRevision);
 
-    broadcastCampaignState();
+    broadcastCampaignChange({
+      revision: nextRevision,
+      updatedAt,
+      changedKeys,
+      actor: {
+        id: req.user.id,
+        username: req.user.username,
+        role: req.user.role
+      }
+    });
 
     res.json({
       ok: true,
@@ -271,15 +278,34 @@ app.get('/', (_req, res) => {
 
 io.on('connection', (socket) => {
   const session = syncSocketSession(socket);
-  const { state, revision, updatedAt } = readCampaignState(db);
+  const { revision, updatedAt } = readCampaignState(db);
 
-  socket.emit('socket:ready', { ok: true, me: session });
+  socket.emit('socket:ready', { ok: true, me: session, revision, updatedAt });
 
-  socket.emit('campaign:bulk-sync', {
-    campaign: sanitizeStateForRole(state, session.role),
-    revision,
-    updatedAt,
-    me: session
+  socket.on('fx:fleet-jump-start', (payload) => {
+    const activeSession = syncSocketSession(socket);
+    if (!activeSession?.id || activeSession.role === 'Viewer' || !payload?.motion) return;
+    socket.broadcast.emit('fx:fleet-jump-start', {
+      motion: payload.motion,
+      actor: {
+        id: activeSession.id,
+        username: activeSession.username,
+        role: activeSession.role
+      }
+    });
+  });
+
+  socket.on('fx:fleet-delete', (payload) => {
+    const activeSession = syncSocketSession(socket);
+    if (!activeSession?.id || activeSession.role === 'Viewer' || !payload?.fleetId) return;
+    socket.broadcast.emit('fx:fleet-delete', {
+      fleetId: payload.fleetId,
+      actor: {
+        id: activeSession.id,
+        username: activeSession.username,
+        role: activeSession.role
+      }
+    });
   });
 });
 

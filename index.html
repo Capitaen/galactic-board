@@ -465,7 +465,11 @@ const serverSync = {
   isApplyingRemoteState: false,
   syncQueued: false,
   syncInFlight: false,
-  offlineMode: false
+  offlineMode: false,
+  reconnectTimer: null,
+  reconnectAttempt: 0,
+  refreshTimer: null,
+  refreshInFlight: false
 };
 let fleetManagementFactionFilter = 'all';
 let searchResultsState = [];
@@ -519,6 +523,7 @@ function normalizeCampaignState() {
   state.planetResources = state.planetResources || {};
   state.ships = Array.isArray(state.ships) ? state.ships : [];
   state.buildJobs = Array.isArray(state.buildJobs) ? state.buildJobs : [];
+  state.fleetMotions = Array.isArray(state.fleetMotions) ? state.fleetMotions : [];
   state.importWarnings = Array.isArray(state.importWarnings) ? state.importWarnings : [];
   state.authUsers = Array.isArray(state.authUsers) ? state.authUsers : [];
   state.lastResourceTickAt = Number(state.lastResourceTickAt) || Date.now();
@@ -551,6 +556,17 @@ function normalizeCampaignState() {
       role: ['Admin', 'Eventleiter / KUS', 'Republic Navy / GAR', 'Viewer'].includes(user.role) ? user.role : 'Viewer'
     }))
     .filter((user) => user.username);
+  state.fleetMotions = state.fleetMotions
+    .map((motion) => ({
+      fleetId: String(motion?.fleetId || '').trim(),
+      sourcePlanetId: String(motion?.sourcePlanetId || '').trim(),
+      sourcePlanetName: String(motion?.sourcePlanetName || '').trim(),
+      targetPlanetId: String(motion?.targetPlanetId || '').trim(),
+      targetPlanetName: String(motion?.targetPlanetName || '').trim(),
+      startedAtMs: Number(motion?.startedAtMs) || Date.now(),
+      durationMs: Math.max(1000, Number(motion?.durationMs) || 0)
+    }))
+    .filter((motion) => motion.fleetId && motion.sourcePlanetId && motion.targetPlanetId && motion.sourcePlanetId !== motion.targetPlanetId);
   normalizeFleetShipAssignments();
 }
 
@@ -1664,6 +1680,7 @@ function makeServerCampaignPayload(nextState) {
     fleets: Array.isArray(nextState?.fleets) ? nextState.fleets : [],
     ships: Array.isArray(nextState?.ships) ? nextState.ships : [],
     buildJobs: Array.isArray(nextState?.buildJobs) ? nextState.buildJobs : [],
+    fleetMotions: Array.isArray(nextState?.fleetMotions) ? nextState.fleetMotions : [],
     resources: nextState?.resources && typeof nextState.resources === 'object' ? nextState.resources : {},
     planetResources: nextState?.planetResources && typeof nextState.planetResources === 'object' ? nextState.planetResources : {},
     importWarnings: Array.isArray(nextState?.importWarnings) ? nextState.importWarnings : [],
@@ -1684,6 +1701,7 @@ function applyServerCampaign(campaign, revision = serverRevision) {
     }));
     normalizeCampaignState();
     rebuildIndexes();
+    syncFleetTravelStateFromCampaign();
     renderBaseThenDeferHeavy();
     serverRevision = Number(revision || 0);
     serverSync.revision = serverRevision;
@@ -1693,14 +1711,90 @@ function applyServerCampaign(campaign, revision = serverRevision) {
   }
 }
 
+function clearServerReconnectTimer() {
+  if (!serverSync.reconnectTimer) return;
+  window.clearTimeout(serverSync.reconnectTimer);
+  serverSync.reconnectTimer = null;
+}
+
+function clearServerRefreshTimer() {
+  if (!serverSync.refreshTimer) return;
+  window.clearTimeout(serverSync.refreshTimer);
+  serverSync.refreshTimer = null;
+}
+
+function updateServerSession(me) {
+  if (!me) return;
+  serverSync.session = me;
+  currentAuthenticatedUsername = me.username || '';
+  roleSelect.value = me.role || 'Viewer';
+  refreshRoleChrome();
+}
+
+function destroyServerSocketConnection() {
+  if (!serverSync.socket) return;
+  serverSync.socket.removeAllListeners();
+  serverSync.socket.disconnect();
+  serverSync.socket = null;
+}
+
 function disableLiveSync(reason) {
-  if (serverSync.socket) {
-    serverSync.socket.removeAllListeners();
-    serverSync.socket.disconnect();
-    serverSync.socket = null;
-  }
+  destroyServerSocketConnection();
+  clearServerReconnectTimer();
+  clearServerRefreshTimer();
   serverSync.offlineMode = true;
   setStatus(reason || 'Server nicht erreichbar. Lokaler Offline-Modus aktiv.');
+}
+
+function scheduleSocketReconnect(reason) {
+  if (!serverSync.enabled || serverSync.offlineMode || serverSync.reconnectTimer) return;
+  const delay = Math.min(15000, 1000 * (2 ** Math.min(serverSync.reconnectAttempt, 4)));
+  serverSync.reconnectAttempt += 1;
+  setStatus(`${reason || 'Live-Sync getrennt.'} Neuer Verbindungsversuch in ${(delay / 1000).toFixed(delay >= 10000 ? 0 : 1)}s.`);
+  serverSync.reconnectTimer = window.setTimeout(() => {
+    serverSync.reconnectTimer = null;
+    connectServerSocket();
+  }, delay);
+}
+
+async function refreshCampaignFromServer() {
+  if (!serverSync.enabled || serverSync.refreshInFlight) return;
+  if (serverSync.syncInFlight || serverSync.syncQueued || isRendering) {
+    scheduleCampaignRefresh(1200);
+    return;
+  }
+  serverSync.refreshInFlight = true;
+  try {
+    const response = await fetch('/api/bootstrap', { credentials: 'include' });
+    if (!response.ok) throw new Error(`bootstrap failed (${response.status})`);
+    const payload = await response.json();
+    serverSync.offlineMode = false;
+    updateServerSession(payload.me || { id: null, username: '', role: 'Viewer' });
+    const nextRevision = Number(payload.revision || 0);
+    if (nextRevision > serverRevision) {
+      applyServerCampaign(payload.campaign || DEFAULT_DATA, nextRevision);
+    }
+  } catch (error) {
+    console.warn('Server refresh failed', error);
+    scheduleSocketReconnect('Live-Sync Aktualisierung fehlgeschlagen.');
+  } finally {
+    serverSync.refreshInFlight = false;
+  }
+}
+
+function scheduleCampaignRefresh(delay = 250) {
+  if (!serverSync.enabled || serverSync.offlineMode) return;
+  clearServerRefreshTimer();
+  serverSync.refreshTimer = window.setTimeout(() => {
+    serverSync.refreshTimer = null;
+    refreshCampaignFromServer();
+  }, delay);
+}
+
+function emitLiveSocketEvent(eventName, payload) {
+  if (!serverSync.socket?.connected) return;
+  if (!serverSync.session?.role || serverSync.session.role === 'Viewer') return;
+  serverSync.socket.emit(eventName, payload);
 }
 
 async function bootstrapFromServer() {
@@ -1710,9 +1804,7 @@ async function bootstrapFromServer() {
     if (!response.ok) throw new Error(`bootstrap failed (${response.status})`);
     const payload = await response.json();
     serverSync.offlineMode = false;
-    serverSync.session = payload.me || { id: null, username: '', role: 'Viewer' };
-    currentAuthenticatedUsername = payload.me?.username || '';
-    roleSelect.value = payload.me?.role || 'Viewer';
+    updateServerSession(payload.me || { id: null, username: '', role: 'Viewer' });
     const nextRevision = Number(payload.revision || 0);
     console.log('bootstrap received');
     if (!(nextRevision > 0 && nextRevision === serverRevision && state?.planets?.length)) {
@@ -1741,29 +1833,47 @@ function connectServerSocket() {
   });
   serverSync.socket.on('connect', () => {
     serverSync.offlineMode = false;
+    serverSync.reconnectAttempt = 0;
+    clearServerReconnectTimer();
     setStatus('Live-Sync mit Server verbunden.');
   });
+  serverSync.socket.on('socket:ready', (payload) => {
+    updateServerSession(payload?.me || { id: null, username: '', role: 'Viewer' });
+    const nextRevision = Number(payload?.revision || 0);
+    if (nextRevision > serverRevision) scheduleCampaignRefresh(120);
+  });
   serverSync.socket.on('disconnect', (reason) => {
-    disableLiveSync(`Live-Sync getrennt (${reason || 'unbekannt'}). Lokaler Offline-Modus aktiv.`);
+    destroyServerSocketConnection();
+    scheduleSocketReconnect(`Live-Sync getrennt (${reason || 'unbekannt'}).`);
   });
   serverSync.socket.on('connect_error', (error) => {
     console.warn('socket connect error', error);
-    disableLiveSync('Live-Sync Server nicht erreichbar. Lokaler Offline-Modus aktiv.');
+    destroyServerSocketConnection();
+    scheduleSocketReconnect('Live-Sync Server nicht erreichbar.');
+  });
+  serverSync.socket.on('campaign:state-changed', (payload) => {
+    const nextRevision = Number(payload?.revision || 0);
+    if (!(nextRevision > serverRevision)) return;
+    scheduleCampaignRefresh(160);
   });
   serverSync.socket.on('campaign:bulk-sync', (payload) => {
     if (!payload?.campaign) return;
     const nextRevision = Number(payload.revision || 0);
     if (nextRevision > 0 && nextRevision <= serverRevision) return;
-    console.log('bulk sync received');
     applyServerCampaign(payload.campaign, nextRevision);
-    serverRevision = nextRevision;
-    serverSync.revision = serverRevision;
-    if (payload.me) {
-      serverSync.session = payload.me;
-      currentAuthenticatedUsername = payload.me.username || '';
-      roleSelect.value = payload.me.role || 'Viewer';
-      refreshRoleChrome();
-    }
+    if (payload.me) updateServerSession(payload.me);
+  });
+  serverSync.socket.on('fx:fleet-jump-start', (payload) => {
+    if (!payload?.motion?.fleetId) return;
+    upsertFleetMotionRecord(payload.motion);
+    beginFleetTravelFromMotion(payload.motion, { playStartAudio: true, persistMotion: false });
+  });
+  serverSync.socket.on('fx:fleet-delete', (payload) => {
+    const fleet = fleetIndex.get(payload?.fleetId);
+    if (!fleet) return;
+    const display = getFleetDisplayPosition(fleet);
+    playAudioCue(fleetDeleteAudio);
+    spawnFleetExplosion(display.x, display.y);
   });
 }
 
@@ -2594,10 +2704,85 @@ function findFleetTravelPlan(startPlanetId, endPlanetId) {
   };
 }
 
+function upsertFleetMotionRecord(motion) {
+  const nextMotion = {
+    fleetId: String(motion?.fleetId || '').trim(),
+    sourcePlanetId: String(motion?.sourcePlanetId || '').trim(),
+    sourcePlanetName: String(motion?.sourcePlanetName || '').trim(),
+    targetPlanetId: String(motion?.targetPlanetId || '').trim(),
+    targetPlanetName: String(motion?.targetPlanetName || '').trim(),
+    startedAtMs: Number(motion?.startedAtMs) || Date.now(),
+    durationMs: Math.max(1000, Number(motion?.durationMs) || 0)
+  };
+  if (!nextMotion.fleetId) return;
+  state.fleetMotions = Array.isArray(state.fleetMotions) ? state.fleetMotions.filter((entry) => entry.fleetId !== nextMotion.fleetId) : [];
+  state.fleetMotions.push(nextMotion);
+}
+
+function removeFleetMotionRecord(fleetId) {
+  if (!Array.isArray(state.fleetMotions)) return;
+  state.fleetMotions = state.fleetMotions.filter((entry) => entry.fleetId !== fleetId);
+}
+
+function buildFleetTravelRuntime(motion, nowMs = Date.now()) {
+  const sourcePlanet = planetIndex.get(motion?.sourcePlanetId);
+  const targetPlanet = planetIndex.get(motion?.targetPlanetId);
+  if (!sourcePlanet || !targetPlanet) return null;
+  const plan = findFleetTravelPlan(sourcePlanet.id, targetPlanet.id);
+  if (!plan || plan.points.length < 2 || plan.totalLength <= 0) return null;
+  const startedAtMs = Number(motion?.startedAtMs) || nowMs;
+  const durationMs = Math.max(1000, Number(motion?.durationMs) || Math.max(6000, (plan.totalLength / FLEET_TRAVEL_REFERENCE_DISTANCE) * FLEET_TRAVEL_REFERENCE_DURATION_MS));
+  const elapsed = Math.max(0, nowMs - startedAtMs);
+  const movementElapsed = Math.max(0, elapsed - FLEET_HYPERSPACE_START_DELAY_MS);
+  const progress = clamp(movementElapsed / durationMs, 0, 1);
+  const distance = plan.totalLength * progress;
+  return {
+    fleetId: String(motion.fleetId || '').trim(),
+    sourcePlanetId: sourcePlanet.id,
+    sourcePlanetName: motion?.sourcePlanetName || sourcePlanet.name,
+    targetPlanetId: targetPlanet.id,
+    targetPlanetName: motion?.targetPlanetName || targetPlanet.name,
+    startedAtMs,
+    durationMs,
+    totalLength: plan.totalLength,
+    points: plan.points,
+    currentPosition: samplePolylineAtDistance(plan.points, distance),
+    finishAudioPlayed: elapsed >= Math.max(FLEET_HYPERSPACE_START_DELAY_MS, (durationMs + FLEET_HYPERSPACE_START_DELAY_MS) - FLEET_HYPERSPACE_FINISH_LEAD_MS)
+  };
+}
+
+function beginFleetTravelFromMotion(motion, options = {}) {
+  const runtime = buildFleetTravelRuntime(motion);
+  if (!runtime) return false;
+  if (options.persistMotion !== false) upsertFleetMotionRecord(runtime);
+  fleetTravelState.set(runtime.fleetId, runtime);
+  const fleet = fleetIndex.get(runtime.fleetId);
+  if (fleet) updateFleetElement(fleet);
+  if (options.playStartAudio) playAudioCue(hyperspaceStartAudio);
+  ensureFleetTravelAnimation();
+  return true;
+}
+
+function syncFleetTravelStateFromCampaign() {
+  const activeFleetIds = new Set();
+  (Array.isArray(state.fleetMotions) ? state.fleetMotions : []).forEach((motion) => {
+    if (beginFleetTravelFromMotion(motion, { persistMotion: false })) {
+      activeFleetIds.add(motion.fleetId);
+    }
+  });
+  [...fleetTravelState.keys()].forEach((fleetId) => {
+    if (!activeFleetIds.has(fleetId)) fleetTravelState.delete(fleetId);
+  });
+  if (!fleetTravelState.size && fleetTravelFrame) {
+    cancelAnimationFrame(fleetTravelFrame);
+    fleetTravelFrame = 0;
+  }
+}
+
 function tickFleetTravelAnimation() {
   fleetTravelFrame = 0;
   if (!fleetTravelState.size) return;
-  const now = performance.now();
+  const now = Date.now();
   let stillTraveling = false;
   fleetTravelState.forEach((travel, fleetId) => {
     const fleet = fleetIndex.get(fleetId);
@@ -2605,7 +2790,7 @@ function tickFleetTravelAnimation() {
       fleetTravelState.delete(fleetId);
       return;
     }
-    const elapsed = now - travel.startedAt;
+    const elapsed = now - travel.startedAtMs;
     const movementElapsed = Math.max(0, elapsed - FLEET_HYPERSPACE_START_DELAY_MS);
     const progress = clamp(movementElapsed / travel.durationMs, 0, 1);
     const distance = travel.totalLength * progress;
@@ -2617,6 +2802,7 @@ function tickFleetTravelAnimation() {
     updateFleetElement(fleet);
     if (progress >= 1) {
       fleetTravelState.delete(fleetId);
+      removeFleetMotionRecord(fleetId);
       fleet.planetId = travel.targetPlanetId;
       fleet.locationPlanetId = travel.targetPlanetId;
       syncFleetCoords(fleet);
@@ -2846,23 +3032,23 @@ function startFleetJump(id) {
     setStatus(`Keine gueltige Hyperraumroute von ${sourcePlanet.name} nach ${targetPlanet.name} gefunden.`);
     return;
   }
-  fleetTravelState.set(fleet.id, {
+  const motion = {
     fleetId: fleet.id,
     sourcePlanetId: sourcePlanet.id,
     sourcePlanetName: sourcePlanet.name,
     targetPlanetId: targetPlanet.id,
     targetPlanetName: targetPlanet.name,
-    startedAt: performance.now(),
+    startedAtMs: Date.now(),
     durationMs: Math.max(6000, (plan.totalLength / FLEET_TRAVEL_REFERENCE_DISTANCE) * FLEET_TRAVEL_REFERENCE_DURATION_MS),
-    totalLength: plan.totalLength,
-    points: plan.points,
-    currentPosition: plan.points[0],
-    finishAudioPlayed: false
-  });
+  };
+  upsertFleetMotionRecord(motion);
+  beginFleetTravelFromMotion(motion, { persistMotion: false });
   playAudioCue(hyperspaceStartAudio);
+  emitLiveSocketEvent('fx:fleet-jump-start', { motion });
   ensureFleetTravelAnimation();
   updateFleetElement(fleet);
   if (selected?.type === 'fleet' && selected.id === fleet.id) openFleet(fleet.id);
+  saveLocal();
   setStatus(`Sprung eingeleitet: ${fleet.name} -> ${targetPlanet.name}`);
 }
 
@@ -2894,6 +3080,8 @@ async function attemptLogin() {
     currentAuthenticatedUsername = payload.user?.username || '';
     roleSelect.value = payload.user?.role || 'Viewer';
     refreshRoleChrome();
+    destroyServerSocketConnection();
+    clearServerReconnectTimer();
     await bootstrapFromServer();
     if (selected?.type === 'planet') openPlanet(selected.id);
     if (selected?.type === 'fleet') openFleet(selected.id);
@@ -4676,6 +4864,8 @@ function deleteFleet(id) {
   playAudioCue(datapadDeleteAudio);
   spawnFleetExplosion(display.x, display.y);
   fleetTravelState.delete(id);
+  removeFleetMotionRecord(id);
+  emitLiveSocketEvent('fx:fleet-delete', { fleetId: id });
   state.fleets = state.fleets.filter((item) => item.id !== id);
   rebuildIndexes();
   saveLocal();
@@ -4923,6 +5113,8 @@ function deleteFleetManagementFleet(id) {
     ship.assignedFleetId = '';
   });
   fleetTravelState.delete(fleet.id);
+  removeFleetMotionRecord(fleet.id);
+  emitLiveSocketEvent('fx:fleet-delete', { fleetId: fleet.id });
   state.fleets = state.fleets.filter((entry) => entry.id !== fleet.id);
   normalizeFleetShipAssignments();
   rebuildFleetRenderPositions();
@@ -5781,6 +5973,7 @@ ensureImportantCampaignPlanets();
 rebuildIndexes();
 runCampaignMaintenance();
 rebuildIndexes();
+syncFleetTravelStateFromCampaign();
 syncWorldSizeToMap();
 renderBaseThenDeferHeavy();
 if (mapEl.complete) {
