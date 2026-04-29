@@ -504,6 +504,7 @@ const datapadClickAudio = new Audio('assets/Datapad click 2.ogg');
 const datapadAcceptAudio = new Audio('assets/Datapad accept.ogg');
 const datapadDeleteAudio = new Audio('assets/Datapad delete.ogg');
 garVictoryAudio.volume = 0.5;
+fleetDeleteAudio.volume = 0.4;
 
 function createEmptyFactionResources() {
   return Object.fromEntries(RESOURCE_KEYS.map((key) => [key, 0]));
@@ -1696,8 +1697,20 @@ function makeServerCampaignPayload(nextState) {
   return JSON.parse(JSON.stringify(payload));
 }
 
-function applyServerCampaign(campaign, revision = serverRevision) {
+function triggerOwnerChangeEffects(previousOwners) {
+  if (!(previousOwners instanceof Map) || !previousOwners.size) return;
+  state.planets.forEach((planet) => {
+    const previousOwner = previousOwners.get(planet.id);
+    if (previousOwner === 'KUS' && planet.owner === 'GAR') {
+      const display = getPlanetDisplayPosition(planet);
+      triggerGarVictoryCelebration(display.x, display.y);
+    }
+  });
+}
+
+function applyServerCampaign(campaign, revision = serverRevision, options = {}) {
   if (!campaign || typeof campaign !== 'object') return;
+  const previousOwners = new Map((state?.planets || []).map((planet) => [planet.id, planet.owner]));
   applyingRemoteState = true;
   serverSync.isApplyingRemoteState = true;
   try {
@@ -1710,6 +1723,7 @@ function applyServerCampaign(campaign, revision = serverRevision) {
     rebuildIndexes();
     syncFleetTravelStateFromCampaign();
     renderBaseThenDeferHeavy();
+    if (options.playOwnerEffects) triggerOwnerChangeEffects(previousOwners);
     serverRevision = Number(revision || 0);
     serverSync.revision = serverRevision;
   } finally {
@@ -1793,7 +1807,7 @@ async function refreshCampaignFromServer() {
     updateServerSession(payload.me || { id: null, username: '', role: 'Viewer' });
     const nextRevision = Number(payload.revision || 0);
     if (nextRevision > serverRevision) {
-      applyServerCampaign(payload.campaign || DEFAULT_DATA, nextRevision);
+      applyServerCampaign(payload.campaign || DEFAULT_DATA, nextRevision, { playOwnerEffects: true });
     } else {
       syncAuthUsersFromCampaign(payload.campaign);
     }
@@ -1831,7 +1845,7 @@ async function bootstrapFromServer() {
     const nextRevision = Number(payload.revision || 0);
     console.log('bootstrap received');
     if (!(nextRevision > 0 && nextRevision === serverRevision && state?.planets?.length)) {
-      applyServerCampaign(payload.campaign || DEFAULT_DATA, nextRevision);
+      applyServerCampaign(payload.campaign || DEFAULT_DATA, nextRevision, { playOwnerEffects: false });
     } else {
       syncAuthUsersFromCampaign(payload.campaign);
     }
@@ -1885,7 +1899,7 @@ function connectServerSocket() {
     if (!payload?.campaign) return;
     const nextRevision = Number(payload.revision || 0);
     if (nextRevision > 0 && nextRevision <= serverRevision) return;
-    applyServerCampaign(payload.campaign, nextRevision);
+    applyServerCampaign(payload.campaign, nextRevision, { playOwnerEffects: true });
     if (payload.me) updateServerSession(payload.me);
   });
   serverSync.socket.on('fx:fleet-jump-start', (payload) => {
@@ -2628,8 +2642,18 @@ function buildFleetTravelGraph() {
   return graph;
 }
 
+function ensureFleetTravelNetwork() {
+  if (tacticalTravelEdges.length) return true;
+  const data = prepareArcgisData();
+  if (!data) return false;
+  const projectionMode = viewMode === 'schematic' ? 'schematic' : 'image';
+  getTacticalSectionCanvas('hyperlanes', data, projectionMode, tacticalCanvas.width || WORLD_SIZE, tacticalCanvas.height || WORLD_SIZE);
+  return tacticalTravelEdges.length > 0;
+}
+
 function findFleetTravelPlan(startPlanetId, endPlanetId) {
   if (!startPlanetId || !endPlanetId || startPlanetId === endPlanetId) return null;
+  ensureFleetTravelNetwork();
   const graph = buildFleetTravelGraph();
   if (!graph.size) return null;
   const startPlanet = planetIndex.get(startPlanetId);
@@ -4927,7 +4951,9 @@ function saveFleetManagementFleet(id) {
 
 function createFleetManagementFleet() {
   const role = currentRole();
-  const faction = role === 'Eventleiter / KUS' ? 'KUS' : 'GAR';
+  const faction = role === 'Eventleiter / KUS'
+    ? 'KUS'
+    : (fleetManagementFactionFilter === 'KUS' ? 'KUS' : 'GAR');
   const fleet = createFleetRecord({ name: 'Neue Taskforce', faction });
   state.fleets.push(fleet);
   saveLocal();
