@@ -1905,8 +1905,13 @@ function connectServerSocket() {
   });
   serverSync.socket.on('fx:fleet-jump-start', (payload) => {
     if (!payload?.motion?.fleetId) return;
+    playAudioCue(hyperspaceStartAudio);
     upsertFleetMotionRecord(payload.motion);
-    beginFleetTravelFromMotion(payload.motion, { playStartAudio: true, persistMotion: false });
+    beginFleetTravelFromMotion(payload.motion, { persistMotion: false });
+  });
+  serverSync.socket.on('fx:fleet-jump-finish', (payload) => {
+    if (!payload?.fleetId) return;
+    playAudioCue(hyperspaceFinishAudio);
   });
   serverSync.socket.on('fx:fleet-delete', (payload) => {
     const fleet = fleetIndex.get(payload?.fleetId);
@@ -2797,6 +2802,7 @@ function buildFleetTravelRuntime(motion, nowMs = Date.now()) {
     sourcePlanetName: motion?.sourcePlanetName || sourcePlanet.name,
     targetPlanetId: targetPlanet.id,
     targetPlanetName: motion?.targetPlanetName || targetPlanet.name,
+    startedByUserId: motion?.startedByUserId || null,
     startedAtMs,
     durationMs,
     totalLength: plan.totalLength,
@@ -2856,6 +2862,13 @@ function tickFleetTravelAnimation() {
     travel.currentPosition = samplePolylineAtDistance(travel.points, distance);
     updateFleetElement(fleet);
     if (progress >= 1) {
+      if (travel.startedByUserId && serverSync.session?.id && String(travel.startedByUserId) === String(serverSync.session.id)) {
+        emitLiveSocketEvent('fx:fleet-jump-finish', {
+          fleetId,
+          targetPlanetId: travel.targetPlanetId,
+          targetPlanetName: travel.targetPlanetName
+        });
+      }
       fleetTravelState.delete(fleetId);
       removeFleetMotionRecord(fleetId);
       fleet.planetId = travel.targetPlanetId;
@@ -3093,6 +3106,7 @@ function startFleetJump(id) {
     sourcePlanetName: sourcePlanet.name,
     targetPlanetId: targetPlanet.id,
     targetPlanetName: targetPlanet.name,
+    startedByUserId: serverSync.session?.id || null,
     startedAtMs: Date.now(),
     durationMs: Math.max(6000, (plan.totalLength / FLEET_TRAVEL_REFERENCE_DISTANCE) * FLEET_TRAVEL_REFERENCE_DURATION_MS),
   };

@@ -381,6 +381,21 @@ io.on('connection', (socket) => {
     });
   });
 
+  socket.on('fx:fleet-jump-finish', (payload) => {
+    const activeSession = syncSocketSession(socket);
+    if (!activeSession?.id || activeSession.role === 'Viewer' || !payload?.fleetId) return;
+    socket.broadcast.emit('fx:fleet-jump-finish', {
+      fleetId: payload.fleetId,
+      targetPlanetId: payload.targetPlanetId || null,
+      targetPlanetName: payload.targetPlanetName || '',
+      actor: {
+        id: activeSession.id,
+        username: activeSession.username,
+        role: activeSession.role
+      }
+    });
+  });
+
   socket.on('fx:fleet-delete', (payload) => {
     const activeSession = syncSocketSession(socket);
     if (!activeSession?.id || activeSession.role === 'Viewer' || !payload?.fleetId) return;
