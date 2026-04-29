@@ -4322,7 +4322,9 @@ function applyLayers() {
     el.classList.toggle('hidden', !isVisible);
   });
   const showInfluenceCanvas = layers.influence;
-  const showTacticalCanvas = !isSchematic && (layers.grid || layers.sectorLabels || layers.hyperlanes);
+  const showTacticalCanvas = isSchematic
+    ? (layers.hyperlanes || layers.sectorLabels)
+    : (layers.grid || layers.sectorLabels || layers.hyperlanes);
   const showTacticalOverlay = isSchematic
     ? (layers.grid || layers.hyperlanes || layers.sectorLabels)
     : (layers.hyperlanes || layers.sectorLabels);
