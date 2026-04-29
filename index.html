@@ -1623,10 +1623,6 @@ function saveLocal() {
     console.log('saveLocal skipped: applyingRemoteState');
     return;
   }
-  if (isRendering) {
-    console.log('saveLocal skipped: isRendering');
-    return;
-  }
   if (!serverSyncReady) return;
   queueCampaignSync();
 }
@@ -1920,12 +1916,27 @@ function connectServerSocket() {
     playAudioCue(fleetDeleteAudio);
     spawnFleetExplosion(display.x, display.y);
   });
+  serverSync.socket.on('fx:ship-redeploy', (payload) => {
+    const ship = state.ships.find((entry) => entry.id === payload?.shipId);
+    const sourceFleet = fleetIndex.get(payload?.sourceFleetId);
+    const targetFleet = fleetIndex.get(payload?.targetFleetId);
+    if (!ship || !sourceFleet || !targetFleet) return;
+    playShipTransferFx(ship, sourceFleet, targetFleet);
+  });
 }
 
 function queueCampaignSync() {
-  if (!serverSync.enabled || applyingRemoteState || serverSync.isApplyingRemoteState || isRendering || !serverSyncReady) return;
+  if (!serverSync.enabled || applyingRemoteState || serverSync.isApplyingRemoteState || !serverSyncReady) return;
   if (!serverSync.session?.role || serverSync.session.role === 'Viewer') return;
   if (saveSyncTimer) window.clearTimeout(saveSyncTimer);
+  if (isRendering) {
+    serverSync.syncQueued = true;
+    saveSyncTimer = window.setTimeout(() => {
+      saveSyncTimer = null;
+      pushCampaignStateToServer();
+    }, 1200);
+    return;
+  }
   if (serverSync.syncInFlight) {
     serverSync.syncQueued = true;
     return;
@@ -5198,36 +5209,19 @@ function deleteFleetManagementFleet(id) {
   setStatus(`Verband gelöscht: ${fleet.name}. ${assignedShips.length} Schiff(e) zurück im Pool.`);
 }
 
-function openFleetManifestInManagement(fleetId) {
-  activeFleetManifestFilterFleetId = fleetId || '';
-  renderFleetManagementView();
-  requestAnimationFrame(() => {
-    const target = document.getElementById('fleetManagementShipsSection');
-    if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  });
-}
-
-function clearFleetManifestFilter() {
-  activeFleetManifestFilterFleetId = '';
-  renderFleetManagementView();
-}
-
-function animateShipTransferBetweenFleets(ship, sourceFleet, targetFleet) {
+function playShipTransferFx(ship, sourceFleet, targetFleet) {
   const sourcePosition = sourceFleet ? getFleetDisplayPosition(sourceFleet) : null;
   const targetPosition = targetFleet ? getFleetDisplayPosition(targetFleet) : null;
   const sourcePlanetId = sourceFleet?.locationPlanetId || sourceFleet?.planetId || '';
   const targetPlanetId = targetFleet?.locationPlanetId || targetFleet?.planetId || '';
-  if (!ship || !sourceFleet || !targetFleet || !sourcePosition || !targetPosition) {
-    ship.assignedFleetId = targetFleet?.id || '';
-    ship.locationPlanetId = targetFleet?.locationPlanetId || targetFleet?.planetId || ship.locationPlanetId;
-    normalizeFleetShipAssignments();
-    rebuildIndexes();
-    saveLocal();
-    render({ positions: true, layers: true });
-    if (activeMainTab === 'fleetManagement') renderFleetManagementView();
-    if (selected?.type === 'fleet' && (selected.id === sourceFleet?.id || selected.id === targetFleet?.id)) openFleet(selected.id);
-    return;
-  }
+  if (!ship || !sourceFleet || !targetFleet || !sourcePosition || !targetPosition) return false;
+  const routePlan = sourcePlanetId && targetPlanetId && sourcePlanetId !== targetPlanetId
+    ? findFleetTravelPlan(sourcePlanetId, targetPlanetId)
+    : null;
+  const fallbackPoints = [sourcePosition, targetPosition];
+  const points = routePlan?.points?.length ? routePlan.points : fallbackPoints;
+  const totalLength = routePlan?.totalLength || distanceBetweenPoints(sourcePosition, targetPosition);
+  const duration = Math.max(6000, Math.min(45000, (Math.max(180, totalLength) / FLEET_TRAVEL_REFERENCE_DISTANCE) * FLEET_TRAVEL_REFERENCE_DURATION_MS));
   const token = document.createElement('div');
   token.className = 'fleet-transfer-token';
   token.style.left = `${sourcePosition.x}px`;
@@ -5235,36 +5229,15 @@ function animateShipTransferBetweenFleets(ship, sourceFleet, targetFleet) {
   token.innerHTML = `<img src="${iconFor(targetFleet)}" alt="">`;
   fxLayer.appendChild(token);
   playAudioCue(hyperspaceStartAudio);
-  ship.assignedFleetId = '';
-  normalizeFleetShipAssignments();
-  saveLocal();
-  if (activeMainTab === 'fleetManagement') renderFleetManagementView();
-  if (selected?.type === 'fleet' && (selected.id === sourceFleet.id || selected.id === targetFleet.id)) openFleet(selected.id);
-  const fallbackPoints = [sourcePosition, targetPosition];
-  const routePlan = sourcePlanetId && targetPlanetId && sourcePlanetId !== targetPlanetId
-    ? findFleetTravelPlan(sourcePlanetId, targetPlanetId)
-    : null;
-  const points = routePlan?.points?.length ? routePlan.points : fallbackPoints;
-  const totalLength = routePlan?.totalLength || distanceBetweenPoints(sourcePosition, targetPosition);
-  const duration = Math.max(6000, Math.min(45000, (Math.max(180, totalLength) / FLEET_TRAVEL_REFERENCE_DISTANCE) * FLEET_TRAVEL_REFERENCE_DURATION_MS));
   let finishAudioPlayed = false;
   const playFinishIfNeeded = () => {
     if (finishAudioPlayed) return;
     finishAudioPlayed = true;
     playAudioCue(hyperspaceFinishAudio);
   };
-  const finalizeTransfer = () => {
+  const finalizeTransferFx = () => {
     token.remove();
     playFinishIfNeeded();
-    ship.assignedFleetId = targetFleet.id;
-    ship.locationPlanetId = targetFleet.locationPlanetId || targetFleet.planetId || ship.locationPlanetId;
-    normalizeFleetShipAssignments();
-    rebuildIndexes();
-    saveLocal();
-    render({ positions: true, layers: true });
-    if (activeMainTab === 'fleetManagement') renderFleetManagementView();
-    if (selected?.type === 'fleet' && (selected.id === sourceFleet.id || selected.id === targetFleet.id)) openFleet(selected.id);
-    setStatus(`Schiff umverlegt: ${ship.name} -> ${targetFleet.name}`);
   };
   const startedAt = performance.now();
   const tickTransfer = (now) => {
@@ -5286,12 +5259,66 @@ function animateShipTransferBetweenFleets(ship, sourceFleet, targetFleet) {
       playFinishIfNeeded();
     }
     if (linearProgress >= 1) {
-      finalizeTransfer();
+      finalizeTransferFx();
       return;
     }
     requestAnimationFrame(tickTransfer);
   };
   requestAnimationFrame(tickTransfer);
+  return duration + FLEET_HYPERSPACE_START_DELAY_MS;
+}
+
+function openFleetManifestInManagement(fleetId) {
+  activeFleetManifestFilterFleetId = fleetId || '';
+  renderFleetManagementView();
+  requestAnimationFrame(() => {
+    const target = document.getElementById('fleetManagementShipsSection');
+    if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+}
+
+function clearFleetManifestFilter() {
+  activeFleetManifestFilterFleetId = '';
+  renderFleetManagementView();
+}
+
+function animateShipTransferBetweenFleets(ship, sourceFleet, targetFleet) {
+  const sourcePosition = sourceFleet ? getFleetDisplayPosition(sourceFleet) : null;
+  const targetPosition = targetFleet ? getFleetDisplayPosition(targetFleet) : null;
+  if (!ship || !sourceFleet || !targetFleet || !sourcePosition || !targetPosition) {
+    ship.assignedFleetId = targetFleet?.id || '';
+    ship.locationPlanetId = targetFleet?.locationPlanetId || targetFleet?.planetId || ship.locationPlanetId;
+    normalizeFleetShipAssignments();
+    rebuildIndexes();
+    saveLocal();
+    render({ positions: true, layers: true });
+    if (activeMainTab === 'fleetManagement') renderFleetManagementView();
+    if (selected?.type === 'fleet' && (selected.id === sourceFleet?.id || selected.id === targetFleet?.id)) openFleet(selected.id);
+    return;
+  }
+  const transferDurationMs = playShipTransferFx(ship, sourceFleet, targetFleet);
+  emitLiveSocketEvent('fx:ship-redeploy', {
+    shipId: ship.id,
+    sourceFleetId: sourceFleet.id,
+    targetFleetId: targetFleet.id
+  });
+  ship.assignedFleetId = '';
+  normalizeFleetShipAssignments();
+  saveLocal();
+  if (activeMainTab === 'fleetManagement') renderFleetManagementView();
+  if (selected?.type === 'fleet' && (selected.id === sourceFleet.id || selected.id === targetFleet.id)) openFleet(selected.id);
+  const finalizeTransfer = () => {
+    ship.assignedFleetId = targetFleet.id;
+    ship.locationPlanetId = targetFleet.locationPlanetId || targetFleet.planetId || ship.locationPlanetId;
+    normalizeFleetShipAssignments();
+    rebuildIndexes();
+    saveLocal();
+    render({ positions: true, layers: true });
+    if (activeMainTab === 'fleetManagement') renderFleetManagementView();
+    if (selected?.type === 'fleet' && (selected.id === sourceFleet.id || selected.id === targetFleet.id)) openFleet(selected.id);
+    setStatus(`Schiff umverlegt: ${ship.name} -> ${targetFleet.name}`);
+  };
+  window.setTimeout(finalizeTransfer, Math.max(Number(transferDurationMs) || 0, 6500));
 }
 
 function renderFleetManagementView() {

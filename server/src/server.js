@@ -408,6 +408,21 @@ io.on('connection', (socket) => {
       }
     });
   });
+
+  socket.on('fx:ship-redeploy', (payload) => {
+    const activeSession = syncSocketSession(socket);
+    if (!activeSession?.id || activeSession.role === 'Viewer' || !payload?.shipId || !payload?.sourceFleetId || !payload?.targetFleetId) return;
+    socket.broadcast.emit('fx:ship-redeploy', {
+      shipId: payload.shipId,
+      sourceFleetId: payload.sourceFleetId,
+      targetFleetId: payload.targetFleetId,
+      actor: {
+        id: activeSession.id,
+        username: activeSession.username,
+        role: activeSession.role
+      }
+    });
+  });
 });
 
 server.listen(PORT, '0.0.0.0', () => {
