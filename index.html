@@ -332,6 +332,7 @@ const CAPTURE_REWARD_PER_SLOT = 20;
 const DEFAULT_SHIPYARD_PLANET_KEYS = ['anaxes', 'kuat', 'rothana'];
 const KUS_SHIPYARD_PLANET_KEYS = ['geonosis', 'muunilinst', 'serenno', 'raxus'];
 const STATION_CLASS_IDS = new Set(['golan_1']);
+const GAR_SHIP_COST_MULTIPLIER = 10;
 const TRELLO_EXCLUDED_LISTS = new Set([
   'informationen',
   'vorlage',
@@ -361,6 +362,12 @@ const SHIP_CLASS_POOL = {
   providence: { displayName: 'Providence-class Dreadnought', asset: 'assets/kus.svg', faction: 'KUS', canJump: true, buildLocations: ['Geonosis', 'Muunilinst', 'Serenno', 'Raxus'], buildTimeHours: 24, cost: {} },
   lucrehulk: { displayName: 'Lucrehulk-class Battleship', asset: 'assets/kus.svg', faction: 'KUS', canJump: true, buildLocations: ['Geonosis', 'Muunilinst', 'Serenno', 'Raxus'], buildTimeHours: 36, cost: {} }
 };
+Object.values(SHIP_CLASS_POOL).forEach((shipMeta) => {
+  if (shipMeta?.faction !== 'GAR' || !shipMeta.cost || GAR_SHIP_COST_MULTIPLIER === 1) return;
+  shipMeta.cost = Object.fromEntries(
+    Object.entries(shipMeta.cost).map(([resourceKey, amount]) => [resourceKey, Math.round((Number(amount) || 0) * GAR_SHIP_COST_MULTIPLIER)])
+  );
+});
 const SHIP_CLASS_IMPORT_PATTERNS = [
   { classId: 'venator', patterns: ['venator'] },
   { classId: 'acclamator_i', patterns: ['acclamator-i', 'acclamator i', 'acclamator 1', 'angriffstransporter'] },
