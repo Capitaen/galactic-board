@@ -116,3 +116,38 @@ export function listUsers(db) {
     ORDER BY username COLLATE NOCASE
   `).all();
 }
+
+export function findUserByNormalizedUsername(db, username) {
+  return db.prepare(`
+    SELECT id, username, role, created_at AS createdAt, updated_at AS updatedAt
+    FROM users
+    WHERE lower(username) = lower(?)
+    LIMIT 1
+  `).get(username);
+}
+
+export function createUser(db, { username, passwordHash, role }) {
+  const now = new Date().toISOString();
+  const id = crypto.randomUUID();
+  db.prepare(`
+    INSERT INTO users (id, username, password_hash, role, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(id, username, passwordHash, role, now, now);
+  return id;
+}
+
+export function updateUser(db, id, { username, passwordHash, role }) {
+  const now = new Date().toISOString();
+  db.prepare(`
+    UPDATE users
+    SET username = ?, password_hash = ?, role = ?, updated_at = ?
+    WHERE id = ?
+  `).run(username, passwordHash, role, now, id);
+}
+
+export function deleteUser(db, id) {
+  db.prepare(`
+    DELETE FROM users
+    WHERE id = ?
+  `).run(id);
+}

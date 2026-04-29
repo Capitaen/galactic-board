@@ -6,7 +6,7 @@ import cookieParser from 'cookie-parser';
 import bcrypt from 'bcryptjs';
 import { createServer } from 'node:http';
 import { Server as SocketServer } from 'socket.io';
-import { createDb, listUsers, readCampaignState, writeCampaignState } from './db.js';
+import { createDb, createUser, deleteUser, findUserByNormalizedUsername, listUsers, readCampaignState, updateUser, writeCampaignState } from './db.js';
 import { validateNextCampaignState } from './stateValidation.js';
 
 const projectRoot = process.cwd();
@@ -162,6 +162,31 @@ function requireAdmin(req, res, next) {
   next();
 }
 
+function sanitizeAdminRole(rawRole) {
+  const role = String(rawRole || '').trim();
+  return ['Admin', 'Eventleiter / KUS', 'Republic Navy / GAR', 'Viewer'].includes(role) ? role : 'Viewer';
+}
+
+function validateAdminUserInput(body) {
+  const username = String(body?.username || '').trim();
+  const password = String(body?.password || '');
+  const role = sanitizeAdminRole(body?.role);
+
+  if (!username) {
+    const error = new Error('Benutzername darf nicht leer sein.');
+    error.status = 400;
+    throw error;
+  }
+
+  if (!password) {
+    const error = new Error('Passwort darf nicht leer sein.');
+    error.status = 400;
+    throw error;
+  }
+
+  return { username, password, role };
+}
+
 function detectChangedCampaignKeys(previousState, nextState) {
   const keys = ['planets', 'fleets', 'ships', 'buildJobs', 'fleetMotions', 'resources', 'planetResources', 'meta'];
   return keys.filter((key) => JSON.stringify(previousState?.[key] ?? null) !== JSON.stringify(nextState?.[key] ?? null));
@@ -219,6 +244,67 @@ app.post('/api/auth/logout', (req, res) => {
   if (token) sessions.delete(token);
   res.clearCookie(COOKIE_NAME, { path: '/' });
   res.json({ ok: true });
+});
+
+app.post('/api/admin/users', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { username, password, role } = validateAdminUserInput(req.body);
+    const existing = findUserByNormalizedUsername(db, username);
+    if (existing) {
+      return res.status(409).json({ error: 'Dieser Benutzername existiert bereits.', users: listUsers(db) });
+    }
+    const passwordHash = await bcrypt.hash(password, 10);
+    createUser(db, { username, passwordHash, role });
+    res.json({ ok: true, users: listUsers(db) });
+  } catch (error) {
+    res.status(error.status || 500).json({
+      error: error.message || 'Login konnte nicht erstellt werden.',
+      users: listUsers(db)
+    });
+  }
+});
+
+app.patch('/api/admin/users/:id', requireAuth, requireAdmin, async (req, res) => {
+  const userId = String(req.params.id || '').trim();
+  if (!userId) {
+    return res.status(400).json({ error: 'Ungültige Benutzer-ID.', users: listUsers(db) });
+  }
+
+  try {
+    const { username, password, role } = validateAdminUserInput(req.body);
+    const existing = findUserByNormalizedUsername(db, username);
+    if (existing && existing.id !== userId) {
+      return res.status(409).json({ error: 'Dieser Benutzername existiert bereits.', users: listUsers(db) });
+    }
+    const passwordHash = await bcrypt.hash(password, 10);
+    updateUser(db, userId, { username, passwordHash, role });
+    res.json({ ok: true, users: listUsers(db) });
+  } catch (error) {
+    res.status(error.status || 500).json({
+      error: error.message || 'Login konnte nicht gespeichert werden.',
+      users: listUsers(db)
+    });
+  }
+});
+
+app.delete('/api/admin/users/:id', requireAuth, requireAdmin, (req, res) => {
+  const userId = String(req.params.id || '').trim();
+  if (!userId) {
+    return res.status(400).json({ error: 'Ungültige Benutzer-ID.', users: listUsers(db) });
+  }
+
+  const existingUsers = listUsers(db);
+  const targetUser = existingUsers.find((entry) => entry.id === userId);
+  if (!targetUser) {
+    return res.status(404).json({ error: 'Login nicht gefunden.', users: existingUsers });
+  }
+
+  if (String(targetUser.username || '').trim().toLowerCase() === 'admin') {
+    return res.status(403).json({ error: 'Der Standard-Admin darf nicht gelöscht werden.', users: existingUsers });
+  }
+
+  deleteUser(db, userId);
+  res.json({ ok: true, users: listUsers(db) });
 });
 
 app.put('/api/campaign/state', requireAuth, (req, res) => {
