@@ -646,7 +646,33 @@ function getPlanetSearchAliases(planet) {
   const aliases = [];
   const key = normalizePlanetKey(planet.id || planet.name);
   if (key === 'raxus') aliases.push('Raxus Secundus');
+  if (key === 'coruscant' || key === 'imperial_center') aliases.push('Coruscant', 'Imperial Center');
+  if (planet.id) aliases.push(String(planet.id).replace(/_/g, ' '));
   return aliases.join(' ');
+}
+
+function getPlanetSearchHaystack(planet) {
+  if (!planet) return '';
+  return normalizeSearchText([
+    planet.name,
+    planet.id,
+    getPlanetSearchAliases(planet),
+    planet.grid || '',
+    planet.sector || '',
+    planet.region || ''
+  ].join(' '));
+}
+
+function planetMatchesExactSearch(planet, normalizedQuery) {
+  if (!planet || !normalizedQuery) return false;
+  const candidates = [
+    planet.name,
+    planet.id,
+    ...String(getPlanetSearchAliases(planet) || '')
+      .split(/\s{2,}|,\s*|;\s*/)
+      .filter(Boolean)
+  ];
+  return candidates.some((entry) => normalizeSearchText(entry).trim() === normalizedQuery);
 }
 
 function playAudioCue(audio) {
@@ -1674,7 +1700,7 @@ async function bootstrapFromServer() {
     serverRevision = Number(payload.revision || 0);
     serverSync.revision = serverRevision;
     refreshRoleChrome();
-    connectServerSocket();
+    window.setTimeout(() => connectServerSocket(), 250);
   } catch (error) {
     console.warn('Server bootstrap unavailable, falling back to local state', error);
     applyDefaultAnonymousRole();
@@ -2663,7 +2689,7 @@ function updatePlanetSearchResults(query) {
   searchResultsState = state.planets
     .map((planet) => ({
       planet,
-      haystack: normalizeSearchText(`${planet.name} ${getPlanetSearchAliases(planet)} ${planet.grid || ''} ${planet.sector || ''} ${planet.region || ''}`)
+      haystack: getPlanetSearchHaystack(planet)
     }))
     .filter((entry) => entry.haystack.includes(normalizedQuery))
     .sort((a, b) => {
@@ -2742,7 +2768,7 @@ function updateFleetJumpSearch(fleetId, query) {
     .filter((planet) => planet.id !== fleet.planetId)
     .map((planet) => ({
       planet,
-      haystack: normalizeSearchText(`${planet.name} ${getPlanetSearchAliases(planet)} ${planet.grid || ''} ${planet.sector || ''} ${planet.region || ''}`)
+      haystack: getPlanetSearchHaystack(planet)
     }))
     .filter((entry) => entry.haystack.includes(normalizedQuery))
     .sort((a, b) => a.planet.name.localeCompare(b.planet.name, 'de'))
@@ -2778,8 +2804,7 @@ function startFleetJump(id) {
   let targetId = document.getElementById('fleetJumpTargetId')?.value || fleetJumpSearchState.selectedPlanetId;
   if (!targetId && typedTarget) {
     const normalizedTypedTarget = normalizeSearchText(typedTarget);
-    const exactMatch = state.planets.find((planet) => normalizeSearchText(planet.name) === normalizedTypedTarget
-      || normalizeSearchText(getPlanetSearchAliases(planet)) === normalizedTypedTarget);
+    const exactMatch = state.planets.find((planet) => planetMatchesExactSearch(planet, normalizedTypedTarget));
     if (exactMatch) targetId = exactMatch.id;
   }
   const targetPlanet = planetIndex.get(targetId);
