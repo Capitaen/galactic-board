@@ -24,7 +24,7 @@ const COOKIE_NAME = 'gcb_session';
 const PORT = Number(process.env.PORT || 3000);
 const RESOURCE_KEYS = ['metal', 'technology', 'fuel', 'chemicals', 'supplies'];
 const RESOURCE_PRODUCTION_TICK_MS = 60 * 60 * 1000;
-const OWNER_FRONTLINE_PASS_VERSION = 'cw_image_v6';
+const OWNER_FRONTLINE_PASS_VERSION = 'excel_owner_visibility_v1';
 const OWNER_FRONTLINE_OVERRIDES = {
   coruscant: 'GAR',
   corellia: 'GAR',
@@ -112,7 +112,15 @@ function loadPlanetOwnershipReference() {
       const owner = mapReferenceOwner(row?.owner);
       if (!owner) continue;
       for (const alias of buildOwnershipReferenceAliases(row?.name)) {
-        if (!reference.has(alias)) reference.set(alias, owner);
+        if (!reference.has(alias)) {
+          reference.set(alias, { owner, isLegends: /\/legends\b/i.test(String(row?.name || '')) });
+          continue;
+        }
+        const existing = reference.get(alias);
+        const candidateIsLegends = /\/legends\b/i.test(String(row?.name || ''));
+        if (existing?.isLegends && !candidateIsLegends) {
+          reference.set(alias, { owner, isLegends: false });
+        }
       }
     }
     return reference;
@@ -131,59 +139,14 @@ function pointInEllipse(x, y, cx, cy, rx, ry) {
   return (dx * dx) + (dy * dy) <= 1;
 }
 
-function classifyOwnerFromReferenceMap(planet) {
+function getPlanetOwnershipReferenceMatch(planet) {
   if (!planet) return null;
   for (const candidate of [planet.name, String(planet.id || '').replace(/_/g, ' ')]) {
     for (const alias of buildOwnershipReferenceAliases(candidate)) {
-      const referencedOwner = PLANET_OWNERSHIP_REFERENCE.get(alias);
-      if (referencedOwner) return referencedOwner;
+      const referenced = PLANET_OWNERSHIP_REFERENCE.get(alias);
+      if (referenced?.owner) return referenced;
     }
   }
-  const explicitOwner = OWNER_FRONTLINE_OVERRIDES[planet.id];
-  if (explicitOwner) return explicitOwner;
-  const region = String(planet.region || '').trim();
-  const x = Number(planet.x);
-  const y = Number(planet.y);
-
-  // The user asked to mirror the reference text/map where BLUE = CIS/KUS.
-  // Prioritize those blue territories first, then fall back to Hutt and core GAR areas.
-  const inBlueNorthArm = pointInEllipse(x, y, 1535, 500, 520, 315);
-  const inBlueNorthWestRun = pointInEllipse(x, y, 1320, 365, 245, 145);
-  const inBlueUnknownRegions = pointInEllipse(x, y, 565, 1100, 845, 640);
-  const inBlueCentralPocket = pointInEllipse(x, y, 1095, 1125, 315, 255);
-  const inBlueColoniesPocket = pointInEllipse(x, y, 1005, 1295, 290, 215);
-  const inBlueEastSlice = pointInEllipse(x, y, 1555, 1085, 420, 455);
-  const inBlueFarSouth = pointInEllipse(x, y, 1115, 1830, 760, 360);
-  const inBlueSouthWest = pointInEllipse(x, y, 640, 1770, 500, 285);
-  const inBlueExpansionSouth = pointInEllipse(x, y, 1210, 1490, 255, 245);
-  const inBlueKesselBand = pointInEllipse(x, y, 1510, 1265, 215, 165);
-  const inBlueAblajeck = pointInEllipse(x, y, 355, 1460, 165, 175);
-
-  if (
-    inBlueNorthArm
-    || inBlueNorthWestRun
-    || inBlueUnknownRegions
-    || inBlueCentralPocket
-    || inBlueColoniesPocket
-    || inBlueEastSlice
-    || inBlueFarSouth
-    || inBlueSouthWest
-    || inBlueExpansionSouth
-    || inBlueKesselBand
-    || inBlueAblajeck
-  ) {
-    return 'KUS';
-  }
-
-  if (region === 'Hutt Space') return 'HUTT';
-  const inHuttCore = pointInEllipse(x, y, 1495, 1280, 145, 165);
-  if (inHuttCore) return 'HUTT';
-
-  if (region === 'Deep Core' || region === 'Core') return 'GAR';
-  if (region === 'Colonies') return 'GAR';
-  if (region === 'Unknown Regions' || region === 'Wild Space' || region === 'Expansion Region' || region === 'Outer Rim') return 'KUS';
-  if (region === 'Mid Rim' || region === 'Inner Rim') return y > 1180 ? 'KUS' : 'GAR';
-
   return null;
 }
 
@@ -305,10 +268,17 @@ function applyOwnerFrontlineImagePass(previousState) {
   let changed = false;
   for (const planet of planets) {
     if (!planet?.id) continue;
-    const nextOwner = classifyOwnerFromReferenceMap(planet);
-    if (!nextOwner || planet.owner === nextOwner) continue;
-    planet.owner = nextOwner;
-    changed = true;
+    const referenceMatch = getPlanetOwnershipReferenceMatch(planet);
+    const isListed = Boolean(referenceMatch?.owner);
+    if (Boolean(planet.referenceListed) !== isListed) {
+      planet.referenceListed = isListed;
+      changed = true;
+    }
+    if (!referenceMatch?.owner) continue;
+    if (planet.owner !== referenceMatch.owner) {
+      planet.owner = referenceMatch.owner;
+      changed = true;
+    }
   }
   nextState.meta.ownerMapPassVersion = OWNER_FRONTLINE_PASS_VERSION;
   if (!changed && previousState?.meta?.ownerMapPassVersion === OWNER_FRONTLINE_PASS_VERSION) {

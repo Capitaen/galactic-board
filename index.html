@@ -1014,6 +1014,10 @@ function planetHasPersistentMapNote(planet) {
   return Boolean(String(planet?.description || '').trim());
 }
 
+function planetIsListedInReference(planet) {
+  return Boolean(planet?.referenceListed);
+}
+
 function planetHasAnchoredGameplayContent(planetId) {
   if (!planetId) return false;
   return state.fleets.some((fleet) => fleet?.planetId === planetId)
@@ -1029,7 +1033,7 @@ function shouldRevealPlanetTemporarily(planet) {
 
 function shouldDisplayPlanetByDefault(planet) {
   if (!planet) return false;
-  return isPriorityWorld(planet)
+  return planetIsListedInReference(planet)
     || planetHasPersistentMapNote(planet)
     || planetHasAnchoredGameplayContent(planet.id);
 }
