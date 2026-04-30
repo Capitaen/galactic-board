@@ -23,7 +23,7 @@ const COOKIE_NAME = 'gcb_session';
 const PORT = Number(process.env.PORT || 3000);
 const RESOURCE_KEYS = ['metal', 'technology', 'fuel', 'chemicals', 'supplies'];
 const RESOURCE_PRODUCTION_TICK_MS = 60 * 60 * 1000;
-const OWNER_FRONTLINE_PASS_VERSION = 'cw_image_v3';
+const OWNER_FRONTLINE_PASS_VERSION = 'cw_image_v4';
 const OWNER_FRONTLINE_OVERRIDES = {
   abregado_rae: 'GAR',
   alderaan: 'GAR',
@@ -77,6 +77,48 @@ const OWNER_FRONTLINE_OVERRIDES = {
   zisia: 'HUTT',
   ziugen: 'HUTT'
 };
+
+function pointInEllipse(x, y, cx, cy, rx, ry) {
+  if (![x, y, cx, cy, rx, ry].every(Number.isFinite)) return false;
+  const dx = (x - cx) / rx;
+  const dy = (y - cy) / ry;
+  return (dx * dx) + (dy * dy) <= 1;
+}
+
+function classifyOwnerFromReferenceMap(planet) {
+  if (!planet) return null;
+  const explicitOwner = OWNER_FRONTLINE_OVERRIDES[planet.id];
+  if (explicitOwner) return explicitOwner;
+  const region = String(planet.region || '').trim();
+  const x = Number(planet.x);
+  const y = Number(planet.y);
+
+  if (region === 'Hutt Space') return 'HUTT';
+  if (region === 'Unknown Regions' || region === 'Wild Space') return 'NEUTRAL';
+
+  const inGarCoreNorth = pointInEllipse(x, y, 1060, 1060, 300, 270);
+  const inGarCoreSouth = pointInEllipse(x, y, 1080, 1435, 285, 335);
+  const inGarWest = pointInEllipse(x, y, 900, 1420, 220, 260);
+  const inHuttSlice = pointInEllipse(x, y, 1510, 1120, 235, 265);
+  const inHuttSouth = pointInEllipse(x, y, 1500, 1475, 255, 220);
+  const inKusNorth = pointInEllipse(x, y, 1275, 655, 425, 285);
+  const inKusNorthEast = pointInEllipse(x, y, 1510, 730, 260, 270);
+  const inKusSouth = pointInEllipse(x, y, 1160, 1675, 285, 195);
+
+  if (inHuttSlice || inHuttSouth) return 'HUTT';
+  if (inGarCoreNorth || inGarCoreSouth || inGarWest) return 'GAR';
+  if (inKusNorth || inKusNorthEast || inKusSouth) return 'KUS';
+
+  if (region === 'Core' || region === 'Colonies' || region === 'Inner Rim') return 'GAR';
+  if (region === 'Expansion Region' && x < 1280 && y > 760) return 'GAR';
+  if (region === 'Mid Rim' && x < 1080 && y > 820 && y < 1700) return 'GAR';
+  if (region === 'Outer Rim' && x < 820) return 'NEUTRAL';
+  if (region === 'Outer Rim' && x > 1420 && y > 930 && y < 1600) return 'HUTT';
+  if (region === 'Outer Rim' && y < 830 && x > 1080) return 'KUS';
+  if (region === 'Outer Rim' && y > 1480 && x > 900 && x < 1420) return 'KUS';
+
+  return null;
+}
 
 function findIndexHtml() {
   const candidates = [
@@ -196,13 +238,7 @@ function applyOwnerFrontlineImagePass(previousState) {
   let changed = false;
   for (const planet of planets) {
     if (!planet?.id) continue;
-    let nextOwner = null;
-    if (String(planet.region || '').trim() === 'Hutt Space') {
-      nextOwner = 'HUTT';
-    }
-    if (OWNER_FRONTLINE_OVERRIDES[planet.id]) {
-      nextOwner = OWNER_FRONTLINE_OVERRIDES[planet.id];
-    }
+    const nextOwner = classifyOwnerFromReferenceMap(planet);
     if (!nextOwner || planet.owner === nextOwner) continue;
     planet.owner = nextOwner;
     changed = true;
