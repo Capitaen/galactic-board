@@ -7,7 +7,7 @@
 <style>
 :root {
   --bg:#05070b; --panel:#1d2027; --panel2:#2b2f38; --text:#e9edf5; --muted:#9aa4b3;
-  --gar:#1f7cff; --kus:#d03632; --neutral:#f0d44b; --line:#ffffff;
+  --gar:#1f7cff; --kus:#d03632; --hutt:#f39a2d; --neutral:#f0d44b; --line:#ffffff;
 }
 * { box-sizing:border-box; }
 body { margin:0; background:#05070b; color:var(--text); font-family: Inter, Segoe UI, Arial, sans-serif; overflow:hidden; }
@@ -50,6 +50,7 @@ body { margin:0; background:#05070b; color:var(--text); font-family: Inter, Sego
 .planet.priority-world { width:18px; height:18px; background:#2cd66b !important; border-width:2px; box-shadow:0 0 12px rgba(44,214,107,.85); z-index:8; }
 .planet.GAR { background:var(--gar); }
 .planet.KUS { background:var(--kus); }
+.planet.HUTT { background:var(--hutt); }
 .planet.NEUTRAL { background:var(--neutral); }
 .planet:hover { width:18px; height:18px; z-index:7; }
 .planet.priority-world:hover { width:22px; height:22px; z-index:9; }
@@ -124,6 +125,7 @@ textarea { min-height:82px; resize:vertical; }
 .badge { display:inline-block; padding:3px 8px; border-radius:999px; background:#303642; margin-right:5px; font-size:12px; }
 .badge.GAR { background:rgba(31,124,255,.25); color:#aecdff; }
 .badge.KUS { background:rgba(208,54,50,.25); color:#ffc2c0; }
+.badge.HUTT { background:rgba(243,154,45,.25); color:#ffd3a0; }
 .badge.NEUTRAL { background:rgba(240,212,75,.25); color:#fff2a0; }
 #statusbar { position:absolute; left:0; right:0; bottom:0; z-index:45; height:26px; padding:5px 10px; background:rgba(0,0,0,.62); color:#a9b5c9; font-size:12px; display:flex; justify-content:space-between; }
 .main-nav { position:absolute; left:22px; bottom:42px; z-index:44; display:flex; gap:8px; }
@@ -2820,9 +2822,11 @@ function getDefaultRouteDominance(route) {
   const total = endpoints.length || 1;
   const garCount = endpoints.filter((planet) => planet?.owner === 'GAR').length;
   const kusCount = endpoints.filter((planet) => planet?.owner === 'KUS').length;
+  const huttCount = endpoints.filter((planet) => planet?.owner === 'HUTT').length;
   return {
     gar: Math.round((garCount / total) * 100),
-    kus: Math.round((kusCount / total) * 100)
+    kus: Math.round((kusCount / total) * 100),
+    hutt: Math.round((huttCount / total) * 100)
   };
 }
 
@@ -2830,8 +2834,9 @@ function getRouteDominance(route) {
   const fallback = getDefaultRouteDominance(route);
   const gar = clamp(Number(fallback.gar) || 0, 0, 100);
   const kus = clamp(Number(fallback.kus) || 0, 0, 100);
-  const neutral = Math.max(0, 100 - gar - kus);
-  return { gar, kus, neutral };
+  const hutt = clamp(Number(fallback.hutt) || 0, 0, 100);
+  const neutral = Math.max(0, 100 - gar - kus - hutt);
+  return { gar, kus, hutt, neutral };
 }
 
 function getRouteDisplayName(route) {
@@ -3469,7 +3474,7 @@ function canEditPlanet() {
 }
 
 function ownerClass(o) {
-  return o === 'GAR' ? 'GAR' : (o === 'KUS' ? 'KUS' : 'NEUTRAL');
+  return o === 'GAR' ? 'GAR' : (o === 'KUS' ? 'KUS' : (o === 'HUTT' ? 'HUTT' : 'NEUTRAL'));
 }
 
 function iconFor(f) {
@@ -3807,15 +3812,17 @@ function buildRouteCache() {
   const neutralState = new Map();
   edges.forEach(([a, b]) => {
     if (a.owner === 'NEUTRAL') {
-      const entry = neutralState.get(a.id) || { gar: false, kus: false };
+      const entry = neutralState.get(a.id) || { gar: false, kus: false, hutt: false };
       entry.gar ||= b.owner === 'GAR';
       entry.kus ||= b.owner === 'KUS';
+      entry.hutt ||= b.owner === 'HUTT';
       neutralState.set(a.id, entry);
     }
     if (b.owner === 'NEUTRAL') {
-      const entry = neutralState.get(b.id) || { gar: false, kus: false };
+      const entry = neutralState.get(b.id) || { gar: false, kus: false, hutt: false };
       entry.gar ||= a.owner === 'GAR';
       entry.kus ||= a.owner === 'KUS';
+      entry.hutt ||= a.owner === 'HUTT';
       neutralState.set(b.id, entry);
     }
   });
@@ -3823,14 +3830,18 @@ function buildRouteCache() {
     let cls = null;
     if (a.owner === 'GAR' && b.owner === 'GAR') cls = 'blue';
     else if (a.owner === 'KUS' && b.owner === 'KUS') cls = 'red';
+    else if (a.owner === 'HUTT' && b.owner === 'HUTT') cls = 'orange';
     else if ((a.owner === 'GAR' && b.owner === 'KUS') || (a.owner === 'KUS' && b.owner === 'GAR')) cls = 'purple';
+    else if ((a.owner === 'GAR' && b.owner === 'HUTT') || (a.owner === 'HUTT' && b.owner === 'GAR')) cls = 'orange';
+    else if ((a.owner === 'KUS' && b.owner === 'HUTT') || (a.owner === 'HUTT' && b.owner === 'KUS')) cls = 'orange';
     else if (a.owner === 'NEUTRAL' || b.owner === 'NEUTRAL') {
       const neutral = a.owner === 'NEUTRAL' ? a : b;
       const other = neutral.id === a.id ? b : a;
       const contested = neutralState.get(neutral.id);
-      if (contested?.gar && contested?.kus) cls = 'purple';
+      if ((contested?.gar && contested?.kus) || (contested?.gar && contested?.hutt) || (contested?.kus && contested?.hutt)) cls = 'purple';
       else if (other.owner === 'GAR') cls = 'purple';
       else if (other.owner === 'KUS') cls = 'red';
+      else if (other.owner === 'HUTT') cls = 'orange';
     }
     return cls ? { id: getRouteId(a, b), a, b, cls } : null;
   }).filter(Boolean);
@@ -4332,9 +4343,11 @@ function getNeutralInfluenceStatus(planet, adjacency) {
     .filter(Boolean);
   const hasGAR = neighbors.some((neighbor) => neighbor.owner === 'GAR');
   const hasKUS = neighbors.some((neighbor) => neighbor.owner === 'KUS');
-  if (hasGAR && hasKUS) return 'CONTESTED';
+  const hasHUTT = neighbors.some((neighbor) => neighbor.owner === 'HUTT');
+  if ((hasGAR && hasKUS) || (hasGAR && hasHUTT) || (hasKUS && hasHUTT)) return 'CONTESTED';
   if (hasGAR) return 'GAR_PRESSURE';
   if (hasKUS) return 'KUS_PRESSURE';
+  if (hasHUTT) return 'HUTT_PRESSURE';
   return 'NEUTRAL';
 }
 
@@ -4342,7 +4355,10 @@ function getHyperlaneVisualState(a, b, adjacency) {
   if (!a || !b) return { color: 'rgba(160,170,188,.28)', contested: false };
   if (a.owner === 'GAR' && b.owner === 'GAR') return { color: 'rgba(31,124,255,.5)', contested: false };
   if (a.owner === 'KUS' && b.owner === 'KUS') return { color: 'rgba(208,54,50,.5)', contested: false };
+  if (a.owner === 'HUTT' && b.owner === 'HUTT') return { color: 'rgba(243,154,45,.6)', contested: false };
   if ((a.owner === 'GAR' && b.owner === 'KUS') || (a.owner === 'KUS' && b.owner === 'GAR')) return { color: 'rgba(156,67,255,.72)', contested: true };
+  if ((a.owner === 'GAR' && b.owner === 'HUTT') || (a.owner === 'HUTT' && b.owner === 'GAR')) return { color: 'rgba(255,181,92,.6)', contested: true };
+  if ((a.owner === 'KUS' && b.owner === 'HUTT') || (a.owner === 'HUTT' && b.owner === 'KUS')) return { color: 'rgba(255,154,72,.62)', contested: true };
   if (a.owner === 'NEUTRAL' && b.owner === 'NEUTRAL') {
     const aStatus = getNeutralInfluenceStatus(a, adjacency);
     const bStatus = getNeutralInfluenceStatus(b, adjacency);
@@ -4355,6 +4371,7 @@ function getHyperlaneVisualState(a, b, adjacency) {
   if (neutralStatus === 'CONTESTED') return { color: faction?.owner === 'GAR' ? 'rgba(110,140,255,.66)' : 'rgba(186,94,255,.66)', contested: true };
   if (neutralStatus === 'GAR_PRESSURE') return { color: 'rgba(94,154,255,.44)', contested: true };
   if (neutralStatus === 'KUS_PRESSURE') return { color: 'rgba(222,98,120,.44)', contested: true };
+  if (neutralStatus === 'HUTT_PRESSURE') return { color: 'rgba(243,154,45,.5)', contested: true };
   return { color: 'rgba(170,176,188,.24)', contested: false };
 }
 
@@ -4399,6 +4416,7 @@ function renderInfluenceClouds() {
 
   drawCloudPass((a, b) => a.owner === 'GAR' && b.owner === 'GAR', 'rgba(31,124,255,.95)', 70, 18, 0.28);
   drawCloudPass((a, b) => a.owner === 'KUS' && b.owner === 'KUS', 'rgba(208,54,50,.95)', 70, 18, 0.28);
+  drawCloudPass((a, b) => a.owner === 'HUTT' && b.owner === 'HUTT', 'rgba(243,154,45,.92)', 66, 18, 0.26);
   if (layers.contested) {
     drawCloudPass((a, b) => {
       const visual = getHyperlaneVisualState(a, b, adjacency);
@@ -4416,6 +4434,10 @@ function renderInfluenceClouds() {
       drawInfluencePlanetHalo(influenceCtx, position.x, position.y, 'rgba(255,126,126,.46)', 'rgba(208,54,50,.18)', 68);
       return;
     }
+    if (planet.owner === 'HUTT') {
+      drawInfluencePlanetHalo(influenceCtx, position.x, position.y, 'rgba(255,187,102,.42)', 'rgba(243,154,45,.18)', 62);
+      return;
+    }
     if (layers.contested) {
       const status = getNeutralInfluenceStatus(planet, adjacency);
       if (status === 'CONTESTED') {
@@ -4424,6 +4446,8 @@ function renderInfluenceClouds() {
         drawInfluencePlanetHalo(influenceCtx, position.x, position.y, 'rgba(133,190,255,.22)', 'rgba(122,140,160,.1)', 48);
       } else if (status === 'KUS_PRESSURE') {
         drawInfluencePlanetHalo(influenceCtx, position.x, position.y, 'rgba(255,138,138,.22)', 'rgba(152,132,144,.1)', 48);
+      } else if (status === 'HUTT_PRESSURE') {
+        drawInfluencePlanetHalo(influenceCtx, position.x, position.y, 'rgba(255,190,116,.24)', 'rgba(243,154,45,.12)', 48);
       } else {
         drawInfluencePlanetHalo(influenceCtx, position.x, position.y, 'rgba(255,228,112,.14)', 'rgba(178,178,178,.08)', 40);
       }
@@ -4986,7 +5010,7 @@ function openRoute(id) {
     <p class="muted">Route-ID: ${route.id} • Verbundene Planeten: ${routePlanets}</p>
     <div class="form-row"><label>Routenname</label><input id="routeName" value="${meta?.name || getRouteDisplayName(route)}" ${disabled}></div>
     <p class="muted">Dominanz automatisch aus den verbundenen Planeten berechnet.</p>
-    <p class="muted">GAR ${dominance.gar.toFixed(0)}% • KUS ${dominance.kus.toFixed(0)}% • Neutral / umkämpft ${dominance.neutral.toFixed(0)}%</p>
+    <p class="muted">GAR ${dominance.gar.toFixed(0)}% • KUS ${dominance.kus.toFixed(0)}% • HUTT ${dominance.hutt.toFixed(0)}% • Neutral / umkämpft ${dominance.neutral.toFixed(0)}%</p>
     <button class="primary" onclick="saveRoute('${route.id}')" ${disabled}>Route speichern</button>
   `;
 }
@@ -5036,6 +5060,7 @@ function openPlanet(id) {
     <div class="form-row"><label>Owner</label><select id="planetOwner" ${disabled}>
       <option ${p.owner === 'GAR' ? 'selected' : ''}>GAR</option>
       <option ${p.owner === 'KUS' ? 'selected' : ''}>KUS</option>
+      <option ${p.owner === 'HUTT' ? 'selected' : ''}>HUTT</option>
       <option ${p.owner === 'NEUTRAL' ? 'selected' : ''}>NEUTRAL</option>
     </select></div>
     <div class="form-row"><label>Wiki-Link</label><input id="planetWiki" value="${p.wiki || ''}" ${disabled}></div>

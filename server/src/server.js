@@ -23,28 +23,59 @@ const COOKIE_NAME = 'gcb_session';
 const PORT = Number(process.env.PORT || 3000);
 const RESOURCE_KEYS = ['metal', 'technology', 'fuel', 'chemicals', 'supplies'];
 const RESOURCE_PRODUCTION_TICK_MS = 60 * 60 * 1000;
-const OWNER_FRONTLINE_PASS_VERSION = 'cw_image_v1';
+const OWNER_FRONTLINE_PASS_VERSION = 'cw_image_v3';
 const OWNER_FRONTLINE_OVERRIDES = {
+  abregado_rae: 'GAR',
+  alderaan: 'GAR',
   balmorra: 'GAR',
   bothawui: 'GAR',
+  cato_neimoidia: 'GAR',
+  coruscant: 'GAR',
   corellia: 'GAR',
+  dantooine: 'GAR',
+  duxn: 'GAR',
+  kashyyyk: 'GAR',
   kuat: 'GAR',
   mandalore: 'GAR',
   mon_calamari: 'GAR',
+  naboo: 'GAR',
+  onderon: 'GAR',
   rendili: 'GAR',
+  tython: 'GAR',
+  yaga_minor: 'GAR',
+  ahldani: 'KUS',
+  auraterra: 'KUS',
   christophsis: 'KUS',
   dathomir: 'KUS',
   felucia: 'KUS',
+  mimban: 'KUS',
+  murkhana: 'KUS',
   ossus: 'KUS',
-  saleucami: 'KUS',
+  qiilura: 'KUS',
+  raxus: 'KUS',
+  scarif: 'KUS',
   sullust: 'KUS',
+  utapau: 'KUS',
+  wobani: 'KUS',
   yavin: 'KUS',
-  geonosis: 'NEUTRAL',
-  nal_hutta: 'NEUTRAL',
-  nar_shaddaa: 'NEUTRAL',
-  ryloth: 'NEUTRAL',
-  tatooine: 'NEUTRAL',
-  toydaria: 'NEUTRAL'
+  affavan: 'HUTT',
+  alee: 'HUTT',
+  eadu: 'HUTT',
+  geonosis: 'HUTT',
+  hypori: 'HUTT',
+  kessel: 'HUTT',
+  nal_hutta: 'HUTT',
+  nar_shaddaa: 'HUTT',
+  ryloth: 'HUTT',
+  saleucami: 'HUTT',
+  sleheyron: 'HUTT',
+  tatooine: 'HUTT',
+  teth: 'HUTT',
+  toydaria: 'HUTT',
+  xolu: 'HUTT',
+  ylesia: 'HUTT',
+  zisia: 'HUTT',
+  ziugen: 'HUTT'
 };
 
 function findIndexHtml() {
@@ -165,7 +196,13 @@ function applyOwnerFrontlineImagePass(previousState) {
   let changed = false;
   for (const planet of planets) {
     if (!planet?.id) continue;
-    const nextOwner = OWNER_FRONTLINE_OVERRIDES[planet.id];
+    let nextOwner = null;
+    if (String(planet.region || '').trim() === 'Hutt Space') {
+      nextOwner = 'HUTT';
+    }
+    if (OWNER_FRONTLINE_OVERRIDES[planet.id]) {
+      nextOwner = OWNER_FRONTLINE_OVERRIDES[planet.id];
+    }
     if (!nextOwner || planet.owner === nextOwner) continue;
     planet.owner = nextOwner;
     changed = true;
