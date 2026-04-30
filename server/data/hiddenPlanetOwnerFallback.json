@@ -1,0 +1,10092 @@
+[
+    {
+        "id":  "a_foroon",
+        "name":  "A-Foroon",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "aaeton",
+        "name":  "Aaeton",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "aargau",
+        "name":  "Aargau",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "aargonar",
+        "name":  "Aargonar",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "abafar",
+        "name":  "Abafar",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "abbaji",
+        "name":  "Abbaji",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "abhean",
+        "name":  "Abhean",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "abo_dreth",
+        "name":  "Abo Dreth",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "abraxas",
+        "name":  "Abraxas",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "abregado_rae",
+        "name":  "Abregado-rae",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "abridon",
+        "name":  "Abridon",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "absit",
+        "name":  "Absit",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "adari",
+        "name":  "Adari",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "adarlon",
+        "name":  "Adarlon",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "adin",
+        "name":  "Adin",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "adoris",
+        "name":  "Adoris",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "aduba",
+        "name":  "Aduba",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "adumar",
+        "name":  "Adumar",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "aeneid",
+        "name":  "Aeneid",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "aeten",
+        "name":  "Aeten",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "af_el",
+        "name":  "Af\u0027El",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "affa",
+        "name":  "Affa",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "affavan",
+        "name":  "Affavan",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "agamar",
+        "name":  "Agamar",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "agon",
+        "name":  "Agon",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "aguarl",
+        "name":  "Aguarl",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "ahakista",
+        "name":  "Ahakista",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ahch_to",
+        "name":  "Ahch-To",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "aikhibba",
+        "name":  "Aikhibba",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ailon",
+        "name":  "Ailon",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "akrit_tar",
+        "name":  "Akrit\u0027tar",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "akuria",
+        "name":  "Akuria",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "alakatha",
+        "name":  "Alakatha",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "alashan",
+        "name":  "Alashan",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "alassa_major",
+        "name":  "Alassa Major",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "alderaan",
+        "name":  "Alderaan",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "aldraig",
+        "name":  "Aldraig",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "alee",
+        "name":  "Alee",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "aleen",
+        "name":  "Aleen",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "algara",
+        "name":  "Algara",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "algarian",
+        "name":  "Algarian",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "algnadesh",
+        "name":  "Algnadesh",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "algor",
+        "name":  "Algor",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "alland",
+        "name":  "Alland",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "allanteen",
+        "name":  "Allanteen",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "allyuen",
+        "name":  "Allyuen",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "almania",
+        "name":  "Almania",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "alpheridies",
+        "name":  "Alpheridies",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "alsakan",
+        "name":  "Alsakan",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "altier",
+        "name":  "Altier",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "altor",
+        "name":  "Altor",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "altratonne",
+        "name":  "Altratonne",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "alui",
+        "name":  "Alui",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "alzoc",
+        "name":  "Alzoc",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "amarin",
+        "name":  "Amarin",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ambria",
+        "name":  "Ambria",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "ammuud",
+        "name":  "Ammuud",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "anantapar",
+        "name":  "Anantapar",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "anaxes",
+        "name":  "Anaxes",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "andalasa",
+        "name":  "Andalasa",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "andalia",
+        "name":  "Andalia",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "andara",
+        "name":  "Andara",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "andelm_iv",
+        "name":  "Andelm IV",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ando",
+        "name":  "Ando",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "andooweel",
+        "name":  "Andooweel",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "andosha",
+        "name":  "Andosha",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "anemcoro",
+        "name":  "Anemcoro",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "angor",
+        "name":  "Angor",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "angratha",
+        "name":  "Angratha",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ank_kit_aar",
+        "name":  "Ank Kit\u0027aar",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ankus",
+        "name":  "Ankus",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "annaj",
+        "name":  "Annaj",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "anoat",
+        "name":  "Anoat",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "anobis",
+        "name":  "Anobis",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "anorelga",
+        "name":  "Anorelga",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "anoth",
+        "name":  "Anoth",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "ansion",
+        "name":  "Ansion",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "anstares",
+        "name":  "Anstares",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "antar",
+        "name":  "Antar",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "anteevy",
+        "name":  "Anteevy",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "antemeridias",
+        "name":  "Antemeridias",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "antipose",
+        "name":  "Antipose",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "antiquity",
+        "name":  "Antiquity",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "anturus",
+        "name":  "Anturus",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "anx_minor",
+        "name":  "Anx Minor",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "anzat",
+        "name":  "Anzat",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "apatros",
+        "name":  "Apatros",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "aphran",
+        "name":  "Aphran",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "aquaris",
+        "name":  "Aquaris",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "aquella",
+        "name":  "Aquella",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "aquilae",
+        "name":  "Aquilae",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "arabanth",
+        "name":  "Arabanth",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "aradia",
+        "name":  "Aradia",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "arami",
+        "name":  "Arami",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "arat_fraca",
+        "name":  "Arat Fraca",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "arbra",
+        "name":  "Arbra",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "arcan",
+        "name":  "Arcan",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "archais",
+        "name":  "Archais",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "arda",
+        "name":  "Arda",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "argai",
+        "name":  "Argai",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "argai_minor",
+        "name":  "Argai Minor",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "argazda",
+        "name":  "Argazda",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "argovia",
+        "name":  "Argovia",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "argus",
+        "name":  "Argus",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "aridus",
+        "name":  "Aridus",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "aris",
+        "name":  "Aris",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "arkam",
+        "name":  "Arkam",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "arkania",
+        "name":  "Arkania",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "arkanis",
+        "name":  "Arkanis",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "arkuda",
+        "name":  "Arkuda",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "arleen",
+        "name":  "Arleen",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "arporatal_lanin",
+        "name":  "Arporatal-Lanin",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "arrgaw",
+        "name":  "Arrgaw",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "artesia",
+        "name":  "Artesia",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "aruza",
+        "name":  "Aruza",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "asation",
+        "name":  "Asation",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ashas_ree",
+        "name":  "Ashas Ree",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "askaj",
+        "name":  "Askaj",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "asmeru",
+        "name":  "Asmeru",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "asmeru_anomaly",
+        "name":  "Asmeru Anomaly",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "asrat",
+        "name":  "Asrat",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "ast_kikorie",
+        "name":  "Ast Kikorie",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "atapap_i",
+        "name":  "Atapap I",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "atchorb",
+        "name":  "Atchorb",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "athiss",
+        "name":  "Athiss",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "atollon",
+        "name":  "Atollon",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ator",
+        "name":  "Ator",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "atorra",
+        "name":  "Atorra",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "atravis",
+        "name":  "Atravis",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "atron",
+        "name":  "Atron",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "attahox",
+        "name":  "Attahox",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "atzerri",
+        "name":  "Atzerri",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "austan",
+        "name":  "Austan",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "avenelle",
+        "name":  "Avenelle",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "averam",
+        "name":  "Averam",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "avidich",
+        "name":  "Avidich",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "axxila",
+        "name":  "Axxila",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "aylayl",
+        "name":  "Aylayl",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "azbrian",
+        "name":  "Azbrian",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "aztubek",
+        "name":  "Aztubek",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "azure",
+        "name":  "Azure",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "azzameen_station",
+        "name":  "Azzameen Station",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "b_foroon",
+        "name":  "B-Foroon",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "b_trilla",
+        "name":  "B\u0027trilla",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "babbadod",
+        "name":  "Babbadod",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "bacrana",
+        "name":  "Bacrana",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "bahalian",
+        "name":  "Bahalian",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "bajic",
+        "name":  "Bajic",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "bakura",
+        "name":  "Bakura",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "balamak",
+        "name":  "Balamak",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "baldavia",
+        "name":  "Baldavia",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "balis_baurgh",
+        "name":  "Balis-Baurgh",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "balmorra",
+        "name":  "Balmorra",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "balnab",
+        "name":  "Balnab",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "balosar",
+        "name":  "Balosar",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "baltizaar",
+        "name":  "Baltizaar",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ban_satir",
+        "name":  "Ban-Satir",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "bandomeer",
+        "name":  "Bandomeer",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "bannistar_station",
+        "name":  "Bannistar Station",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "barab",
+        "name":  "Barab",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "baraboo",
+        "name":  "Baraboo",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "baradas",
+        "name":  "Baradas",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "barcaria",
+        "name":  "Barcaria",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "bardotta",
+        "name":  "Bardotta",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "barenth",
+        "name":  "Barenth",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "barison",
+        "name":  "Barison",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "barkhesh",
+        "name":  "Barkhesh",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "barlok",
+        "name":  "Barlok",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "baroli",
+        "name":  "Baroli",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "baros",
+        "name":  "Baros",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "barseg",
+        "name":  "Barseg",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "basilisk",
+        "name":  "Basilisk",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "bassadro",
+        "name":  "Bassadro",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "bastion",
+        "name":  "Bastion",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "bastooine",
+        "name":  "Bastooine",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "bator_bai",
+        "name":  "Bator Bai",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "batorine",
+        "name":  "Batorine",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "baummu",
+        "name":  "Baummu",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "bavva",
+        "name":  "Bavva",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "begeren",
+        "name":  "Begeren",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "belasco",
+        "name":  "Belasco",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "belassar",
+        "name":  "Belassar",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "belazura",
+        "name":  "Belazura",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "belderone",
+        "name":  "Belderone",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "belgaroth",
+        "name":  "Belgaroth",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "belkadan",
+        "name":  "Belkadan",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "bellassa",
+        "name":  "Bellassa",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "belnar",
+        "name":  "Belnar",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "belsavis",
+        "name":  "Belsavis",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "beltrix_iii",
+        "name":  "Beltrix III",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "bendeluum",
+        "name":  "Bendeluum",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "bengat",
+        "name":  "Bengat",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "berchest",
+        "name":  "Berchest",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "beris",
+        "name":  "Beris",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "berri",
+        "name":  "Berri",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "berrol_s_donn",
+        "name":  "Berrol\u0027s Donn",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "besberra",
+        "name":  "Besberra",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "bescane",
+        "name":  "Bescane",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "besero",
+        "name":  "Besero",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "besnia",
+        "name":  "Besnia",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "bespin",
+        "name":  "Bespin",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "bestine",
+        "name":  "Bestine",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "betha",
+        "name":  "Betha",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "betshish",
+        "name":  "Betshish",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "bettel",
+        "name":  "Bettel",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "bextar",
+        "name":  "Bextar",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "bhargebba",
+        "name":  "Bhargebba",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "bheriz",
+        "name":  "Bheriz",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "biewa",
+        "name":  "Biewa",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "biitu",
+        "name":  "Biitu",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "bilbringi",
+        "name":  "Bilbringi",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "bimin_three",
+        "name":  "Bimin Three",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "bimmiel",
+        "name":  "Bimmiel",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "bimmisaari",
+        "name":  "Bimmisaari",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "birgis",
+        "name":  "Birgis",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "bisellia",
+        "name":  "Bisellia",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "bissillirus",
+        "name":  "Bissillirus",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "bith",
+        "name":  "Bith",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "blenjeel",
+        "name":  "Blenjeel",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "blimph",
+        "name":  "Blimph",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "bnar",
+        "name":  "Bnar",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "bogden",
+        "name":  "Bogden",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "bogo_rai",
+        "name":  "Bogo Rai",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "bomis_koori",
+        "name":  "Bomis Koori",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "bonadan",
+        "name":  "Bonadan",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "boonta",
+        "name":  "Boonta",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "boordii",
+        "name":  "Boordii",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "bootana_shagplan",
+        "name":  "Bootana Shagplan",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "boranda",
+        "name":  "Boranda",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "borao",
+        "name":  "Borao",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "borgo_prime",
+        "name":  "Borgo Prime",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "borkyne",
+        "name":  "Borkyne",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "borleias",
+        "name":  "Borleias",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "boro_borosa",
+        "name":  "Boro-borosa",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "borosk",
+        "name":  "Borosk",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "bortras",
+        "name":  "Bortras",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "bosph",
+        "name":  "Bosph",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "bosthirda",
+        "name":  "Bosthirda",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "botajef",
+        "name":  "Botajef",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "bothawui",
+        "name":  "Bothawui",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "botor",
+        "name":  "Botor",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "boudolayz",
+        "name":  "Boudolayz",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "bovo_yagen",
+        "name":  "Bovo Yagen",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "boz_pity",
+        "name":  "Boz Pity",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "bpfassh",
+        "name":  "Bpfassh",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "brentaal",
+        "name":  "Brentaal",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "bresnia",
+        "name":  "Bresnia",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "brevost",
+        "name":  "Brevost",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "brigia",
+        "name":  "Brigia",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "brochiib",
+        "name":  "Brochiib",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "brodo_asogi",
+        "name":  "Brodo Asogi",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "broest",
+        "name":  "Broest",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "bronsoon",
+        "name":  "Bronsoon",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "brosi",
+        "name":  "Brosi",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "bryexx",
+        "name":  "Bryexx",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "bryx",
+        "name":  "Bryx",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "bseto",
+        "name":  "Bseto",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "buchich",
+        "name":  "Buchich",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "budpock",
+        "name":  "Budpock",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "bunduki",
+        "name":  "Bunduki",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "burnin_konn",
+        "name":  "Burnin Konn",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "burska",
+        "name":  "Burska",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "byblos",
+        "name":  "Byblos",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "byss",
+        "name":  "Byss",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "c_foroon",
+        "name":  "C-Foroon",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "caamas",
+        "name":  "Caamas",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "cademimu",
+        "name":  "Cademimu",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "cadinth",
+        "name":  "Cadinth",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "cadma",
+        "name":  "Cadma",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "cadomai",
+        "name":  "Cadomai",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "cal_seti",
+        "name":  "Cal-Seti",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "calfa",
+        "name":  "Calfa",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "calonica",
+        "name":  "Calonica",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "caltinia",
+        "name":  "Caltinia",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "calus",
+        "name":  "Calus",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "caluula",
+        "name":  "Caluula",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "cambria",
+        "name":  "Cambria",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "camden",
+        "name":  "Camden",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "candoria",
+        "name":  "Candoria",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "cantonica",
+        "name":  "Cantonica",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "cantras_gola",
+        "name":  "Cantras Gola",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "cantros",
+        "name":  "Cantros",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "capella",
+        "name":  "Capella",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "capza",
+        "name":  "Capza",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "carcel",
+        "name":  "Carcel",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "carest",
+        "name":  "Carest",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "cargamalis",
+        "name":  "Cargamalis",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "carida",
+        "name":  "Carida",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "carlac",
+        "name":  "Carlac",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "carlania",
+        "name":  "Carlania",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "carnovia",
+        "name":  "Carnovia",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "carosi",
+        "name":  "Carosi",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "carratos",
+        "name":  "Carratos",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "carsanza",
+        "name":  "Carsanza",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "cartao",
+        "name":  "Cartao",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "casfield",
+        "name":  "Casfield",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "cassander",
+        "name":  "Cassander",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "castell",
+        "name":  "Castell",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "cathar",
+        "name":  "Cathar",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "cato_neimoidia",
+        "name":  "Cato Neimoidia",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "celanon",
+        "name":  "Celanon",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "celdaru",
+        "name":  "Celdaru",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "celegia",
+        "name":  "Celegia",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "celwis",
+        "name":  "Celwis",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "centares",
+        "name":  "Centares",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "cerea",
+        "name":  "Cerea",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "cerenia",
+        "name":  "Cerenia",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "cezith",
+        "name":  "Cezith",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ch_hodos",
+        "name":  "Ch\u0027hodos",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "chad",
+        "name":  "Chad",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "chalacta",
+        "name":  "Chalacta",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "chalcedon",
+        "name":  "Chalcedon",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "challon",
+        "name":  "Challon",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "chamble",
+        "name":  "Chamble",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "chamm",
+        "name":  "Chamm",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "champala",
+        "name":  "Champala",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "chandaar",
+        "name":  "Chandaar",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "chandrila",
+        "name":  "Chandrila",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "chanosant",
+        "name":  "Chanosant",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "chardaan",
+        "name":  "Chardaan",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "charra",
+        "name":  "Charra",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "charros",
+        "name":  "Charros",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "charubah",
+        "name":  "Charubah",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "chasin",
+        "name":  "Chasin",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "chazwa",
+        "name":  "Chazwa",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "cheelit",
+        "name":  "Cheelit",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "cheku",
+        "name":  "Cheku",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "chenowei",
+        "name":  "Chenowei",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "cheruba",
+        "name":  "Cheruba",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "chibias",
+        "name":  "Chibias",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "chiron",
+        "name":  "Chiron",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "chokan",
+        "name":  "Chokan",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "cholganna",
+        "name":  "Cholganna",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "chorax",
+        "name":  "Chorax",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "chosper",
+        "name":  "Chosper",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "christophsis",
+        "name":  "Christophsis",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "chroma_zed",
+        "name":  "Chroma Zed",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "chryya",
+        "name":  "Chryya",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "churruma",
+        "name":  "Churruma",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "cilpar",
+        "name":  "Cilpar",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "cioral",
+        "name":  "Cioral",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "circumtore",
+        "name":  "Circumtore",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "cirrus",
+        "name":  "Cirrus",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "cirus",
+        "name":  "Cirus",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ciutric",
+        "name":  "Ciutric",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "clantaano",
+        "name":  "Clantaano",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "cmaoli_di",
+        "name":  "Cmaoli Di",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "coachelle",
+        "name":  "Coachelle",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "codia",
+        "name":  "Codia",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "colla_iv",
+        "name":  "Colla IV",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "colonial_station_cam_co",
+        "name":  "Colonial Station Cam\u0027co",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "colonial_station_chaf",
+        "name":  "Colonial Station Chaf",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "columex",
+        "name":  "Columex",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "columus",
+        "name":  "Columus",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "comkin_v",
+        "name":  "Comkin V",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "commenor",
+        "name":  "Commenor",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "comra",
+        "name":  "Comra",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "cona",
+        "name":  "Cona",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "concord_dawn",
+        "name":  "Concord Dawn",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "condular",
+        "name":  "Condular",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "constancia",
+        "name":  "Constancia",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "contruum",
+        "name":  "Contruum",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "coonee",
+        "name":  "Coonee",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "copero",
+        "name":  "Copero",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "cophrigin",
+        "name":  "Cophrigin",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "copperline",
+        "name":  "Copperline",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "corann",
+        "name":  "Corann",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "corbett_cluster",
+        "name":  "Corbett CLuster",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "corbos",
+        "name":  "Corbos",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "corellia",
+        "name":  "Corellia",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "corlass",
+        "name":  "Corlass",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "cormit",
+        "name":  "Cormit",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "corroth",
+        "name":  "Corroth",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "corsin",
+        "name":  "Corsin",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "cortina",
+        "name":  "Cortina",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "corulag",
+        "name":  "Corulag",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "corva_yag",
+        "name":  "Corva Yag",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "corvanni_iv",
+        "name":  "Corvanni IV",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "corvis_minor",
+        "name":  "Corvis Minor",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "cotellier",
+        "name":  "Cotellier",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "council",
+        "name":  "Council",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "coveway",
+        "name":  "Coveway",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "craci",
+        "name":  "Craci",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "crait",
+        "name":  "Crait",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "crakull",
+        "name":  "Crakull",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "cranan",
+        "name":  "Cranan",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "criton_s_point",
+        "name":  "Criton\u0027s Point",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "crovna",
+        "name":  "Crovna",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "crustai",
+        "name":  "Crustai",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "crystan",
+        "name":  "Crystan",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "csaus",
+        "name":  "Csaus",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "csilla",
+        "name":  "Csilla",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "cularin",
+        "name":  "Cularin",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "cuvacia",
+        "name":  "Cuvacia",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "cyax",
+        "name":  "Cyax",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "cybloc",
+        "name":  "Cybloc",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "cyborrea",
+        "name":  "Cyborrea",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "cyimarra",
+        "name":  "Cyimarra",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "cyphar",
+        "name":  "Cyphar",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "cyrillia",
+        "name":  "Cyrillia",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "d_ian",
+        "name":  "D\u0027ian",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "d_qar",
+        "name":  "D\u0027Qar",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "d_rinba",
+        "name":  "D\u0027rinba",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "daalang",
+        "name":  "Daalang",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "daan_melida",
+        "name":  "Daan/Melida",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "dachat",
+        "name":  "Dachat",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "dactruria",
+        "name":  "Dactruria",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "daemen",
+        "name":  "Daemen",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "dagary_minor",
+        "name":  "Dagary Minor",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "dagelin_minor",
+        "name":  "Dagelin Minor",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "dagobah",
+        "name":  "Dagobah",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "dahrtag",
+        "name":  "Dahrtag",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "dakshee",
+        "name":  "Dakshee",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "dalchon",
+        "name":  "Dalchon",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "dalcretti",
+        "name":  "Dalcretti",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "dalisor",
+        "name":  "Dalisor",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "dalron",
+        "name":  "Dalron",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "daluuj",
+        "name":  "Daluuj",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "damendine",
+        "name":  "Damendine",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "damoria",
+        "name":  "Damoria",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "dankayo",
+        "name":  "Dankayo",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "danteel",
+        "name":  "Danteel",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "dantooine",
+        "name":  "Dantooine",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "danuta",
+        "name":  "Danuta",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "darada",
+        "name":  "Darada",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "darek",
+        "name":  "Darek",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "dargulli",
+        "name":  "Dargulli",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "darkknell",
+        "name":  "Darkknell",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "darlyn_boda",
+        "name":  "Darlyn Boda",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "dartessex_iv",
+        "name":  "Dartessex IV",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "daruvvia",
+        "name":  "Daruvvia",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "dasoor",
+        "name":  "Dasoor",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "datar",
+        "name":  "Datar",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "dathomir",
+        "name":  "Dathomir",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "daupherm",
+        "name":  "Daupherm",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "davirien",
+        "name":  "Davirien",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "dela",
+        "name":  "Dela",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "delacrix",
+        "name":  "Delacrix",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "delephr",
+        "name":  "Delephr",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "dellalt",
+        "name":  "Dellalt",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "delle",
+        "name":  "Delle",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "delphon",
+        "name":  "Delphon",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "delrakkin",
+        "name":  "Delrakkin",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "deltooine",
+        "name":  "Deltooine",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "deminol",
+        "name":  "Deminol",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "demophon",
+        "name":  "Demophon",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "demos",
+        "name":  "Demos",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "denab",
+        "name":  "Denab",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "denarii_station",
+        "name":  "Denarii Station",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "deneba",
+        "name":  "Deneba",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "denebia",
+        "name":  "Denebia",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "denevar",
+        "name":  "Denevar",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "dennaskar",
+        "name":  "Dennaskar",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "dennogra",
+        "name":  "Dennogra",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "denon",
+        "name":  "Denon",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "denova",
+        "name":  "Denova",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "dentaal",
+        "name":  "Dentaal",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "derellium",
+        "name":  "Derellium",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "derra",
+        "name":  "Derra",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "desevro",
+        "name":  "Desevro",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "devaron",
+        "name":  "Devaron",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "devon",
+        "name":  "Devon",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "deysum",
+        "name":  "Deysum",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "diamal",
+        "name":  "Diamal",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "dica",
+        "name":  "Dica",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "dilbana",
+        "name":  "Dilbana",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "dilonexa",
+        "name":  "Dilonexa",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "din_pulsar",
+        "name":  "Din Pulsar",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "dioll",
+        "name":  "Dioll",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "dirha",
+        "name":  "Dirha",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "divora",
+        "name":  "Divora",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "diyu",
+        "name":  "Diyu",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "djurmo",
+        "name":  "Djurmo",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "dohlban",
+        "name":  "Dohlban",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "dohu",
+        "name":  "Dohu",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "doldrums",
+        "name":  "Doldrums",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "doldur",
+        "name":  "Doldur",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "dolis",
+        "name":  "Dolis",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "dolla",
+        "name":  "Dolla",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "donadus",
+        "name":  "Donadus",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "doniphon",
+        "name":  "Doniphon",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "donovia",
+        "name":  "Donovia",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "doreen",
+        "name":  "Doreen",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "dorin",
+        "name":  "Dorin",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "dorlo",
+        "name":  "Dorlo",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "dornea",
+        "name":  "Dornea",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "dorvalla",
+        "name":  "Dorvalla",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "dosuun",
+        "name":  "Dosuun",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "douglas",
+        "name":  "Douglas",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "dra",
+        "name":  "Dra",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "drackmar",
+        "name":  "Drackmar",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "dractu",
+        "name":  "Dractu",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "dramassia",
+        "name":  "Dramassia",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "draria",
+        "name":  "Draria",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "draukyze",
+        "name":  "Draukyze",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "dravian_station",
+        "name":  "Dravian Station",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "drearia",
+        "name":  "Drearia",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "dreena",
+        "name":  "Dreena",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "dremulae",
+        "name":  "Dremulae",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "dressel",
+        "name":  "Dressel",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "drexel",
+        "name":  "Drexel",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "droecil",
+        "name":  "Droecil",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "drog",
+        "name":  "Drog",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "drogheda",
+        "name":  "Drogheda",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "dromund_kaas",
+        "name":  "Dromund Kaas",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "drongar",
+        "name":  "Drongar",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "droxu",
+        "name":  "Droxu",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "drualkiin",
+        "name":  "Drualkiin",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "druckenwell",
+        "name":  "Druckenwell",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "du_hutta",
+        "name":  "Du Hutta",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "dubrava",
+        "name":  "Dubrava",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "dubrillion",
+        "name":  "Dubrillion",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "duinarbulon",
+        "name":  "Duinarbulon",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "dulathia",
+        "name":  "Dulathia",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "dulin",
+        "name":  "Dulin",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "dulvoyinn",
+        "name":  "Dulvoyinn",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "durgen_s_star",
+        "name":  "Durgen\u0027s Star",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "durkteel",
+        "name":  "Durkteel",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "duro",
+        "name":  "Duro",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "duroon",
+        "name":  "Duroon",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "eadu",
+        "name":  "Eadu",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "eamus",
+        "name":  "Eamus",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "ebaq",
+        "name":  "Ebaq",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "ebra",
+        "name":  "Ebra",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "echnos",
+        "name":  "Echnos",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "eclipse",
+        "name":  "Eclipse",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "ediorung",
+        "name":  "Ediorung",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "edusa",
+        "name":  "Edusa",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "eiattu",
+        "name":  "Eiattu",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "eibon",
+        "name":  "Eibon",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ejolus",
+        "name":  "Ejolus",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "ekibo",
+        "name":  "Ekibo",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "elamposnia",
+        "name":  "Elamposnia",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "elbara",
+        "name":  "Elbara",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "elgit",
+        "name":  "Elgit",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "eliad",
+        "name":  "Eliad",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "elom",
+        "name":  "Elom",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "elrood",
+        "name":  "Elrood",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "elshandruu_pica",
+        "name":  "Elshandruu Pica",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "emberlene",
+        "name":  "Emberlene",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "emmer",
+        "name":  "Emmer",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "empress_teta",
+        "name":  "Empress Teta",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "enarc",
+        "name":  "Enarc",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "endex",
+        "name":  "Endex",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "endor",
+        "name":  "Endor",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "endor_gate",
+        "name":  "Endor Gate",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "endoraan",
+        "name":  "Endoraan",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "endregaad",
+        "name":  "Endregaad",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "enisca",
+        "name":  "Enisca",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "entralla",
+        "name":  "Entralla",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "entuur",
+        "name":  "Entuur",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "eol_sha",
+        "name":  "Eol Sha",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "epica",
+        "name":  "Epica",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "equanus",
+        "name":  "Equanus",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "er_kit",
+        "name":  "Er\u0027Kit",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "erai",
+        "name":  "Erai",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "eredenn",
+        "name":  "Eredenn",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ereesus",
+        "name":  "Ereesus",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "eriadu",
+        "name":  "Eriadu",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "eridicon",
+        "name":  "Eridicon",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "erilnar",
+        "name":  "Erilnar",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ertegas",
+        "name":  "Ertegas",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "erysthes",
+        "name":  "Erysthes",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "esfandia",
+        "name":  "Esfandia",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "eshan",
+        "name":  "Eshan",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "esseles",
+        "name":  "Esseles",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "ession",
+        "name":  "Ession",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "etti",
+        "name":  "Etti",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "euceron",
+        "name":  "Euceron",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "excarga",
+        "name":  "Excarga",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "exodeen",
+        "name":  "Exodeen",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "fabrin",
+        "name":  "Fabrin",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "fadden",
+        "name":  "Fadden",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "faldos",
+        "name":  "Faldos",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "falko",
+        "name":  "Falko",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "falleen",
+        "name":  "Falleen",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "far_indosa",
+        "name":  "Far Indosa",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "far_pando",
+        "name":  "Far Pando",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "farana",
+        "name":  "Farana",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "farnica",
+        "name":  "Farnica",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "faro",
+        "name":  "Faro",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "farquar",
+        "name":  "Farquar",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "farrfin",
+        "name":  "Farrfin",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "farstine",
+        "name":  "Farstine",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "farstone",
+        "name":  "Farstone",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "febrini",
+        "name":  "Febrini",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "fedalle",
+        "name":  "Fedalle",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "fedje",
+        "name":  "Fedje",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "feena",
+        "name":  "Feena",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "feenix",
+        "name":  "Feenix",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "feldwes",
+        "name":  "Feldwes",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "felucia",
+        "name":  "Felucia",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "fengrine",
+        "name":  "Fengrine",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "fennesa",
+        "name":  "Fennesa",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "ferro",
+        "name":  "Ferro",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "fest",
+        "name":  "Fest",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "feswe_corridor",
+        "name":  "Feswe Corridor",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "feswe_minor",
+        "name":  "Feswe Minor",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "feswe_prime",
+        "name":  "Feswe Prime",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "fether",
+        "name":  "Fether",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "fibuli",
+        "name":  "Fibuli",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "filordis",
+        "name":  "Filordis",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "firrerre",
+        "name":  "Firrerre",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "florn",
+        "name":  "Florn",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "florrum",
+        "name":  "Florrum",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "fodro",
+        "name":  "Fodro",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "foerost",
+        "name":  "Foerost",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "foless",
+        "name":  "Foless",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "fondor",
+        "name":  "Fondor",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "formos",
+        "name":  "Formos",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "fornax",
+        "name":  "Fornax",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "forsen",
+        "name":  "Forsen",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "foundry",
+        "name":  "Foundry",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "frego",
+        "name":  "Frego",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "fresia",
+        "name":  "Fresia",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "froswythe",
+        "name":  "Froswythe",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "fwatna",
+        "name":  "Fwatna",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "fwillsving",
+        "name":  "Fwillsving",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "g_wenee",
+        "name":  "G\u0027wenee",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "gabredor",
+        "name":  "Gabredor",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "gacerian",
+        "name":  "Gacerian",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "gala",
+        "name":  "Gala",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "galand",
+        "name":  "Galand",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "galantos",
+        "name":  "Galantos",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "galidraan",
+        "name":  "Galidraan",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "gallinore",
+        "name":  "Gallinore",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "galvoni",
+        "name":  "Galvoni",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "gama",
+        "name":  "Gama",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "gamor",
+        "name":  "Gamor",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "gamorr",
+        "name":  "Gamorr",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ganath",
+        "name":  "Ganath",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "gand",
+        "name":  "Gand",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "gandeal",
+        "name":  "Gandeal",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "gandolo",
+        "name":  "Gandolo",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "gannaria",
+        "name":  "Gannaria",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ganthel",
+        "name":  "Ganthel",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "garel",
+        "name":  "Garel",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "gargon",
+        "name":  "Gargon",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "garnib",
+        "name":  "Garnib",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "garos",
+        "name":  "Garos",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "garqi",
+        "name":  "Garqi",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "gaulus",
+        "name":  "Gaulus",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "gaurick",
+        "name":  "Gaurick",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "gavryn",
+        "name":  "Gavryn",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "gbu",
+        "name":  "Gbu",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "gedi",
+        "name":  "Gedi",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "gelda",
+        "name":  "Gelda",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "gelviddis_cluster",
+        "name":  "Gelviddis Cluster",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "genassa",
+        "name":  "Genassa",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "gendrah_narvin",
+        "name":  "Gendrah-Narvin",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "generis",
+        "name":  "Generis",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "genian",
+        "name":  "Genian",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "genon",
+        "name":  "Genon",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "geonosis",
+        "name":  "Geonosis",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "geris",
+        "name":  "Geris",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "geroon",
+        "name":  "Geroon",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "gerrard",
+        "name":  "Gerrard",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "gerrenthum",
+        "name":  "Gerrenthum",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "gestrex",
+        "name":  "Gestrex",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "gholondreine",
+        "name":  "Gholondreine",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "ghorman",
+        "name":  "Ghorman",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "gibbela",
+        "name":  "Gibbela",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "gigor",
+        "name":  "Gigor",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "giju",
+        "name":  "Giju",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "gilatter",
+        "name":  "Gilatter",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "gizer",
+        "name":  "Gizer",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "glade",
+        "name":  "Glade",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "glee_anselm",
+        "name":  "Glee Anselm",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "glithnos",
+        "name":  "Glithnos",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "glom_tho",
+        "name":  "Glom Tho",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "glottal",
+        "name":  "Glottal",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "golden_nyss",
+        "name":  "Golden Nyss",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "gonmore",
+        "name":  "Gonmore",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "goorla",
+        "name":  "Goorla",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "gorno",
+        "name":  "Gorno",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "goroth",
+        "name":  "Goroth",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "gorse",
+        "name":  "Gorse",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "gorsh",
+        "name":  "Gorsh",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "gos_hutta",
+        "name":  "Gos Hutta",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "grakouine",
+        "name":  "Grakouine",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "grandine",
+        "name":  "Grandine",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "gravan_seven",
+        "name":  "Gravan Seven",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "gravlex_med",
+        "name":  "Gravlex Med",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "gree",
+        "name":  "Gree",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "grizmallt",
+        "name":  "Grizmallt",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "gromas",
+        "name":  "Gromas",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "groth",
+        "name":  "Groth",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "guiteica",
+        "name":  "Guiteica",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "gulma",
+        "name":  "Gulma",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "gulvitch",
+        "name":  "Gulvitch",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "gwori",
+        "name":  "Gwori",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "gyndine",
+        "name":  "Gyndine",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "h_ratth",
+        "name":  "H\u0027ratth",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "habassa",
+        "name":  "Habassa",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "had_abbadon",
+        "name":  "Had Abbadon",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "hakassi",
+        "name":  "Hakassi",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "halm",
+        "name":  "Halm",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "halmad",
+        "name":  "Halmad",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "handooine",
+        "name":  "Handooine",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "hapes",
+        "name":  "Hapes",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "har_binande",
+        "name":  "Har Binande",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "harloen",
+        "name":  "Harloen",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "harrin",
+        "name":  "Harrin",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "harterra",
+        "name":  "Harterra",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "haruun_kal",
+        "name":  "Haruun Kal",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "haseria",
+        "name":  "Haseria",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "hast",
+        "name":  "Hast",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "haverling",
+        "name":  "Haverling",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "havricus",
+        "name":  "Havricus",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "heffrin",
+        "name":  "Heffrin",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "helska",
+        "name":  "Helska",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "hemei",
+        "name":  "Hemei",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "hensara",
+        "name":  "Hensara",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "heptalia",
+        "name":  "Heptalia",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "herdessa",
+        "name":  "Herdessa",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "herzob",
+        "name":  "Herzob",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "hestria",
+        "name":  "Hestria",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "hethar",
+        "name":  "Hethar",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "hewett",
+        "name":  "Hewett",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "high_chunah",
+        "name":  "High Chunah",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "hiit",
+        "name":  "Hiit",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "hijado",
+        "name":  "Hijado",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "hijarna",
+        "name":  "Hijarna",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "hijo",
+        "name":  "Hijo",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "hillindor",
+        "name":  "Hillindor",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "hilo",
+        "name":  "Hilo",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "hinakuu",
+        "name":  "Hinakuu",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "hirsi",
+        "name":  "Hirsi",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "hishyim",
+        "name":  "Hishyim",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "hjaff",
+        "name":  "Hjaff",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "hok",
+        "name":  "Hok",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "holess",
+        "name":  "Holess",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "hollastin",
+        "name":  "Hollastin",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "honoghr",
+        "name":  "Honoghr",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "horuz",
+        "name":  "Horuz",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "hosko",
+        "name":  "Hosko",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "hosnian_prime",
+        "name":  "Hosnian Prime",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "hosrel",
+        "name":  "Hosrel",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "hoth",
+        "name":  "Hoth",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "houche",
+        "name":  "Houche",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "hovan",
+        "name":  "Hovan",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "hoylin",
+        "name":  "Hoylin",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "huk",
+        "name":  "Huk",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "huldamun",
+        "name":  "Huldamun",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "hull_s_star",
+        "name":  "Hull\u0027s Star",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "huloon",
+        "name":  "Huloon",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "humbarine",
+        "name":  "Humbarine",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "hutlar",
+        "name":  "Hutlar",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "hyabb",
+        "name":  "Hyabb",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "hynah",
+        "name":  "Hynah",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "hypori",
+        "name":  "Hypori",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "iast",
+        "name":  "Iast",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ibanjji",
+        "name":  "Ibanjji",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ichtor",
+        "name":  "Ichtor",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "iego",
+        "name":  "Iego",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ifmix",
+        "name":  "Ifmix",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "iktotchon",
+        "name":  "Iktotchon",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "iliabath",
+        "name":  "Iliabath",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "illarreen",
+        "name":  "Illarreen",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "illodia",
+        "name":  "Illodia",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "illoud",
+        "name":  "Illoud",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "ilos",
+        "name":  "Ilos",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "ilos_minor",
+        "name":  "Ilos Minor",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "ilum",
+        "name":  "Ilum",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "immalia",
+        "name":  "Immalia",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "imynusoph",
+        "name":  "Imynusoph",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "indellian",
+        "name":  "Indellian",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "indobok",
+        "name":  "Indobok",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "indu_san",
+        "name":  "Indu San",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "indupar",
+        "name":  "Indupar",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ingo",
+        "name":  "Ingo",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "inysh",
+        "name":  "Inysh",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "ione",
+        "name":  "Ione",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "iope",
+        "name":  "Iope",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "iotra",
+        "name":  "Iotra",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "iphigin",
+        "name":  "Iphigin",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "iridium",
+        "name":  "Iridium",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "iridonia",
+        "name":  "Iridonia",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "irith",
+        "name":  "Irith",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "isde_naha",
+        "name":  "Isde Naha",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "iseno",
+        "name":  "Iseno",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "ishanna",
+        "name":  "Ishanna",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "isiring",
+        "name":  "Isiring",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "isis",
+        "name":  "Isis",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "iskalon",
+        "name":  "Iskalon",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ison",
+        "name":  "Ison",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "issagra",
+        "name":  "Issagra",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "issor",
+        "name":  "Issor",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "itani",
+        "name":  "Itani",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "ithor",
+        "name":  "Ithor",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ithull",
+        "name":  "Ithull",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "ixtlar",
+        "name":  "Ixtlar",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "j_t_p_tan",
+        "name":  "J\u0027t\u0027p\u0027tan",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "jabiim",
+        "name":  "Jabiim",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "jaciprus",
+        "name":  "Jaciprus",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "jaemus",
+        "name":  "Jaemus",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "jagomir",
+        "name":  "Jagomir",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "jaguada",
+        "name":  "Jaguada",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "jakku",
+        "name":  "Jakku",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "jalarren",
+        "name":  "Jalarren",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "jaminere",
+        "name":  "Jaminere",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "jamiron",
+        "name":  "Jamiron",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "janara",
+        "name":  "Janara",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "jandur",
+        "name":  "Jandur",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "janfathal",
+        "name":  "JanFathal",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "janodral_mizar",
+        "name":  "Janodral Mizar",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "jarnollen",
+        "name":  "Jarnollen",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "jatir",
+        "name":  "Jatir",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "javin",
+        "name":  "Javin",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "jazbina",
+        "name":  "Jazbina",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "jedha",
+        "name":  "Jedha",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "jelucan",
+        "name":  "Jelucan",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "jendorn",
+        "name":  "Jendorn",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "jerne",
+        "name":  "Jerne",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "jerrilek",
+        "name":  "Jerrilek",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "jerrist",
+        "name":  "Jerrist",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "jestan",
+        "name":  "Jestan",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "jeyell",
+        "name":  "Jeyell",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "jilrua",
+        "name":  "Jilrua",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "jiroch",
+        "name":  "Jiroch",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "jodaka",
+        "name":  "Jodaka",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "joiol",
+        "name":  "Joiol",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "jomark",
+        "name":  "Jomark",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "joodrudda",
+        "name":  "Joodrudda",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "jovan",
+        "name":  "Jovan",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "jovaria",
+        "name":  "Jovaria",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "jubilar",
+        "name":  "Jubilar",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "junction",
+        "name":  "Junction",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "junkfort_station",
+        "name":  "Junkfort Station",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "jurzan",
+        "name":  "Jurzan",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "juvex",
+        "name":  "Juvex",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "k_ath",
+        "name":  "K\u0027ath",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "k_farri",
+        "name":  "k\u0027Farri",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "k_taktaxka",
+        "name":  "K\u0027taktaxka",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "kaal",
+        "name":  "Kaal",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "kabal",
+        "name":  "Kabal",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "kabray",
+        "name":  "Kabray",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "kadavo",
+        "name":  "Kadavo",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "kafane",
+        "name":  "Kafane",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "kail",
+        "name":  "Kail",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "kailor",
+        "name":  "Kailor",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "kal_shebbol",
+        "name":  "Kal\u0027Shebbol",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "kalaan",
+        "name":  "Kalaan",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "kalarba",
+        "name":  "Kalarba",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "kalee",
+        "name":  "Kalee",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "kalevala",
+        "name":  "Kalevala",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "kalgo",
+        "name":  "Kalgo",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "kaliida_shoals",
+        "name":  "Kaliida Shoals",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "kalinda",
+        "name":  "Kalinda",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "kalishik",
+        "name":  "Kalishik",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "kalist",
+        "name":  "Kalist",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "kalki_nebula",
+        "name":  "Kalki Nebula",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "kalkovak",
+        "name":  "Kalkovak",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "kalla",
+        "name":  "Kalla",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "kalsunor",
+        "name":  "Kalsunor",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "kamar",
+        "name":  "Kamar",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "kamdon",
+        "name":  "Kamdon",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "kamino",
+        "name":  "Kamino",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "kamur",
+        "name":  "Kamur",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "kanaver",
+        "name":  "Kanaver",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "kaon",
+        "name":  "Kaon",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "karazak",
+        "name":  "Karazak",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "kardura",
+        "name":  "Kardura",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "karfeddion",
+        "name":  "Karfeddion",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "karideph",
+        "name":  "Karideph",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "karlinus",
+        "name":  "Karlinus",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "karra",
+        "name":  "Karra",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "karsten_s_world",
+        "name":  "Karsten\u0027s World",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "karvoss",
+        "name":  "Karvoss",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "kashyyyk",
+        "name":  "Kashyyyk",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "kassido",
+        "name":  "Kassido",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "katarr",
+        "name":  "Katarr",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "kath",
+        "name":  "Kath",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "kattada",
+        "name":  "Kattada",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "kayri",
+        "name":  "Kayri",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "kedorzha",
+        "name":  "Kedorzha",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "keeara_major",
+        "name":  "Keeara Major",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "kegan",
+        "name":  "Kegan",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "keitum",
+        "name":  "Keitum",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "kelada",
+        "name":  "Kelada",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "keldooine",
+        "name":  "Keldooine",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "kelrodo_ai",
+        "name":  "Kelrodo-Ai",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "kemal_station",
+        "name":  "Kemal Station",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "kerkoidia",
+        "name":  "Kerkoidia",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "kesh",
+        "name":  "Kesh",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "keskin",
+        "name":  "Keskin",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "kesmere",
+        "name":  "Kesmere",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "kesmere_minor",
+        "name":  "Kesmere Minor",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "kessel",
+        "name":  "Kessel",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ket",
+        "name":  "Ket",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "ketal",
+        "name":  "Ketal",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "ketaris",
+        "name":  "Ketaris",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "khar_delba",
+        "name":  "Khar Delba",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "khomm",
+        "name":  "Khomm",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "khubeaie",
+        "name":  "Khubeaie",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "kidiet_olgo",
+        "name":  "Kidiet Olgo",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "kidriff",
+        "name":  "Kidriff",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "kiffu",
+        "name":  "Kiffu",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "kile",
+        "name":  "Kile",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "kimm_aurek",
+        "name":  "Kimm Aurek",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "kimm_besh",
+        "name":  "Kimm Besh",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "kimm_cresh",
+        "name":  "Kimm Cresh",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "kinooine",
+        "name":  "Kinooine",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "kinoss",
+        "name":  "Kinoss",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "kinyen",
+        "name":  "Kinyen",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "kir",
+        "name":  "Kir",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "kira",
+        "name":  "Kira",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "kirdo",
+        "name":  "Kirdo",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "kiribi",
+        "name":  "Kiribi",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "kiros",
+        "name":  "Kiros",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "kirtania",
+        "name":  "Kirtania",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "kirtarkin",
+        "name":  "Kirtarkin",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "kitel_phard",
+        "name":  "Kitel Phard",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "kiva",
+        "name":  "Kiva",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "klasse_ephemora",
+        "name":  "Klasse Ephemora",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "klatooine",
+        "name":  "Klatooine",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "kleeva",
+        "name":  "Kleeva",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "kli_aar",
+        "name":  "Kli\u0027aar",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "kloper",
+        "name":  "Kloper",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "kluistar",
+        "name":  "Kluistar",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "knolstee",
+        "name":  "Knolstee",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "knores",
+        "name":  "Knores",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "koba",
+        "name":  "Koba",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "kobaria",
+        "name":  "Kobaria",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "koda_station",
+        "name":  "Koda Station",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "kodai",
+        "name":  "Kodai",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "koensayr",
+        "name":  "Koensayr",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "koiogra",
+        "name":  "Koiogra",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "kokash",
+        "name":  "Kokash",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "kol_huro",
+        "name":  "Kol Huro",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "kolanda_station",
+        "name":  "Kolanda Station",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "komnor",
+        "name":  "Komnor",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "kooriva",
+        "name":  "Kooriva",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "kor_anjiliac",
+        "name":  "Kor Anjiliac",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "kor_besadii",
+        "name":  "Kor Besadii",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "kor_desilijic",
+        "name":  "Kor Desilijic",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "kor_gejalli",
+        "name":  "Kor Gejalli",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "kor_hestilic",
+        "name":  "Kor Hestilic",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "kor_hunamma",
+        "name":  "Kor Hunamma",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "kor_jiramma",
+        "name":  "Kor Jiramma",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "kor_nasirii",
+        "name":  "Kor Nasirii",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "kor_nijiladii",
+        "name":  "Kor Nijiladii",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "kor_oktanivii",
+        "name":  "Kor Oktanivii",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "kor_trinivii",
+        "name":  "Kor Trinivii",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "kor_usilic",
+        "name":  "Kor Usilic",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "kor_utoradii",
+        "name":  "Kor Utoradii",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "kor_vosadii",
+        "name":  "Kor Vosadii",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "korbin",
+        "name":  "Korbin",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "korda_six",
+        "name":  "Korda Six",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "korev_vii",
+        "name":  "Korev VII",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "korfo",
+        "name":  "Korfo",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "korphir",
+        "name":  "Korphir",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "korriban",
+        "name":  "Korriban",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "korriz",
+        "name":  "Korriz",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "korvaii",
+        "name":  "Korvaii",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "kothlis",
+        "name":  "Kothlis",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "kowak",
+        "name":  "Kowak",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "krann",
+        "name":  "Krann",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "krant",
+        "name":  "Krant",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "krayiss",
+        "name":  "Krayiss",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "kril_dor",
+        "name":  "Kril\u0027Dor",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "krinemonen",
+        "name":  "Krinemonen",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "kriselist",
+        "name":  "Kriselist",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "kroctar",
+        "name":  "Kroctar",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "kromus",
+        "name":  "Kromus",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "krylon",
+        "name":  "Krylon",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ktil",
+        "name":  "Ktil",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "kuar",
+        "name":  "Kuar",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "kuat",
+        "name":  "Kuat",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "kubindi",
+        "name":  "Kubindi",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "kumru",
+        "name":  "Kumru",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "kuna_s_eye",
+        "name":  "Kuna\u0027s Eye",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "kuna_s_fist",
+        "name":  "Kuna\u0027s Fist",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "kuna_s_horn",
+        "name":  "Kuna\u0027s Horn",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "kuna_s_tail",
+        "name":  "Kuna\u0027s Tail",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "kuna_s_tooth",
+        "name":  "Kuna\u0027s Tooth",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "kushibah",
+        "name":  "Kushibah",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "kwenn",
+        "name":  "Kwenn",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "kwevron",
+        "name":  "Kwevron",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "kwookrrr",
+        "name":  "Kwookrrr",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "laakteen_depot",
+        "name":  "Laakteen Depot",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "ladarra",
+        "name":  "Ladarra",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "laertos",
+        "name":  "Laertos",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "lafra",
+        "name":  "Lafra",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "lah_mu",
+        "name":  "Lah\u0027mu",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "lahag_erli",
+        "name":  "Lahag Erli",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "lahsbane",
+        "name":  "Lahsbane",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "lalmy_ash",
+        "name":  "Lalmy\u0027ash",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "lamaredd",
+        "name":  "Lamaredd",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "langoona",
+        "name":  "Langoona",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "lankashiir",
+        "name":  "Lankashiir",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "lannik",
+        "name":  "Lannik",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "lansono",
+        "name":  "Lansono",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "lant",
+        "name":  "Lant",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "lanteeb",
+        "name":  "Lanteeb",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "lanthe",
+        "name":  "Lanthe",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "lantillies",
+        "name":  "Lantillies",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "las_lagon",
+        "name":  "Las Lagon",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "lasan",
+        "name":  "Lasan",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "lavisar",
+        "name":  "Lavisar",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "lazerian",
+        "name":  "Lazerian",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "lekua",
+        "name":  "Lekua",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "lelmra",
+        "name":  "Lelmra",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "lemmi",
+        "name":  "Lemmi",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "lenico_iv",
+        "name":  "Lenico IV",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "lequabis",
+        "name":  "Lequabis",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "leria_kerlsil",
+        "name":  "Leria Kerlsil",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "leritor",
+        "name":  "Leritor",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "lettow",
+        "name":  "Lettow",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "levian",
+        "name":  "Levian",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "lexrul",
+        "name":  "Lexrul",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "lialic",
+        "name":  "Lialic",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "lianna",
+        "name":  "Lianna",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "linuri",
+        "name":  "Linuri",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "lipsec",
+        "name":  "Lipsec",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "lirra",
+        "name":  "Lirra",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "listehol",
+        "name":  "Listehol",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "little_capella",
+        "name":  "Little Capella",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "little_kessel",
+        "name":  "Little Kessel",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "little_talhovi",
+        "name":  "Little Talhovi",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "livien",
+        "name":  "Livien",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "llanic",
+        "name":  "Llanic",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "llon_nebulae",
+        "name":  "Llon Nebulae",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "lo_uran",
+        "name":  "Lo\u0027Uran",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "loedorvia",
+        "name":  "Loedorvia",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "lohopa",
+        "name":  "Lohopa",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "lok",
+        "name":  "Lok",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "lola_sayu",
+        "name":  "Lola Sayu",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "lolnar",
+        "name":  "Lolnar",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "lonnaw",
+        "name":  "Lonnaw",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "loovria",
+        "name":  "Loovria",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "lorahns",
+        "name":  "Lorahns",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "loretto",
+        "name":  "Loretto",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "loronar",
+        "name":  "Loronar",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "lorrd",
+        "name":  "Lorrd",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "lorta",
+        "name":  "Lorta",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "lothal",
+        "name":  "Lothal",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "lotho_minor",
+        "name":  "Lotho Minor",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "lovola",
+        "name":  "Lovola",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "low_n",
+        "name":  "Low\u0027n",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "lowick",
+        "name":  "Lowick",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "lucazec",
+        "name":  "Lucazec",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "lujo",
+        "name":  "Lujo",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "lur",
+        "name":  "Lur",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "lutrillia",
+        "name":  "Lutrillia",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "lwhekk",
+        "name":  "Lwhekk",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "lyran",
+        "name":  "Lyran",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "lythos",
+        "name":  "Lythos",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "m_haeli",
+        "name":  "M\u0027haeli",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "m_hanna",
+        "name":  "M\u0027Hanna",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "ma_ar_shaddam",
+        "name":  "Ma\u0027ar Shaddam",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "maires",
+        "name":  "Maires",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "majoor",
+        "name":  "Majoor",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "makeb",
+        "name":  "Makeb",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "makem_te",
+        "name":  "Makem Te",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "malachor",
+        "name":  "Malachor",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "malador",
+        "name":  "Malador",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "malagarr",
+        "name":  "Malagarr",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "malastare",
+        "name":  "Malastare",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "maldra",
+        "name":  "Maldra",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "malestrom_nebula",
+        "name":  "Malestrom Nebula",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "mall_ordian",
+        "name":  "Mall\u0027ordian",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "malrev_iv",
+        "name":  "Malrev IV",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "maltha_obex",
+        "name":  "Maltha Obex",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "mamendin",
+        "name":  "Mamendin",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "manaan",
+        "name":  "Manaan",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "manda",
+        "name":  "Manda",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "mandalore_concordia",
+        "name":  "Mandalore \u0026 Concordia",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "mandell",
+        "name":  "Mandell",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "manforgon",
+        "name":  "Manforgon",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "mannova",
+        "name":  "Mannova",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "manpha",
+        "name":  "Manpha",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "manress",
+        "name":  "Manress",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "mantan",
+        "name":  "Mantan",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "mantessa",
+        "name":  "Mantessa",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "mantooine",
+        "name":  "Mantooine",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "manwess",
+        "name":  "Manwess",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "maridun",
+        "name":  "Maridun",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "markbee_s_star",
+        "name":  "Markbee\u0027s Star",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "marmoth",
+        "name":  "Marmoth",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "marquarra",
+        "name":  "Marquarra",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "marrovia",
+        "name":  "Marrovia",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "maryo",
+        "name":  "Maryo",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "marzoon",
+        "name":  "Marzoon",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "masterra",
+        "name":  "Masterra",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "mataou",
+        "name":  "Mataou",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "matra",
+        "name":  "Matra",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "mattri",
+        "name":  "Mattri",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "mawan",
+        "name":  "Mawan",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "maya_kovel",
+        "name":  "Maya Kovel",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "mayvitch",
+        "name":  "Mayvitch",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "meastrinnar",
+        "name":  "Meastrinnar",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "mechis_iii",
+        "name":  "Mechis III",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "media",
+        "name":  "Media",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "medth",
+        "name":  "Medth",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "mek_va_uil",
+        "name":  "Mek va Uil",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "melnea_s_world",
+        "name":  "Melnea\u0027s World",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "mendicat",
+        "name":  "Mendicat",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "mephout",
+        "name":  "Mephout",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "merakai",
+        "name":  "Merakai",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "merren",
+        "name":  "Merren",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "merson",
+        "name":  "Merson",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "meryx_minor",
+        "name":  "Meryx Minor",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "messert",
+        "name":  "Messert",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "metalorn",
+        "name":  "Metalorn",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "metellos",
+        "name":  "Metellos",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "mev",
+        "name":  "Mev",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "mexeluine",
+        "name":  "Mexeluine",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "mijos",
+        "name":  "Mijos",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "mika",
+        "name":  "Mika",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "milagro",
+        "name":  "Milagro",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "milarian",
+        "name":  "Milarian",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "millinar",
+        "name":  "Millinar",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "milvayne",
+        "name":  "Milvayne",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "mimban",
+        "name":  "Mimban",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "minashee",
+        "name":  "Minashee",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "mindabaal",
+        "name":  "Mindabaal",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "mindor",
+        "name":  "Mindor",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "minntooine",
+        "name":  "Minntooine",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "mirial",
+        "name":  "Mirial",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "miztoc",
+        "name":  "Miztoc",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "modus",
+        "name":  "Modus",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "mogoshyn",
+        "name":  "Mogoshyn",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "mokk_ix",
+        "name":  "Mokk IX",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "molavar",
+        "name":  "Molavar",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "moltok",
+        "name":  "Moltok",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "momansi",
+        "name":  "Momansi",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "mon_calamari",
+        "name":  "Mon Calamari",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "mon_gazza",
+        "name":  "Mon Gazza",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "monastery",
+        "name":  "Monastery",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "mondress",
+        "name":  "Mondress",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "monhudle",
+        "name":  "Monhudle",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "monor",
+        "name":  "Monor",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "montitia",
+        "name":  "Montitia",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "moonus",
+        "name":  "Moonus",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "moorja",
+        "name":  "Moorja",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "moralan",
+        "name":  "Moralan",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "mordagon",
+        "name":  "Mordagon",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "morellia",
+        "name":  "Morellia",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "morishim",
+        "name":  "Morishim",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "mortis",
+        "name":  "Mortis",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "mossak",
+        "name":  "Mossak",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "motexx",
+        "name":  "Motexx",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "mrlsst",
+        "name":  "Mrlsst",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "msst",
+        "name":  "Msst",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "mugaar",
+        "name":  "Mugaar",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "mulatan",
+        "name":  "Mulatan",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "mullan",
+        "name":  "Mullan",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "munto_codru",
+        "name":  "Munto Codru",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "murgo",
+        "name":  "Murgo",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "murk",
+        "name":  "Murk",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "murkhana",
+        "name":  "Murkhana",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "mussubir",
+        "name":  "Mussubir",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "mustafar",
+        "name":  "Mustafar",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "muunilinst",
+        "name":  "Muunilinst",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "muzara",
+        "name":  "Muzara",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "mygeeto",
+        "name":  "Mygeeto",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "myomar",
+        "name":  "Myomar",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "myrkr",
+        "name":  "Myrkr",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "mytaranor",
+        "name":  "Mytaranor",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "mytus",
+        "name":  "Mytus",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "n_zoth",
+        "name":  "N\u0027Zoth",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "naalol",
+        "name":  "Naalol",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "naboo",
+        "name":  "Naboo",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "nadiem",
+        "name":  "Nadiem",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "najarka",
+        "name":  "Najarka",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "najiba",
+        "name":  "Najiba",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "nal_hutta_nar_shaddaa",
+        "name":  "Nal Hutta \u0026 Nar Shaddaa",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "nam_chorios",
+        "name":  "Nam Chorios",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "nam_ta",
+        "name":  "Nam\u0027ta",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "namadii",
+        "name":  "Namadii",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "nantama",
+        "name":  "Nantama",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "nanth_ri",
+        "name":  "Nanth\u0027ri",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "nantuker",
+        "name":  "Nantuker",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "naos",
+        "name":  "Naos",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "naporar",
+        "name":  "Naporar",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "nar_bo_sholla",
+        "name":  "Nar Bo Sholla",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "nar_chunna",
+        "name":  "Nar Chunna",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "nar_haaska",
+        "name":  "Nar Haaska",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "nar_kaaga",
+        "name":  "Nar Kaaga",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "nar_kreeta",
+        "name":  "Nar Kreeta",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "nara",
+        "name":  "Nara",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "nars",
+        "name":  "Nars",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "natalon",
+        "name":  "Natalon",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "nathema",
+        "name":  "Nathema",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "nazzri",
+        "name":  "Nazzri",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "near_indosa",
+        "name":  "Near Indosa",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "near_pando",
+        "name":  "Near Pando",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "nedij",
+        "name":  "Nedij",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "needan",
+        "name":  "Needan",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "neelanon",
+        "name":  "Neelanon",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "neelgaimon",
+        "name":  "Neelgaimon",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "neimoidia",
+        "name":  "Neimoidia",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "nelvaan",
+        "name":  "Nelvaan",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "nentan",
+        "name":  "Nentan",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "nepoy",
+        "name":  "Nepoy",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "neshtab",
+        "name":  "Neshtab",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "nessem",
+        "name":  "Nessem",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "new_alderaan",
+        "name":  "New Alderaan",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "new_apsolon",
+        "name":  "New Apsolon",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "new_ator",
+        "name":  "New Ator",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "new_bakstre",
+        "name":  "New Bakstre",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "new_balosar",
+        "name":  "New Balosar",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "new_cov",
+        "name":  "New Cov",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "new_cylimba",
+        "name":  "New Cylimba",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "new_heurkea",
+        "name":  "New Heurkea",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "new_holstice",
+        "name":  "New Holstice",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "nexus_ortai",
+        "name":  "Nexus Ortai",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "nez_peron",
+        "name":  "Nez Peron",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "nfolgai",
+        "name":  "Nfolgai",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "nicht_ka",
+        "name":  "Nicht Ka",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "nierport",
+        "name":  "Nierport",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "nigel",
+        "name":  "Nigel",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "nim_drovis",
+        "name":  "Nim Drovis",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "nimat",
+        "name":  "Nimat",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "nimban",
+        "name":  "Nimban",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "nimia",
+        "name":  "Nimia",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "ninn",
+        "name":  "Ninn",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ninzan",
+        "name":  "Ninzan",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "nirauan",
+        "name":  "Nirauan",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "nivek",
+        "name":  "Nivek",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "nixor",
+        "name":  "Nixor",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "nkllon",
+        "name":  "Nkllon",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "noe_ha_on",
+        "name":  "Noe\u0027ha\u0027on",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "nooli",
+        "name":  "Nooli",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "noonar",
+        "name":  "Noonar",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "noquivzor",
+        "name":  "Noquivzor",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "norah",
+        "name":  "Norah",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "noris",
+        "name":  "Noris",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "norkronia",
+        "name":  "Norkronia",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "norval",
+        "name":  "Norval",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "nothoiin",
+        "name":  "Nothoiin",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "nouane",
+        "name":  "Nouane",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "novi",
+        "name":  "Novi",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "nubia",
+        "name":  "Nubia",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "null",
+        "name":  "Null",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "nuralee",
+        "name":  "Nuralee",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "nuswatta",
+        "name":  "Nuswatta",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "nuvar",
+        "name":  "Nuvar",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "nyny",
+        "name":  "Nyny",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "obana",
+        "name":  "Obana",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "obredaan",
+        "name":  "Obredaan",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "obroa_skai",
+        "name":  "Obroa-skai",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "ocsin",
+        "name":  "Ocsin",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "odacer_faustin",
+        "name":  "Odacer-Faustin",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "odik",
+        "name":  "Odik",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "ogem",
+        "name":  "Ogem",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ohs1782_03",
+        "name":  "OHS1782-03",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ohs2132_04",
+        "name":  "OHS2132-04",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ohs3842_03",
+        "name":  "OHS3842-03",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ohs4140_02",
+        "name":  "OHS4140-02",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ojom",
+        "name":  "Ojom",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "old_mankoo",
+        "name":  "Old Mankoo",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "omar",
+        "name":  "Omar",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "omonoth",
+        "name":  "Omonoth",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "ompersan",
+        "name":  "Ompersan",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "omwat",
+        "name":  "Omwat",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "onderon_dxun",
+        "name":  "Onderon \u0026 Dxun",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "ool",
+        "name":  "Ool",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "ooo_temiuk",
+        "name":  "Ooo-temiuk",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "oovo",
+        "name":  "Oovo",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ophideraan",
+        "name":  "Ophideraan",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "opiteihr",
+        "name":  "Opiteihr",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "orax",
+        "name":  "Orax",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ord_antalaha",
+        "name":  "Ord Antalaha",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "ord_biniir",
+        "name":  "Ord Biniir",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ord_canfre",
+        "name":  "Ord Canfre",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ord_cantrell",
+        "name":  "Ord Cantrell",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ord_cestus",
+        "name":  "Ord Cestus",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ord_grovner",
+        "name":  "Ord Grovner",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ord_ibanna",
+        "name":  "Ord Ibanna",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ord_lithone",
+        "name":  "Ord Lithone",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "ord_mantell",
+        "name":  "Ord Mantell",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "ord_mirit",
+        "name":  "Ord Mirit",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "ord_pardron",
+        "name":  "Ord Pardron",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ord_radama",
+        "name":  "Ord Radama",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ord_sedra",
+        "name":  "Ord Sedra",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ord_sigatt",
+        "name":  "Ord Sigatt",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ord_tessebok",
+        "name":  "Ord Tessebok",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ord_thoden",
+        "name":  "Ord Thoden",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ord_tiddell",
+        "name":  "Ord Tiddell",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ord_trasi",
+        "name":  "Ord Trasi",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ord_varee",
+        "name":  "Ord Varee",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ord_vaug",
+        "name":  "Ord Vaug",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "ord_vaxal",
+        "name":  "Ord Vaxal",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "ordo",
+        "name":  "Ordo",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "orelon",
+        "name":  "Orelon",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "oricon",
+        "name":  "Oricon",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "orinda",
+        "name":  "Orinda",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "orleon",
+        "name":  "Orleon",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "orn_kios",
+        "name":  "Orn Kios",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ornfra",
+        "name":  "Ornfra",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "orondia",
+        "name":  "Orondia",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "orron",
+        "name":  "Orron",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "orto_plutonia",
+        "name":  "Orto Plutonia",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "orvax",
+        "name":  "Orvax",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "oseon",
+        "name":  "Oseon",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "oslumpex",
+        "name":  "Oslumpex",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "osmani",
+        "name":  "Osmani",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ossel",
+        "name":  "Ossel",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ossiathora",
+        "name":  "Ossiathora",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "osssorck_nebulae",
+        "name":  "Osssorck Nebulae",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "ossus",
+        "name":  "Ossus",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ota",
+        "name":  "Ota",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ottabesk",
+        "name":  "Ottabesk",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "outland_transit",
+        "name":  "Outland Transit",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "ovise",
+        "name":  "Ovise",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "oyokal",
+        "name":  "Oyokal",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "ozu",
+        "name":  "Ozu",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "pa_tho",
+        "name":  "Pa Tho",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "pakuuni",
+        "name":  "Pakuuni",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "palanhi",
+        "name":  "Palanhi",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "palawa",
+        "name":  "Palawa",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "pallaxides",
+        "name":  "Pallaxides",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "pammant",
+        "name":  "Pammant",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "pamorjal",
+        "name":  "Pamorjal",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "panatha",
+        "name":  "Panatha",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "pantolomin",
+        "name":  "Pantolomin",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "pantora",
+        "name":  "Pantora",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "paonid",
+        "name":  "Paonid",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "paqualis_iii",
+        "name":  "Paqualis III",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "paqwepor_major",
+        "name":  "Paqwepor Major",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "parada",
+        "name":  "Parada",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "paramatan",
+        "name":  "Paramatan",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "parcelus_minor",
+        "name":  "Parcelus Minor",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "parkis",
+        "name":  "Parkis",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "parshoone",
+        "name":  "Parshoone",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "parthovian_cluster",
+        "name":  "Parthovian Cluster",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "pasmin",
+        "name":  "Pasmin",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "patitite_pattuna",
+        "name":  "Patitite Pattuna",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "paulking",
+        "name":  "Paulking",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "pavo_prime",
+        "name":  "Pavo Prime",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "pax",
+        "name":  "Pax",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "peg_shar",
+        "name":  "Peg Shar",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "pencael",
+        "name":  "Pencael",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "pendari",
+        "name":  "Pendari",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "pengalan",
+        "name":  "Pengalan",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "per_lupelo",
+        "name":  "Per Lupelo",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "peragus_ii",
+        "name":  "Peragus II",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "pergitor",
+        "name":  "Pergitor",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "perin",
+        "name":  "Perin",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "perithal_vi",
+        "name":  "Perithal VI",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "perma",
+        "name":  "Perma",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "pesfavri",
+        "name":  "Pesfavri",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "pesmenben",
+        "name":  "Pesmenben",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "petabys_station",
+        "name":  "Petabys Station",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "phaeda",
+        "name":  "Phaeda",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "phaegon_iii",
+        "name":  "Phaegon_III",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "phaseera",
+        "name":  "Phaseera",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "phateem",
+        "name":  "Phateem",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "phelope",
+        "name":  "Phelope",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "phindar",
+        "name":  "Phindar",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "pho_ph_eah",
+        "name":  "Pho Ph\u0027eah",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "phu",
+        "name":  "Phu",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "pieldi",
+        "name":  "Pieldi",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "pii",
+        "name":  "Pii",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "pinperu",
+        "name":  "Pinperu",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "pirin",
+        "name":  "Pirin",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "piroket",
+        "name":  "Piroket",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "pirralor",
+        "name":  "Pirralor",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "pitrolea",
+        "name":  "Pitrolea",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "pizilis",
+        "name":  "Pizilis",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "plesstil",
+        "name":  "Plesstil",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "plexis",
+        "name":  "Plexis",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "ploo",
+        "name":  "Ploo",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "plooma",
+        "name":  "Plooma",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "pluthan",
+        "name":  "Pluthan",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "poderis",
+        "name":  "Poderis",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "polis_massa",
+        "name":  "Polis Massa",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "pollillus",
+        "name":  "Pollillus",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "polmanar",
+        "name":  "Polmanar",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "poln_system",
+        "name":  "Poln System",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "polus",
+        "name":  "Polus",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "pondut_station",
+        "name":  "Pondut Station",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "porchello",
+        "name":  "Porchello",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "port_evokk",
+        "name":  "Port Evokk",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "porus_vida",
+        "name":  "Porus Vida",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "poseidenna",
+        "name":  "Poseidenna",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "povanaria",
+        "name":  "Povanaria",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "poviduze",
+        "name":  "Poviduze",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "poytta",
+        "name":  "Poytta",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "praadost",
+        "name":  "Praadost",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "praesitlyn",
+        "name":  "Praesitlyn",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "prakith",
+        "name":  "Prakith",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "prazhi",
+        "name":  "Prazhi",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "prefsbelt",
+        "name":  "Prefsbelt",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "presbalin",
+        "name":  "Presbalin",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "presteen",
+        "name":  "Presteen",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "pria",
+        "name":  "Pria",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "primus_goluud",
+        "name":  "Primus Goluud",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "prishella",
+        "name":  "Prishella",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "pusat_station",
+        "name":  "Pusat Station",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "pybus",
+        "name":  "Pybus",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "pygorix",
+        "name":  "Pygorix",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "pypin",
+        "name":  "Pypin",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "pzob",
+        "name":  "Pzob",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "q_mara",
+        "name":  "Q\u0027mara",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "qat_chrystac",
+        "name":  "Qat Chrystac",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "qiilura",
+        "name":  "Qiilura",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "qina",
+        "name":  "Qina",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "qonto",
+        "name":  "Qonto",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "quaensan_prime",
+        "name":  "Quaensan Prime",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "quamar",
+        "name":  "Quamar",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "quarzite",
+        "name":  "Quarzite",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "quas_killam",
+        "name":  "Quas Killam",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "quelii",
+        "name":  "Quelii",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "quell",
+        "name":  "Quell",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "quellor",
+        "name":  "Quellor",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "quermia",
+        "name":  "Quermia",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ques",
+        "name":  "Ques",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "quesaya",
+        "name":  "Quesaya",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "quesh",
+        "name":  "Quesh",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "questal",
+        "name":  "Questal",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "queyta",
+        "name":  "Queyta",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "quintas",
+        "name":  "Quintas",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "r_duba",
+        "name":  "R-Duba",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "r_alla",
+        "name":  "R\u0027alla",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "radnor",
+        "name":  "Radnor",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "rafa",
+        "name":  "Rafa",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ragith",
+        "name":  "Ragith",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "ragna",
+        "name":  "Ragna",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "rago",
+        "name":  "Rago",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ragoon",
+        "name":  "Ragoon",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "rainboh",
+        "name":  "Rainboh",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "rainos_cluster",
+        "name":  "Rainos CLuster",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "raithal",
+        "name":  "Raithal",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "rakata_prime",
+        "name":  "Rakata Prime",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "rakhuuun",
+        "name":  "Rakhuuun",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ralltiir",
+        "name":  "Ralltiir",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "ramordia",
+        "name":  "Ramordia",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "rampa",
+        "name":  "Rampa",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "rampa_minor",
+        "name":  "Rampa Minor",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "randon",
+        "name":  "Randon",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "rannon",
+        "name":  "Rannon",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ranroon",
+        "name":  "Ranroon",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "rasterous",
+        "name":  "Rasterous",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "rattatak",
+        "name":  "Rattatak",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "raxus",
+        "name":  "Raxus",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "raxxa",
+        "name":  "Raxxa",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "raydonia",
+        "name":  "Raydonia",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "rbollea",
+        "name":  "Rbollea",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "rearqu_cluster",
+        "name":  "Rearqu Cluster",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "reboam",
+        "name":  "Reboam",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "recopia",
+        "name":  "Recopia",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "red_nebula",
+        "name":  "Red Nebula",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "reecee",
+        "name":  "Reecee",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "refnar",
+        "name":  "Refnar",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "reginard",
+        "name":  "Reginard",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "rehemsa",
+        "name":  "Rehemsa",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "relatta",
+        "name":  "Relatta",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "relephon",
+        "name":  "Relephon",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "reltooine",
+        "name":  "Reltooine",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "renatasia",
+        "name":  "Renatasia",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "rendili",
+        "name":  "Rendili",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "renillis",
+        "name":  "Renillis",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "rentor",
+        "name":  "Rentor",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "resht",
+        "name":  "Resht",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "resti_kel",
+        "name":  "Resti Kel",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "retep",
+        "name":  "Retep",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "rettna",
+        "name":  "Rettna",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "reuss",
+        "name":  "Reuss",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "revyia",
+        "name":  "Revyia",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "reytha",
+        "name":  "Reytha",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "rhelg",
+        "name":  "Rhelg",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "rhen_var",
+        "name":  "Rhen Var",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "rhigar",
+        "name":  "Rhigar",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "rhinnal",
+        "name":  "Rhinnal",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "rhommamool",
+        "name":  "Rhommamool",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "riflor",
+        "name":  "Riflor",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "riileb",
+        "name":  "Riileb",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "rimcee_station",
+        "name":  "Rimcee Station",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "rindao",
+        "name":  "Rindao",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ring_of_kafrene",
+        "name":  "Ring of Kafrene",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "ringneldia",
+        "name":  "Ringneldia",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ringo_vinda",
+        "name":  "Ringo Vinda",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "rinn",
+        "name":  "Rinn",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "rintonne",
+        "name":  "Rintonne",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "rishi",
+        "name":  "Rishi",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "rnda",
+        "name":  "Rnda",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "roche",
+        "name":  "Roche",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "rodia",
+        "name":  "Rodia",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "roldalna",
+        "name":  "Roldalna",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "romin",
+        "name":  "Romin",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "rondai",
+        "name":  "Rondai",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "ronyards",
+        "name":  "Ronyards",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "roon",
+        "name":  "Roon",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "roona",
+        "name":  "Roona",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "ropagi",
+        "name":  "Ropagi",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "roqoo_depot",
+        "name":  "Roqoo Depot",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "rorak",
+        "name":  "Rorak",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "rorgam",
+        "name":  "Rorgam",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "rothana",
+        "name":  "Rothana",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "roundtree",
+        "name":  "Roundtree",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "roxuli",
+        "name":  "Roxuli",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "rrulinn",
+        "name":  "Rrulinn",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ruan",
+        "name":  "Ruan",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "rudrig",
+        "name":  "Rudrig",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "rugosa",
+        "name":  "Rugosa",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ruisto",
+        "name":  "Ruisto",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "rulaar",
+        "name":  "Rulaar",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "runaway_prince",
+        "name":  "Runaway Prince",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "rustibar",
+        "name":  "Rustibar",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "rutan",
+        "name":  "Rutan",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ruul",
+        "name":  "Ruul",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "ruuria",
+        "name":  "Ruuria",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ruusan",
+        "name":  "Ruusan",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "rydonni_prime",
+        "name":  "Rydonni Prime",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "ryloon",
+        "name":  "Ryloon",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ryloth",
+        "name":  "Ryloth",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ryndellia",
+        "name":  "Ryndellia",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "rynmar",
+        "name":  "Rynmar",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "ryoone",
+        "name":  "Ryoone",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ryvellia",
+        "name":  "Ryvellia",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "saclas",
+        "name":  "Saclas",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "sacorria",
+        "name":  "Sacorria",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "saffalore",
+        "name":  "Saffalore",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "sagar",
+        "name":  "Sagar",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "saijo",
+        "name":  "Saijo",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "saila_na",
+        "name":  "Saila Na",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "sakidopa",
+        "name":  "Sakidopa",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "sakiduba",
+        "name":  "Sakiduba",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "sakifwanna",
+        "name":  "Sakifwanna",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "sakiya",
+        "name":  "Sakiya",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "saleucami",
+        "name":  "Saleucami",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "salient",
+        "name":  "Salient",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "salin",
+        "name":  "Salin",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "salliche",
+        "name":  "Salliche",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "salvara",
+        "name":  "Salvara",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "samaria",
+        "name":  "Samaria",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "sanbra",
+        "name":  "Sanbra",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "sanctuary",
+        "name":  "Sanctuary",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "sanjin",
+        "name":  "Sanjin",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "sanrafsix",
+        "name":  "Sanrafsix",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "sanyassa",
+        "name":  "Sanyassa",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "sanza",
+        "name":  "Sanza",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "saqqar",
+        "name":  "Saqqar",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "sarapin",
+        "name":  "Sarapin",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "sargon",
+        "name":  "Sargon",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "sarka",
+        "name":  "Sarka",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "sarko",
+        "name":  "Sarko",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "sarrish",
+        "name":  "Sarrish",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "sarvchi",
+        "name":  "Sarvchi",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "savareen",
+        "name":  "Savareen",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "scardia",
+        "name":  "Scardia",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "scarif",
+        "name":  "Scarif",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "schesa",
+        "name":  "Schesa",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "scillal",
+        "name":  "Scillal",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "scipio",
+        "name":  "Scipio",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "sedesia",
+        "name":  "Sedesia",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "sedratis",
+        "name":  "Sedratis",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "seelos",
+        "name":  "Seelos",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "selab",
+        "name":  "Selab",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "selenius",
+        "name":  "Selenius",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "seline",
+        "name":  "Seline",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "selitan",
+        "name":  "Selitan",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "selsor",
+        "name":  "Selsor",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "seltos",
+        "name":  "Seltos",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "selvaris",
+        "name":  "Selvaris",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "sembla",
+        "name":  "Sembla",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "senex",
+        "name":  "Senex",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "sennex",
+        "name":  "Sennex",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "seoul",
+        "name":  "Seoul",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "sepan",
+        "name":  "Sepan",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "serat",
+        "name":  "Serat",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "serenno",
+        "name":  "Serenno",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "sermeria",
+        "name":  "Sermeria",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "sernpidal",
+        "name":  "Sernpidal",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "serroco",
+        "name":  "Serroco",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "sestria",
+        "name":  "Sestria",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "sev_tok",
+        "name":  "Sev Tok",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "sevarcos",
+        "name":  "Sevarcos",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "seyugi",
+        "name":  "Seyugi",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "shadda_bi_boran",
+        "name":  "Shadda-Bi Boran",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "shador",
+        "name":  "Shador",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "shalam",
+        "name":  "Shalam",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "sharb",
+        "name":  "Sharb",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "sharlissia",
+        "name":  "Sharlissia",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "shasfath",
+        "name":  "Shasfath",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "shaum_hii",
+        "name":  "Shaum Hii",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "shawken",
+        "name":  "Shawken",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "shaylin",
+        "name":  "Shaylin",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "shedu_maad",
+        "name":  "Shedu Maad",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "shelkonwa",
+        "name":  "Shelkonwa",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "shibric",
+        "name":  "Shibric",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "shiffrin",
+        "name":  "Shiffrin",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "shihon",
+        "name":  "Shihon",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "shili",
+        "name":  "Shili",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "shimia",
+        "name":  "Shimia",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "shinbone",
+        "name":  "Shinbone",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "shiva",
+        "name":  "Shiva",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "shola",
+        "name":  "Shola",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "shoon",
+        "name":  "Shoon",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "shuldene",
+        "name":  "Shuldene",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "shulstine",
+        "name":  "Shulstine",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "shulxi",
+        "name":  "Shulxi",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "shumavar",
+        "name":  "Shumavar",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "shumogi",
+        "name":  "Shumogi",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "shusugaunt",
+        "name":  "Shusugaunt",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "shuxl",
+        "name":  "Shuxl",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "sif_uwana",
+        "name":  "Sif-Uwana",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "sika",
+        "name":  "Sika",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "sikurd",
+        "name":  "Sikurd",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "sil_lume",
+        "name":  "Sil\u0027Lume",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "silken",
+        "name":  "Silken",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "simoom",
+        "name":  "Simoom",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "simpla",
+        "name":  "Simpla",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "sinsang",
+        "name":  "Sinsang",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "sinton",
+        "name":  "Sinton",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "sionia",
+        "name":  "Sionia",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "sirpar",
+        "name":  "Sirpar",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "siskeen",
+        "name":  "Siskeen",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "sivoria",
+        "name":  "Sivoria",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "skako",
+        "name":  "Skako",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "skartis",
+        "name":  "Skartis",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "skeebo",
+        "name":  "Skeebo",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "skor",
+        "name":  "Skor",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "skorrupon",
+        "name":  "Skorrupon",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "skustell_cluster",
+        "name":  "Skustell Cluster",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "skye",
+        "name":  "Skye",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "skynara",
+        "name":  "Skynara",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "sleheyron",
+        "name":  "Sleheyron",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "sluis_van",
+        "name":  "Sluis Van",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "smarteel",
+        "name":  "Smarteel",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "smuggler_s_run",
+        "name":  "Smuggler\u0027s Run",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "sneeve",
+        "name":  "Sneeve",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "sochi",
+        "name":  "Sochi",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "socorro",
+        "name":  "Socorro",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "solibus",
+        "name":  "Solibus",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "somov_rit",
+        "name":  "Somov Rit",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "sorjus",
+        "name":  "Sorjus",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "sorrus",
+        "name":  "Sorrus",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "soullex",
+        "name":  "Soullex",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "soun",
+        "name":  "Soun",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "spefik",
+        "name":  "Spefik",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "spice_terminus",
+        "name":  "Spice Terminus",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "spintir",
+        "name":  "Spintir",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "spira",
+        "name":  "Spira",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "spirador",
+        "name":  "Spirador",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "spirana",
+        "name":  "Spirana",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "sposia",
+        "name":  "Sposia",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "sriluur",
+        "name":  "Sriluur",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "stalsinek",
+        "name":  "Stalsinek",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "starforge_nebula",
+        "name":  "StarForge Nebula",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "starswarm_cluster",
+        "name":  "Starswarm Cluster",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "stassia",
+        "name":  "Stassia",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "station_88",
+        "name":  "Station 88",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "steelious",
+        "name":  "Steelious",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "stend",
+        "name":  "Stend",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "stenos",
+        "name":  "Stenos",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "stobar",
+        "name":  "Stobar",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "stygeon_prime",
+        "name":  "Stygeon Prime",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "suarbi",
+        "name":  "Suarbi",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "subterrel",
+        "name":  "Subterrel",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "sukkult",
+        "name":  "Sukkult",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "suliana",
+        "name":  "Suliana",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "sullust",
+        "name":  "Sullust",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "sump",
+        "name":  "Sump",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "surcaris",
+        "name":  "Surcaris",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "surron",
+        "name":  "Surron",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "svivren",
+        "name":  "Svivren",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "svolten",
+        "name":  "Svolten",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "swellen",
+        "name":  "Swellen",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "sy_myrth",
+        "name":  "Sy Myrth",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "symbia",
+        "name":  "Symbia",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "syned",
+        "name":  "Syned",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "syngia",
+        "name":  "Syngia",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "syvris",
+        "name":  "Syvris",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "t_surr",
+        "name":  "T\u0027surr",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "taanab",
+        "name":  "Taanab",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "taboon",
+        "name":  "Taboon",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "takodana",
+        "name":  "Takodana",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "tal_nami",
+        "name":  "Tal Nami",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "tala",
+        "name":  "Tala",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "talasea",
+        "name":  "Talasea",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "talay",
+        "name":  "Talay",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "talcene",
+        "name":  "Talcene",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "talcharaim",
+        "name":  "Talcharaim",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "talhovi",
+        "name":  "Talhovi",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "taloraan",
+        "name":  "Taloraan",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "talravin",
+        "name":  "Talravin",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "tamban",
+        "name":  "Tamban",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "tammar",
+        "name":  "Tammar",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "tammuz_an",
+        "name":  "Tammuz-an",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "tandankin",
+        "name":  "Tandankin",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "tandun",
+        "name":  "Tandun",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "tangrene",
+        "name":  "Tangrene",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "tanjay",
+        "name":  "Tanjay",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "tantive",
+        "name":  "Tantive",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "tar_mordren",
+        "name":  "Tar Mordren",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "tarabba",
+        "name":  "Tarabba",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "taral_v",
+        "name":  "Taral V",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "targon",
+        "name":  "Targon",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "tarhassan",
+        "name":  "Tarhassan",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "taris",
+        "name":  "Taris",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "tarmidia",
+        "name":  "Tarmidia",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "tarnoonga",
+        "name":  "Tarnoonga",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "taroon",
+        "name":  "Taroon",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "tarsa",
+        "name":  "Tarsa",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "tarsunt",
+        "name":  "Tarsunt",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "tasariq",
+        "name":  "Tasariq",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "tashtor_seneca",
+        "name":  "Tashtor Seneca",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "taskeed",
+        "name":  "Taskeed",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "taspir_iii",
+        "name":  "Taspir III",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "tatooine",
+        "name":  "Tatooine",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "tauber",
+        "name":  "Tauber",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "taul",
+        "name":  "Taul",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "teardrop",
+        "name":  "Teardrop",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "tekurr_k",
+        "name":  "Tekurr\u0027k",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "telaris",
+        "name":  "Telaris",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "telerath",
+        "name":  "Telerath",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "telkur_station",
+        "name":  "Telkur Station",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "telos",
+        "name":  "Telos",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "telti",
+        "name":  "Telti",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "tenara",
+        "name":  "Tenara",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "tepasi",
+        "name":  "Tepasi",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "terephon",
+        "name":  "Terephon",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "terman",
+        "name":  "Terman",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "terminus",
+        "name":  "Terminus",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "terr_skiar",
+        "name":  "Terr\u0027Skiar",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "terrijo",
+        "name":  "Terrijo",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "tertiary_feswe",
+        "name":  "Tertiary Feswe",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "tertiary_kesmere",
+        "name":  "Tertiary Kesmere",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "teth",
+        "name":  "Teth",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "teya_iv",
+        "name":  "Teya IV",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "teyr_vulvarch",
+        "name":  "Teyr Vulvarch",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "thaere",
+        "name":  "Thaere",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "thakwaa",
+        "name":  "Thakwaa",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "thalassia",
+        "name":  "Thalassia",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "thanium",
+        "name":  "Thanium",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "thape",
+        "name":  "Thape",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "the_cometwash",
+        "name":  "The Cometwash",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "the_godsheart",
+        "name":  "The Godsheart",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "the_maw",
+        "name":  "The Maw",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "the_red_twins",
+        "name":  "The Red Twins",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "the_redoubt",
+        "name":  "The Redoubt",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "the_ring",
+        "name":  "The Ring",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "the_wheel",
+        "name":  "The Wheel",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "thearterra",
+        "name":  "Thearterra",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "thebeon",
+        "name":  "Thebeon",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "thermon",
+        "name":  "Thermon",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "theselon",
+        "name":  "Theselon",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "thesme",
+        "name":  "Thesme",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "thila",
+        "name":  "Thila",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "thisspias",
+        "name":  "Thisspias",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "thoadeye",
+        "name":  "Thoadeye",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "thokos",
+        "name":  "Thokos",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "thokosia",
+        "name":  "Thokosia",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "tholatin",
+        "name":  "Tholatin",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "thomork",
+        "name":  "Thomork",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "thonboka",
+        "name":  "ThonBoka",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "thonner",
+        "name":  "Thonner",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "thoran",
+        "name":  "Thoran",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "thorgeld",
+        "name":  "Thorgeld",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "thosa",
+        "name":  "Thosa",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "thracior",
+        "name":  "Thracior",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "thrakia",
+        "name":  "Thrakia",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "thrantin",
+        "name":  "Thrantin",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "thule",
+        "name":  "Thule",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "thull_s_vault",
+        "name":  "Thull\u0027s Vault",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "thustra",
+        "name":  "Thustra",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "thyferra",
+        "name":  "Thyferra",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "tibrin",
+        "name":  "Tibrin",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "tibro",
+        "name":  "Tibro",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "tierfon",
+        "name":  "Tierfon",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "timora",
+        "name":  "Timora",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "tinallis",
+        "name":  "Tinallis",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "tinnel",
+        "name":  "Tinnel",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "tinoon",
+        "name":  "Tinoon",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "tinta",
+        "name":  "Tinta",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "tion",
+        "name":  "Tion",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "tirahnn",
+        "name":  "Tirahnn",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "tirsa",
+        "name":  "Tirsa",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "tisht",
+        "name":  "Tisht",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "tiss_sharl",
+        "name":  "Tiss\u0027sharl",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "tlactehon",
+        "name":  "Tlactehon",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "togominda",
+        "name":  "Togominda",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "togoria",
+        "name":  "Togoria",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "tokmia",
+        "name":  "Tokmia",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "tol_amn",
+        "name":  "Tol Amn",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "tomo_reth",
+        "name":  "Tomo-Reth",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "toola",
+        "name":  "Toola",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "toong_l",
+        "name":  "Toong\u0027l",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "toprawa",
+        "name":  "Toprawa",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "torn_station",
+        "name":  "Torn Station",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "torolis",
+        "name":  "Torolis",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "torque",
+        "name":  "Torque",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "tosste",
+        "name":  "Tosste",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "tothis",
+        "name":  "Tothis",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "tovarskl",
+        "name":  "Tovarskl",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "toydaria",
+        "name":  "Toydaria",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "trammen",
+        "name":  "Trammen",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "trammis",
+        "name":  "Trammis",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "trancret",
+        "name":  "Trancret",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "trandosha",
+        "name":  "Trandosha",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "transel",
+        "name":  "Transel",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "tranthellix",
+        "name":  "Tranthellix",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "trantor",
+        "name":  "Trantor",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "trasse",
+        "name":  "Trasse",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "trassitan",
+        "name":  "Trassitan",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "tregillis",
+        "name":  "Tregillis",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "trellen",
+        "name":  "Trellen",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "trenwyth",
+        "name":  "Trenwyth",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "trevi",
+        "name":  "Trevi",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "trevura",
+        "name":  "Trevura",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "trian",
+        "name":  "Trian",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "triewahl",
+        "name":  "Triewahl",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "triffis",
+        "name":  "Triffis",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "trigalis",
+        "name":  "Trigalis",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "trindello",
+        "name":  "Trindello",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "trinovat",
+        "name":  "Trinovat",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "triton",
+        "name":  "Triton",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "trogan",
+        "name":  "Trogan",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "troiken",
+        "name":  "Troiken",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "troos",
+        "name":  "Troos",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "troska",
+        "name":  "Troska",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "trunska",
+        "name":  "Trunska",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "truuine",
+        "name":  "Truuine",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "tshindral",
+        "name":  "Tshindral",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "tsoss_beacon",
+        "name":  "Tsoss Beacon",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "tsyk",
+        "name":  "Tsyk",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "tumani",
+        "name":  "Tumani",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "tund",
+        "name":  "Tund",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "turkana",
+        "name":  "Turkana",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "twith",
+        "name":  "Twith",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "tyed_kant",
+        "name":  "Tyed Kant",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "tyluun",
+        "name":  "Tyluun",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "tynna",
+        "name":  "Tynna",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "tythe",
+        "name":  "Tythe",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "tython",
+        "name":  "Tython",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "tyus_cluster",
+        "name":  "Tyus Cluster",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "uaua",
+        "name":  "Uaua",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "uba",
+        "name":  "Uba",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ubrikkia",
+        "name":  "Ubrikkia",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ukatis",
+        "name":  "Ukatis",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "ukio",
+        "name":  "Ukio",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ulda_frav",
+        "name":  "Ulda Frav",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "ulicia",
+        "name":  "Ulicia",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ulmatra",
+        "name":  "Ulmatra",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "ultaar",
+        "name":  "Ultaar",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "umbara",
+        "name":  "Umbara",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "umgul",
+        "name":  "Umgul",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "umthyg",
+        "name":  "Umthyg",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "unagin",
+        "name":  "Unagin",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "uogo_cor",
+        "name":  "Uogo\u0027cor",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "uphrades",
+        "name":  "Uphrades",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "uquine",
+        "name":  "Uquine",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "ur_1060",
+        "name":  "UR-1060",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ur_2650",
+        "name":  "UR-2650",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ur_3741",
+        "name":  "UR-3741",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ur_8827",
+        "name":  "UR-8827",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ur_9353",
+        "name":  "UR-9353",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "urce",
+        "name":  "Urce",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "urdur",
+        "name":  "Urdur",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "usk",
+        "name":  "Usk",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "usnia",
+        "name":  "Usnia",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "usta",
+        "name":  "Usta",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ut",
+        "name":  "Ut",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "utapau",
+        "name":  "Utapau",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "utaruun",
+        "name":  "Utaruun",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "utegetu_nebula",
+        "name":  "Utegetu Nebula",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "utrost",
+        "name":  "Utrost",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "uviuy_exen",
+        "name":  "Uviuy Exen",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "uyter",
+        "name":  "Uyter",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "vaal",
+        "name":  "Vaal",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "vaathkree",
+        "name":  "Vaathkree",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "vaced",
+        "name":  "Vaced",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "vactooine",
+        "name":  "Vactooine",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "vakkar",
+        "name":  "Vakkar",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "vaklin",
+        "name":  "Vaklin",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "valc",
+        "name":  "Valc",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "valgauth",
+        "name":  "Valgauth",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "vallusk_cluster",
+        "name":  "Vallusk Cluster",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "valorsi",
+        "name":  "Valorsi",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "valrar",
+        "name":  "Valrar",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "vandelhelm",
+        "name":  "Vandelhelm",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "vandor",
+        "name":  "Vandor",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "vandyne",
+        "name":  "Vandyne",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "vanik",
+        "name":  "Vanik",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "vanjervalis",
+        "name":  "Vanjervalis",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "vanquo",
+        "name":  "Vanquo",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "varadan",
+        "name":  "Varadan",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "varl",
+        "name":  "Varl",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "varonat",
+        "name":  "Varonat",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "varristad",
+        "name":  "Varristad",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "varvrona",
+        "name":  "Varvrona",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "vasch",
+        "name":  "Vasch",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "vasha",
+        "name":  "Vasha",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "vassek",
+        "name":  "Vassek",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "vaykaaris",
+        "name":  "Vaykaaris",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "vaynai",
+        "name":  "Vaynai",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "velabri",
+        "name":  "Velabri",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "velga",
+        "name":  "Velga",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "velmor",
+        "name":  "Velmor",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "velusia",
+        "name":  "Velusia",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "vena",
+        "name":  "Vena",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "venaari",
+        "name":  "Venaari",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "vendaxa",
+        "name":  "Vendaxa",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "venestria",
+        "name":  "Venestria",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "venjagga",
+        "name":  "Venjagga",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "ventooine",
+        "name":  "Ventooine",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "veragi",
+        "name":  "Veragi",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "verdanth",
+        "name":  "Verdanth",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "vergesso",
+        "name":  "Vergesso",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "vergill",
+        "name":  "Vergill",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "vernet",
+        "name":  "Vernet",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "veron",
+        "name":  "Veron",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "vestar",
+        "name":  "Vestar",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "vex",
+        "name":  "Vex",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "vexta",
+        "name":  "Vexta",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "vicondor",
+        "name":  "Vicondor",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "vindalia",
+        "name":  "Vindalia",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "vinsoth",
+        "name":  "Vinsoth",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "virgillia",
+        "name":  "Virgillia",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "virujansi",
+        "name":  "Virujansi",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "vjun",
+        "name":  "Vjun",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "vladet",
+        "name":  "Vladet",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "vogel",
+        "name":  "Vogel",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "vohai",
+        "name":  "Vohai",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "void_station",
+        "name":  "Void Station",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "voktunma",
+        "name":  "Voktunma",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "voltare",
+        "name":  "Voltare",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "von_alai",
+        "name":  "Von-Alai",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "vondarc",
+        "name":  "Vondarc",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "vontor",
+        "name":  "Vontor",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "voon",
+        "name":  "Voon",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "voorsbain",
+        "name":  "Voorsbain",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "vor_deo",
+        "name":  "Vor Deo",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "vorsia",
+        "name":  "Vorsia",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "vortex",
+        "name":  "Vortex",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "vorzyd",
+        "name":  "Vorzyd",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "voss",
+        "name":  "Voss",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "vuchelle",
+        "name":  "Vuchelle",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "vulcar",
+        "name":  "Vulcar",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "vulpter",
+        "name":  "Vulpter",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "vulta",
+        "name":  "Vulta",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "vultar",
+        "name":  "Vultar",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "vuma",
+        "name":  "Vuma",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "vurdon_ka",
+        "name":  "Vurdon Ka",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "vuzsa",
+        "name":  "Vuzsa",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "vykos",
+        "name":  "Vykos",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "wakeelmui",
+        "name":  "Wakeelmui",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "walalla",
+        "name":  "Walalla",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "walinor",
+        "name":  "Walinor",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "wann_tsir",
+        "name":  "Wann Tsir",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "wayland",
+        "name":  "Wayland",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "weerden",
+        "name":  "Weerden",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "wetyin_s_colony",
+        "name":  "Wetyin\u0027s Colony",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "whelori",
+        "name":  "Whelori",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "wistril",
+        "name":  "Wistril",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "wobani",
+        "name":  "Wobani",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "wodan",
+        "name":  "Wodan",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "womrik",
+        "name":  "Womrik",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "woostri",
+        "name":  "Woostri",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "worru_du",
+        "name":  "Worru\u0027du",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "wrea",
+        "name":  "Wrea",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "wroona",
+        "name":  "Wroona",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "wukkar",
+        "name":  "Wukkar",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "wyndigal",
+        "name":  "Wyndigal",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "xa_fel",
+        "name":  "Xa Fel",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "xagobah",
+        "name":  "Xagobah",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "xeron",
+        "name":  "Xeron",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "xerton",
+        "name":  "Xerton",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "xo",
+        "name":  "Xo",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "xobome",
+        "name":  "Xobome",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "xochtl",
+        "name":  "Xochtl",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "xolu",
+        "name":  "Xolu",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "xoman",
+        "name":  "Xoman",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "xorth",
+        "name":  "Xorth",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "yabol_opa",
+        "name":  "Yabol Opa",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "yag_dhul",
+        "name":  "Yag\u0027Dhul",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "yaga_minor",
+        "name":  "Yaga Minor",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "yalara",
+        "name":  "Yalara",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "yashuvhu",
+        "name":  "Yashuvhu",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "yavin",
+        "name":  "Yavin",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "yetoom",
+        "name":  "Yetoom",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "yhifar",
+        "name":  "Yhifar",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "yinchorr",
+        "name":  "Yinchorr",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "yitabo",
+        "name":  "Yitabo",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "ylesia",
+        "name":  "Ylesia",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "ylix",
+        "name":  "Ylix",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "yn",
+        "name":  "Yn",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "yoribuunt",
+        "name":  "Yoribuunt",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "yout",
+        "name":  "Yout",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "yulant",
+        "name":  "Yulant",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "yutan",
+        "name":  "Yutan",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "yutusk",
+        "name":  "Yutusk",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "zadaria",
+        "name":  "Zadaria",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "zaddja",
+        "name":  "Zaddja",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "zakuul",
+        "name":  "Zakuul",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "zalori",
+        "name":  "Zalori",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "zaloriis",
+        "name":  "Zaloriis",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "zamael",
+        "name":  "Zamael",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "zanbar",
+        "name":  "Zanbar",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "zardossa_stix",
+        "name":  "Zardossa Stix",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "zaria",
+        "name":  "Zaria",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "zchtek",
+        "name":  "Zchtek",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "zebitrope",
+        "name":  "Zebitrope",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "zeheth",
+        "name":  "ZeHeth",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "zeltros",
+        "name":  "Zeltros",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "zenox_cluster",
+        "name":  "Zenox Cluster",
+        "owner":  "GAR"
+    },
+    {
+        "id":  "zephry",
+        "name":  "Zephry",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "zerm",
+        "name":  "Zerm",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "zeta",
+        "name":  "Zeta",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "zhanox",
+        "name":  "Zhanox",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "zhar",
+        "name":  "Zhar",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "zigoola",
+        "name":  "Zigoola",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "ziost",
+        "name":  "Ziost",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "zirulast",
+        "name":  "Zirulast",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "zisia",
+        "name":  "Zisia",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "ziugen",
+        "name":  "Ziugen",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "zolan",
+        "name":  "Zolan",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "zonama_sekot",
+        "name":  "Zonama Sekot",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "zonju",
+        "name":  "Zonju",
+        "owner":  "NEUTRAL"
+    },
+    {
+        "id":  "zorbia",
+        "name":  "Zorbia",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "zygerria",
+        "name":  "Zygerria",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "zygia",
+        "name":  "Zygia",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "zyluria",
+        "name":  "Zyluria",
+        "owner":  "KUS"
+    },
+    {
+        "id":  "coruscant",
+        "name":  "Coruscant",
+        "owner":  "GAR"
+    }
+]

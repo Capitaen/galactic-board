@@ -4204,6 +4204,7 @@ function buildBoundsForPaths(paths) {
 function rebuildTacticalRouteCache(data, projectionMode) {
   const groupedRoutes = new Map();
   tacticalTravelEdges = [];
+  const routeProjectionMode = getHyperlaneProjectionMode(projectionMode);
   (data?.hyperlanes || []).forEach((lane, laneIndex) => {
     const routeName = String(lane.name || `Hyperroute ${laneIndex + 1}`);
     if (!groupedRoutes.has(routeName)) {
@@ -4214,7 +4215,7 @@ function rebuildTacticalRouteCache(data, projectionMode) {
     }
     const route = groupedRoutes.get(routeName);
     (lane.paths || []).forEach((lanePath) => {
-      const projectedPath = Array.isArray(lanePath) ? lanePath.map((point) => projectArcgisToWorld(point[0], point[1], projectionMode)) : [];
+      const projectedPath = Array.isArray(lanePath) ? lanePath.map((point) => projectArcgisToWorld(point[0], point[1], routeProjectionMode)) : [];
       if (projectedPath.length < 2) return;
       const startPlanet = getNearestPlanetByDisplayPoint(projectedPath[0].x, projectedPath[0].y);
       const endPlanet = getNearestPlanetByDisplayPoint(projectedPath[projectedPath.length - 1].x, projectedPath[projectedPath.length - 1].y);
@@ -4713,6 +4714,10 @@ function createTacticalSectionCanvas(width, height) {
   return canvas;
 }
 
+function getHyperlaneProjectionMode(projectionMode) {
+  return projectionMode === 'schematic' ? 'image' : projectionMode;
+}
+
 function renderTacticalSectionToContext(ctx, sectionName, data, projectionMode) {
   renderSectionSafely(sectionName, () => {
     if (sectionName === 'grid') {
@@ -4787,6 +4792,7 @@ function renderTacticalSectionToContext(ctx, sectionName, data, projectionMode) 
       return;
     }
     if (sectionName === 'hyperlanes') {
+      if (!tacticalRouteCache.length) rebuildTacticalRouteCache(data, getHyperlaneProjectionMode(projectionMode));
       const adjacency = getInfluenceAdjacency();
       tacticalRouteCache.forEach((route) => {
         route.paths.forEach((projected) => {

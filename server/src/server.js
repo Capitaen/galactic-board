@@ -12,6 +12,7 @@ import { validateNextCampaignState } from './stateValidation.js';
 const projectRoot = process.cwd();
 const db = createDb(projectRoot);
 const PLANET_OWNERSHIP_REFERENCE_PATH = path.join(projectRoot, 'server', 'data', 'planetOwnershipReference.json');
+const HIDDEN_PLANET_OWNER_FALLBACK_PATH = path.join(projectRoot, 'server', 'data', 'hiddenPlanetOwnerFallback.json');
 
 const app = express();
 const server = createServer(app);
@@ -25,32 +26,6 @@ const PORT = Number(process.env.PORT || 3000);
 const RESOURCE_KEYS = ['metal', 'technology', 'fuel', 'chemicals', 'supplies'];
 const RESOURCE_PRODUCTION_TICK_MS = 60 * 60 * 1000;
 const OWNER_FRONTLINE_PASS_VERSION = 'excel_owner_visibility_v1';
-const OWNER_FRONTLINE_OVERRIDES = {
-  coruscant: 'GAR',
-  corellia: 'GAR',
-  kuat: 'GAR',
-  alderaan: 'GAR',
-  cato_neimoidia: 'GAR',
-  mandalore: 'GAR',
-  naboo: 'GAR',
-  rendili: 'GAR',
-  felucia: 'KUS',
-  raxus: 'KUS',
-  mygeeto: 'KUS',
-  mon_calamari: 'KUS',
-  dantooine: 'KUS',
-  kashyyyk: 'KUS',
-  saleucami: 'KUS',
-  yaga_minor: 'KUS',
-  ossus: 'KUS',
-  yavin: 'GAR',
-  kessel: 'HUTT',
-  nal_hutta: 'HUTT',
-  nar_shaddaa: 'HUTT',
-  toydaria: 'HUTT',
-  ylesia: 'HUTT'
-};
-
 function normalizeOwnershipReferenceName(text) {
   return String(text || '')
     .toLowerCase()
@@ -132,12 +107,29 @@ function loadPlanetOwnershipReference() {
 
 const PLANET_OWNERSHIP_REFERENCE = loadPlanetOwnershipReference();
 
-function pointInEllipse(x, y, cx, cy, rx, ry) {
-  if (![x, y, cx, cy, rx, ry].every(Number.isFinite)) return false;
-  const dx = (x - cx) / rx;
-  const dy = (y - cy) / ry;
-  return (dx * dx) + (dy * dy) <= 1;
+function loadHiddenPlanetOwnerFallback() {
+  if (!fs.existsSync(HIDDEN_PLANET_OWNER_FALLBACK_PATH)) return { byId: new Map(), byName: new Map() };
+  try {
+    const rows = JSON.parse(fs.readFileSync(HIDDEN_PLANET_OWNER_FALLBACK_PATH, 'utf8'));
+    const byId = new Map();
+    const byName = new Map();
+    for (const row of Array.isArray(rows) ? rows : []) {
+      const owner = mapReferenceOwner(row?.owner);
+      if (!owner) continue;
+      const id = String(row?.id || '').trim();
+      if (id && !byId.has(id)) byId.set(id, owner);
+      for (const alias of buildOwnershipReferenceAliases(row?.name)) {
+        if (!byName.has(alias)) byName.set(alias, owner);
+      }
+    }
+    return { byId, byName };
+  } catch (error) {
+    console.warn('Failed to load hidden planet owner fallback', error);
+    return { byId: new Map(), byName: new Map() };
+  }
 }
+
+const HIDDEN_PLANET_OWNER_FALLBACK = loadHiddenPlanetOwnerFallback();
 
 function getPlanetOwnershipReferenceMatch(planet) {
   if (!planet) return null;
@@ -145,6 +137,19 @@ function getPlanetOwnershipReferenceMatch(planet) {
     for (const alias of buildOwnershipReferenceAliases(candidate)) {
       const referenced = PLANET_OWNERSHIP_REFERENCE.get(alias);
       if (referenced?.owner) return referenced;
+    }
+  }
+  return null;
+}
+
+function getHiddenPlanetFallbackOwner(planet) {
+  if (!planet) return null;
+  const byId = HIDDEN_PLANET_OWNER_FALLBACK.byId.get(String(planet.id || '').trim());
+  if (byId) return byId;
+  for (const candidate of [planet.name, String(planet.id || '').replace(/_/g, ' ')]) {
+    for (const alias of buildOwnershipReferenceAliases(candidate)) {
+      const byName = HIDDEN_PLANET_OWNER_FALLBACK.byName.get(alias);
+      if (byName) return byName;
     }
   }
   return null;
@@ -274,9 +279,10 @@ function applyOwnerFrontlineImagePass(previousState) {
       planet.referenceListed = isListed;
       changed = true;
     }
-    if (!referenceMatch?.owner) continue;
-    if (planet.owner !== referenceMatch.owner) {
-      planet.owner = referenceMatch.owner;
+    const desiredOwner = referenceMatch?.owner || getHiddenPlanetFallbackOwner(planet);
+    if (!desiredOwner) continue;
+    if (planet.owner !== desiredOwner) {
+      planet.owner = desiredOwner;
       changed = true;
     }
   }
