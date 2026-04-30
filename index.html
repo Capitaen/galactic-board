@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Galactic Campaign Command Board - MVP</title>
 <style>
 :root {
@@ -203,10 +203,191 @@ textarea { min-height:82px; resize:vertical; }
 .workspace-hidden { display:none !important; }
 .hidden { display:none !important; pointer-events:none !important; }
 a { color:#8bc7ff; }
+.orientation-guard {
+  position:fixed;
+  inset:0;
+  z-index:120;
+  display:none;
+  align-items:center;
+  justify-content:center;
+  padding:24px;
+  background:radial-gradient(circle at top, rgba(44,92,255,.18), rgba(5,7,11,.96) 52%);
+  text-align:center;
+}
+.orientation-guard-card {
+  width:min(420px, 100%);
+  padding:22px 20px;
+  border-radius:22px;
+  background:rgba(18,21,27,.96);
+  border:1px solid rgba(255,255,255,.1);
+  box-shadow:0 24px 64px rgba(0,0,0,.46);
+}
+.orientation-guard-card h2 { margin:0 0 10px; font-size:24px; }
+.orientation-guard-card p { margin:0 0 16px; color:var(--muted); line-height:1.45; }
+.orientation-guard-actions { display:flex; gap:10px; justify-content:center; flex-wrap:wrap; }
+@media (max-width: 900px) {
+  body.mobile-device {
+    overscroll-behavior:none;
+    -webkit-text-size-adjust:100%;
+  }
+  #topbar {
+    left:12px;
+    right:60px;
+    top:max(12px, env(safe-area-inset-top));
+    gap:8px;
+    padding:10px;
+  }
+  #topbar strong {
+    width:100%;
+    font-size:15px;
+  }
+  #roleSelect {
+    flex:1 1 180px;
+    width:auto;
+    min-width:148px;
+  }
+  .topbar-auth {
+    display:grid;
+    grid-template-columns:1fr 1fr auto;
+    width:100%;
+  }
+  .topbar-auth input { width:100%; min-width:0; }
+  .search-wrap {
+    flex:1 1 100%;
+    width:100%;
+  }
+  #viewModeBtn,
+  #saveBtn,
+  #loginBtn {
+    min-height:40px;
+  }
+  #planetSearchResults,
+  .inline-search-results {
+    max-height:42vh;
+  }
+  .toolstack {
+    top:auto;
+    left:12px;
+    bottom:max(108px, calc(env(safe-area-inset-bottom) + 90px));
+    gap:6px;
+  }
+  .toolbtn {
+    width:40px;
+    height:40px;
+    font-size:21px;
+  }
+  #homeBtn {
+    top:max(12px, env(safe-area-inset-top));
+    right:12px;
+  }
+  #layersPanel {
+    left:12px;
+    top:176px;
+    width:min(320px, calc(100vw - 24px));
+    max-height:calc(100vh - 290px);
+    overflow:auto;
+  }
+  #infoPanel {
+    left:12px;
+    right:12px;
+    top:auto;
+    bottom:max(108px, calc(env(safe-area-inset-bottom) + 90px));
+    width:auto;
+    max-height:min(52vh, 520px);
+  }
+  #workspacePanel {
+    left:12px;
+    right:12px;
+    top:176px;
+    bottom:max(88px, calc(env(safe-area-inset-bottom) + 70px));
+    padding:14px;
+    border-radius:18px;
+  }
+  .workspace-columns,
+  .resource-slot-row,
+  .workspace-grid,
+  .fleet-card-list {
+    grid-template-columns:1fr;
+  }
+  .workspace-head,
+  .fleet-category-head,
+  .fleet-category-actions,
+  .toolbar-row,
+  .split-inline {
+    flex-direction:column;
+    align-items:stretch;
+  }
+  .split-inline > * {
+    flex:1 1 auto;
+  }
+  .main-nav {
+    left:12px;
+    right:12px;
+    bottom:max(10px, env(safe-area-inset-bottom));
+    gap:8px;
+  }
+  .main-tab-btn {
+    flex:1 1 0;
+    min-width:0;
+    padding:12px 10px;
+    font-size:13px;
+  }
+  #statusbar {
+    display:none;
+  }
+}
+@media (max-width: 900px) and (orientation: landscape) {
+  #topbar {
+    right:120px;
+  }
+  .topbar-auth {
+    grid-template-columns:repeat(3, minmax(0, 1fr));
+  }
+  .search-wrap {
+    flex:1 1 220px;
+  }
+  #layersPanel,
+  #workspacePanel {
+    top:124px;
+  }
+  #infoPanel {
+    left:auto;
+    right:12px;
+    top:124px;
+    bottom:max(86px, calc(env(safe-area-inset-bottom) + 68px));
+    width:min(360px, calc(100vw - 24px));
+    max-height:none;
+  }
+}
+@media (max-width: 900px) and (orientation: portrait) {
+  .orientation-guard {
+    display:flex;
+  }
+  #topbar,
+  .toolstack,
+  #homeBtn,
+  #layersPanel,
+  #infoPanel,
+  #workspacePanel,
+  .main-nav {
+    visibility:hidden;
+    pointer-events:none;
+  }
+}
 </style>
 </head>
 <body>
 <div id="app">
+  <div id="orientationGuard" class="orientation-guard" aria-hidden="true">
+    <div class="orientation-guard-card">
+      <h2>Bitte ins Querformat drehen</h2>
+      <p>Auf dem Handy ist die Karte im Querformat optimiert. Danach werden Map, Panels und Flottenmanagement kompakter und besser bedienbar.</p>
+      <div class="orientation-guard-actions">
+        <button class="primary" id="orientationLockBtn" type="button">Querformat aktivieren</button>
+        <button class="secondary" id="orientationDismissBtn" type="button">Trotzdem anzeigen</button>
+      </div>
+    </div>
+  </div>
   <div id="viewport">
     <div id="world">
       <img id="map" src="assets/GFFA-high.jpg" alt="Galaxy Map">
@@ -492,6 +673,9 @@ const roleSelect = document.getElementById('roleSelect');
 const saveBtn = document.getElementById('saveBtn');
 const roleFactionBadge = document.getElementById('roleFactionBadge');
 const loginBtn = document.getElementById('loginBtn');
+const orientationGuardEl = document.getElementById('orientationGuard');
+const orientationLockBtn = document.getElementById('orientationLockBtn');
+const orientationDismissBtn = document.getElementById('orientationDismissBtn');
 const loginManagerTabBtn = document.getElementById('loginManagerTabBtn');
 const planetIndex = new Map();
 const fleetIndex = new Map();
@@ -531,6 +715,7 @@ let activePlanetSearchHighlightTimer = 0;
 let draggedFleetManagementFleetId = '';
 let draggedFleetCategoryId = '';
 let currentAuthenticatedUsername = '';
+let mobileOrientationDismissed = false;
 const CLIENT_UI_PREFS_KEY = 'gcb_ui_v1';
 let fleetCategoryCollapsedIds = new Set();
 const serverSync = {
@@ -3180,6 +3365,40 @@ function needsLayerRefreshForZoom(prevZoom, nextZoom) {
 
 function setStatus(t) {
   document.getElementById('statusLeft').textContent = t;
+}
+
+function isLikelyMobileDevice() {
+  return window.matchMedia('(max-width: 900px)').matches
+    && (navigator.maxTouchPoints > 0 || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent));
+}
+
+function isPortraitMobile() {
+  return isLikelyMobileDevice() && window.matchMedia('(orientation: portrait)').matches;
+}
+
+async function requestLandscapeOrientation() {
+  if (!isLikelyMobileDevice()) return false;
+  try {
+    if (document.fullscreenEnabled && !document.fullscreenElement) {
+      await document.documentElement.requestFullscreen();
+    }
+  } catch (_) {}
+  try {
+    if (screen.orientation?.lock) {
+      await screen.orientation.lock('landscape');
+      return true;
+    }
+  } catch (_) {}
+  return false;
+}
+
+function syncMobileOrientationUi() {
+  const mobile = isLikelyMobileDevice();
+  document.body.classList.toggle('mobile-device', mobile);
+  if (!orientationGuardEl) return;
+  const shouldShowGuard = mobile && isPortraitMobile() && !mobileOrientationDismissed;
+  orientationGuardEl.setAttribute('aria-hidden', shouldShowGuard ? 'false' : 'true');
+  orientationGuardEl.style.display = shouldShowGuard ? 'flex' : '';
 }
 
 function closePlanetSearchResults(clearSelection = true) {
@@ -6596,6 +6815,18 @@ document.getElementById('saveBtn').onclick = () => {
   a.click();
   URL.revokeObjectURL(url);
 };
+orientationLockBtn?.addEventListener('click', async () => {
+  const locked = await requestLandscapeOrientation();
+  if (!locked) {
+    setStatus('Querformat bitte manuell aktivieren.');
+  }
+  mobileOrientationDismissed = false;
+  syncMobileOrientationUi();
+});
+orientationDismissBtn?.addEventListener('click', () => {
+  mobileOrientationDismissed = true;
+  syncMobileOrientationUi();
+});
 loginBtn.onclick = attemptLogin;
 document.getElementById('loginPassword').addEventListener('keydown', (event) => {
   if (event.key === 'Enter') {
@@ -6607,6 +6838,12 @@ applyDefaultAnonymousRole();
 loadClientUiPrefs();
 refreshRoleChrome();
 bootstrapFromServer();
+syncMobileOrientationUi();
+window.addEventListener('resize', syncMobileOrientationUi);
+window.addEventListener('orientationchange', syncMobileOrientationUi);
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) syncMobileOrientationUi();
+});
 window.savePlanet = savePlanet;
 window.saveFleet = saveFleet;
 window.deleteFleet = deleteFleet;
