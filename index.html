@@ -151,7 +151,8 @@ textarea { min-height:82px; resize:vertical; }
 .muted-box { padding:12px; border:1px dashed rgba(255,255,255,.16); border-radius:12px; color:var(--muted); }
 .warning-list { margin:0; padding-left:18px; color:#ffcf9d; }
 .warning-list li { margin:4px 0; }
-.resource-slot-row { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+.resource-slot-row { display:grid; grid-template-columns:repeat(5,1fr); gap:8px; }
+.resource-slot-cell small { display:block; margin-top:4px; color:var(--muted); font-size:11px; text-align:center; }
 .resource-pill { display:inline-flex; align-items:center; gap:6px; padding:5px 9px; border-radius:999px; background:rgba(69,123,255,.12); color:#cfe0ff; border:1px solid rgba(69,123,255,.24); font-size:12px; margin:0 6px 6px 0; }
 .fleet-card-list { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:12px; }
 .fleet-card { background:rgba(255,255,255,.035); border:1px solid rgba(255,255,255,.08); border-radius:14px; padding:14px; }
@@ -319,11 +320,11 @@ const POSITION_CALIBRATION_ANCHORS = [
   { id: 'jedha', old: { x: 663, y: 942 }, next: { x: 749, y: 950 } }
 ];
 const RESOURCE_DEFS = [
-  { key: 'quadraniumErz', label: 'QUADRANIUM ERZ' },
-  { key: 'agrinium', label: 'AGRINIUM' },
-  { key: 'tibannaGas', label: 'TIBANNA GAS' },
-  { key: 'baradium', label: 'BARADIUM' },
-  { key: 'kavamSalz', label: 'KAVAM SALZ' }
+  { key: 'quadraniumErz', label: 'METALLE' },
+  { key: 'agrinium', label: 'TECHNOLOGIEN' },
+  { key: 'tibannaGas', label: 'TREIBSTOFFE' },
+  { key: 'baradium', label: 'CHEMIKALIEN' },
+  { key: 'kavamSalz', label: 'VERSORGUNGSGÜTER' }
 ];
 const RESOURCE_KEYS = RESOURCE_DEFS.map((entry) => entry.key);
 const RESOURCE_LABELS = Object.fromEntries(RESOURCE_DEFS.map((entry) => [entry.key, entry.label]));
@@ -331,7 +332,7 @@ const RESOURCE_PRODUCTION_TICK_MS = 60 * 60 * 1000;
 const CAPTURE_REWARD_PER_SLOT = 20;
 const DEFAULT_SHIPYARD_PLANET_KEYS = ['anaxes', 'kuat', 'rothana'];
 const KUS_SHIPYARD_PLANET_KEYS = ['geonosis', 'muunilinst', 'serenno', 'raxus'];
-const STATION_CLASS_IDS = new Set(['golan_1']);
+const STATION_CLASS_IDS = new Set(['golan_1', 'haven_medistation', 'cardan_station', 'galactic_orbital_station', 'nis_black_site']);
 const GAR_SHIP_COST_MULTIPLIER = 70;
 const TRELLO_EXCLUDED_LISTS = new Set([
   'informationen',
@@ -357,7 +358,24 @@ const SHIP_CLASS_POOL = {
   cr90: { displayName: 'CR90-Korvette', asset: 'assets/CR90-Korvette.svg', faction: 'GAR', canJump: true, buildLocations: ['Anaxes', 'Kuat', 'Rothana'], buildTimeHours: 10, cost: { quadraniumErz: 20, agrinium: 12, tibannaGas: 10, baradium: 7, kavamSalz: 6 } },
   dp20: { displayName: 'DP20-Kanonenboot', asset: 'assets/DP20-Kanonenboot.svg', faction: 'GAR', canJump: true, buildLocations: ['Anaxes', 'Kuat', 'Rothana'], buildTimeHours: 9, cost: { quadraniumErz: 18, agrinium: 11, tibannaGas: 9, baradium: 6, kavamSalz: 6 } },
   dreadnaught: { displayName: 'Dreadnaught-Klasse-Kreuzer', asset: 'assets/Dreadnaught-Klasse-Kreuzer.svg', faction: 'GAR', canJump: true, buildLocations: ['Anaxes', 'Kuat', 'Rothana'], buildTimeHours: 28, cost: { quadraniumErz: 70, agrinium: 46, tibannaGas: 38, baradium: 26, kavamSalz: 22 } },
+  gozanti_frachter: { displayName: 'Gozanti-Klasse-Frachter', asset: 'assets/gar.svg', faction: 'GAR', canJump: true, buildLocations: ['Anaxes', 'Kuat', 'Rothana'], buildTimeHours: 24, cost: { quadraniumErz: 14, agrinium: 8, tibannaGas: 7, baradium: 5, kavamSalz: 10 } },
+  gozanti_kreuzer: { displayName: 'Gozanti-Klasse-Kreuzer', asset: 'assets/gar.svg', faction: 'GAR', canJump: true, buildLocations: ['Anaxes', 'Kuat', 'Rothana'], buildTimeHours: 24, cost: { quadraniumErz: 18, agrinium: 10, tibannaGas: 9, baradium: 6, kavamSalz: 8 } },
+  pelta_fregatte: { displayName: 'Pelta-Klasse-Fregatte', asset: 'assets/gar.svg', faction: 'GAR', canJump: true, buildLocations: ['Anaxes', 'Kuat', 'Rothana'], buildTimeHours: 72, cost: { quadraniumErz: 48, agrinium: 32, tibannaGas: 26, baradium: 18, kavamSalz: 18 } },
+  pelta_blockadebreaker: { displayName: 'Pelta-Klasse-Blockadebrecher', asset: 'assets/gar.svg', faction: 'GAR', canJump: true, buildLocations: ['Anaxes', 'Kuat', 'Rothana'], buildTimeHours: 72, cost: { quadraniumErz: 54, agrinium: 36, tibannaGas: 30, baradium: 22, kavamSalz: 20 } },
+  invincible_kreuzer: { displayName: 'Invincible-Klasse-Kreuzer', asset: 'assets/gar.svg', faction: 'GAR', canJump: true, buildLocations: ['Anaxes', 'Kuat', 'Rothana'], buildTimeHours: 144, cost: { quadraniumErz: 120, agrinium: 78, tibannaGas: 68, baradium: 48, kavamSalz: 42 } },
+  icebreaker_fregatte: { displayName: 'Icebreaker-Klasse-Fregatte', asset: 'assets/gar.svg', faction: 'GAR', canJump: true, buildLocations: ['Anaxes', 'Kuat', 'Rothana'], buildTimeHours: 72, cost: { quadraniumErz: 52, agrinium: 34, tibannaGas: 28, baradium: 20, kavamSalz: 18 } },
   golan_1: { displayName: 'Golan-1-Kampfstation', asset: 'assets/Golan-1-Kampfstation.svg', faction: 'GAR', canJump: false, buildLocations: 'anyGARPlanet', buildTimeHours: 54, cost: { quadraniumErz: 92, agrinium: 60, tibannaGas: 44, baradium: 48, kavamSalz: 36 } },
+  haven_medistation: { displayName: 'Haven-Class-Medistation (Hafen-Klasse)', asset: 'assets/gar.svg', faction: 'GAR', canJump: false, buildLocations: 'anyGARPlanet', buildTimeHours: 120, cost: { quadraniumErz: 130, agrinium: 120, tibannaGas: 70, baradium: 90, kavamSalz: 110 } },
+  cardan_station: { displayName: 'Cardan-Klasse Raumstation', asset: 'assets/gar.svg', faction: 'GAR', canJump: false, buildLocations: 'anyGARPlanet', buildTimeHours: 132, cost: { quadraniumErz: 150, agrinium: 110, tibannaGas: 80, baradium: 100, kavamSalz: 90 } },
+  galactic_orbital_station: { displayName: 'Galaktische Orbital Station', asset: 'assets/gar.svg', faction: 'GAR', canJump: false, buildLocations: 'anyGARPlanet', buildTimeHours: 168, cost: { quadraniumErz: 210, agrinium: 150, tibannaGas: 120, baradium: 110, kavamSalz: 130 } },
+  nis_black_site: { displayName: 'NIS Deep Space Black Site', asset: 'assets/gar.svg', faction: 'GAR', canJump: false, buildLocations: 'anyGARPlanet', buildTimeHours: 180, cost: { quadraniumErz: 260, agrinium: 220, tibannaGas: 160, baradium: 140, kavamSalz: 180 } },
+  gladiator_sternzerstoerer: { displayName: 'Gladiator-Klasse-Sternzerstörer', asset: 'assets/gar.svg', faction: 'GAR', canJump: true, buildLocations: ['Anaxes', 'Kuat', 'Rothana'], buildTimeHours: 168, cost: { quadraniumErz: 115, agrinium: 80, tibannaGas: 70, baradium: 52, kavamSalz: 48 } },
+  victory_i_sternzerstoerer: { displayName: 'Victory-I-Klasse Sternzerstörer', asset: 'assets/gar.svg', faction: 'GAR', canJump: true, buildLocations: ['Anaxes', 'Kuat', 'Rothana'], buildTimeHours: 168, cost: { quadraniumErz: 170, agrinium: 120, tibannaGas: 100, baradium: 80, kavamSalz: 70 } },
+  secutor_sternzerstoerer: { displayName: 'Secutor-Klasse-Sternzerstörer', asset: 'assets/gar.svg', faction: 'GAR', canJump: true, buildLocations: ['Anaxes', 'Kuat', 'Rothana'], buildTimeHours: 240, cost: { quadraniumErz: 240, agrinium: 180, tibannaGas: 160, baradium: 120, kavamSalz: 110 } },
+  mandator_sternzerstoerer: { displayName: 'Mandator-Klasse-Sternzerstörer', asset: 'assets/gar.svg', faction: 'GAR', canJump: true, buildLocations: ['Anaxes', 'Kuat', 'Rothana'], buildTimeHours: 336, cost: { quadraniumErz: 420, agrinium: 320, tibannaGas: 260, baradium: 220, kavamSalz: 180 } },
+  praetor_schlachtkreuzer: { displayName: 'Praetor-Klasse-Schlachtkreuzer', asset: 'assets/gar.svg', faction: 'GAR', canJump: true, buildLocations: ['Anaxes', 'Kuat', 'Rothana'], buildTimeHours: 288, cost: { quadraniumErz: 360, agrinium: 280, tibannaGas: 220, baradium: 180, kavamSalz: 160 } },
+  maelstrom_schlachtkreuzer: { displayName: 'Maelstrom-Klasse-Schlachtkreuzer', asset: 'assets/gar.svg', faction: 'GAR', canJump: true, buildLocations: ['Anaxes', 'Kuat', 'Rothana'], buildTimeHours: 264, cost: { quadraniumErz: 300, agrinium: 230, tibannaGas: 200, baradium: 150, kavamSalz: 140 } },
+  ipv_2c_tarnkorvette: { displayName: 'IPV-2C-Tarnkorvette', asset: 'assets/gar.svg', faction: 'GAR', canJump: true, buildLocations: ['Anaxes', 'Kuat', 'Rothana'], buildTimeHours: 48, cost: { quadraniumErz: 30, agrinium: 40, tibannaGas: 20, baradium: 18, kavamSalz: 12 } },
   munificent: { displayName: 'Munificent-class Star Frigate', asset: 'assets/kus.svg', faction: 'KUS', canJump: true, buildLocations: ['Geonosis', 'Muunilinst', 'Serenno', 'Raxus'], buildTimeHours: 12, cost: {} },
   providence: { displayName: 'Providence-class Dreadnought', asset: 'assets/kus.svg', faction: 'KUS', canJump: true, buildLocations: ['Geonosis', 'Muunilinst', 'Serenno', 'Raxus'], buildTimeHours: 24, cost: {} },
   lucrehulk: { displayName: 'Lucrehulk-class Battleship', asset: 'assets/kus.svg', faction: 'KUS', canJump: true, buildLocations: ['Geonosis', 'Muunilinst', 'Serenno', 'Raxus'], buildTimeHours: 36, cost: {} }
@@ -378,7 +396,25 @@ const SHIP_CLASS_IMPORT_PATTERNS = [
   { classId: 'cr90', patterns: ['cr90'] },
   { classId: 'dp20', patterns: ['dp20'] },
   { classId: 'dreadnaught', patterns: ['dreadnaught'] },
-  { classId: 'golan_1', patterns: ['golan-1', 'golan 1', 'kampfstation'] }
+  { classId: 'gozanti_frachter', patterns: ['gozanti-klasse-frachter', 'gozanti klasse frachter'] },
+  { classId: 'gozanti_kreuzer', patterns: ['gozanti-klasse-kreuzer', 'gozanti klasse kreuzer'] },
+  { classId: 'pelta_fregatte', patterns: ['pelta-klasse-fregatte', 'pelta klasse fregatte'] },
+  { classId: 'pelta_blockadebreaker', patterns: ['pelta-klasse-blockadebrecher', 'blockadebrecher'] },
+  { classId: 'invincible_kreuzer', patterns: ['invincible-klasse-kreuzer', 'invincible klasse kreuzer'] },
+  { classId: 'icebreaker_fregatte', patterns: ['icebreaker-klasse-fregatte', 'icebreaker klasse fregatte'] },
+  { classId: 'golan_1', patterns: ['golan-1', 'golan 1', 'kampfstation'] },
+  { classId: 'haven_medistation', patterns: ['haven-class-medistation', 'haven class medistation', 'hafen-klasse-medistation', 'hafen klasse medistation'] },
+  { classId: 'cardan_station', patterns: ['cardan-klasse raumstation', 'cardan-klasse-raumstation', 'cardan klasse raumstation'] },
+  { classId: 'galactic_orbital_station', patterns: ['galaktische orbital station', 'orbital station'] },
+  { classId: 'nis_black_site', patterns: ['nis deep space black site', 'nis deep space black site', 'black site', 'blacksite'] },
+  { classId: 'gladiator_sternzerstoerer', patterns: ['gladiator-klasse-sternzerst', 'gladiator klasse sternzerst'] },
+  { classId: 'victory_i_sternzerstoerer', patterns: ['victory-i-klasse sternzerst', 'victory i klasse sternzerst'] },
+  { classId: 'secutor_sternzerstoerer', patterns: ['secutor-klasse-sternzerst', 'secutor klasse sternzerst'] },
+  { classId: 'mandator_sternzerstoerer', patterns: ['mandator-klasse-sternzerst', 'mandator klasse sternzerst'] },
+  { classId: 'praetor_schlachtkreuzer', patterns: ['praetor klasse schlachtkreuzer', 'praetor-klasse-schlachtkreuzer'] },
+  { classId: 'maelstrom_schlachtkreuzer', patterns: ['maelstrom-klasse-schlachtkreuzer', 'maelstrom klasse schlachtkreuzer'] },
+  { classId: 'ipv_2c_tarnkorvette', patterns: ['ipv-2c-tarnkorvette', 'ipv 2c tarnkorvette'] },
+  { classId: 'consular', patterns: ['charger-c70-umbau', 'charger c70 umbau'] }
 ];
 const LOCAL_STATE_MAX_BYTES = 2.5 * 1024 * 1024;
 let deferredFullRenderTimer = null;
@@ -515,6 +551,10 @@ function normalizeFleetShipAssignments() {
     fleet.shipIds = [];
   });
   state.ships.forEach((ship) => {
+    if (isStationClass(ship.classId)) {
+      ship.assignedFleetId = '';
+      return;
+    }
     if (!ship.assignedFleetId) return;
     const fleet = state.fleets.find((entry) => entry.id === ship.assignedFleetId);
     if (!fleet) {
@@ -528,7 +568,12 @@ function normalizeFleetShipAssignments() {
 function normalizeCampaignState() {
   state.resources = state.resources || {};
   state.resources.GAR = { ...createEmptyFactionResources(), ...(state.resources.GAR || {}) };
-  state.planetResources = state.planetResources || {};
+  state.planetResources = Object.fromEntries(
+    Object.entries(state.planetResources || {}).map(([planetId, slots]) => [
+      planetId,
+      Array.isArray(slots) ? slots.filter((slot) => RESOURCE_KEYS.includes(slot)).slice(0, 10) : []
+    ])
+  );
   state.ships = Array.isArray(state.ships) ? state.ships : [];
   state.buildJobs = Array.isArray(state.buildJobs) ? state.buildJobs : [];
   state.fleetMotions = Array.isArray(state.fleetMotions) ? state.fleetMotions : [];
@@ -551,7 +596,7 @@ function normalizeCampaignState() {
       faction: ship.faction || 'GAR',
       status: ship.status || 'active',
       locationPlanetId: ship.locationPlanetId || ship.planetId || '',
-      assignedFleetId: ship.assignedFleetId || '',
+      assignedFleetId: isStationClass(ship.classId) ? '' : (ship.assignedFleetId || ''),
       canJump: typeof ship.canJump === 'boolean' ? ship.canJump : (SHIP_CLASS_POOL[ship.classId]?.canJump ?? true),
       createdFrom: ship.createdFrom || 'manual'
     }))
@@ -2007,12 +2052,22 @@ function getFactionResourcePool(faction = 'GAR') {
 
 function getPlanetResourceSlots(planetId) {
   const slots = state.planetResources?.[planetId];
-  return Array.isArray(slots) ? slots.filter((slot) => RESOURCE_KEYS.includes(slot)).slice(0, 3) : [];
+  const normalized = Array.isArray(slots) ? slots.filter((slot) => RESOURCE_KEYS.includes(slot)).slice(0, 10) : [];
+  while (normalized.length < 10) normalized.push('');
+  return normalized;
 }
 
 function setPlanetResourceSlots(planetId, slots) {
   state.planetResources = state.planetResources || {};
-  state.planetResources[planetId] = (slots || []).filter((slot) => RESOURCE_KEYS.includes(slot)).slice(0, 3);
+  state.planetResources[planetId] = (slots || []).filter((slot) => RESOURCE_KEYS.includes(slot)).slice(0, 10);
+}
+
+function canEditPlanetResourceSlot(planet, index) {
+  if (!planet || !Number.isInteger(index)) return false;
+  const role = currentRole();
+  if (role === 'Admin') return true;
+  if (role === 'Eventleiter / KUS') return planet.owner !== 'GAR' && index < 3;
+  return false;
 }
 
 function isResourceAssignmentEditable(planet) {
@@ -2306,8 +2361,9 @@ function formatDuration(ms) {
 }
 
 function renderResourcePills(slots) {
-  if (!slots.length) return '<span class="muted">Keine Rohstoffe zugewiesen.</span>';
-  return slots.map((slot) => `<span class="resource-pill">${RESOURCE_LABELS[slot]}</span>`).join('');
+  const visibleSlots = (slots || []).filter((slot) => RESOURCE_LABELS[slot]);
+  if (!visibleSlots.length) return '<span class="muted">Keine Rohstoffe zugewiesen.</span>';
+  return visibleSlots.map((slot) => `<span class="resource-pill">${RESOURCE_LABELS[slot]}</span>`).join('');
 }
 
 function focusPlanetOnMap(planetId) {
@@ -2522,20 +2578,28 @@ function importTrelloData(payload) {
     const fleet = validFleetMap.get(card.idList);
     if (!fleet) return;
     const classId = detectShipClassId(card.name || '');
-    if (!classId || !SHIP_CLASS_POOL[classId]) {
-      warnings.push(`Unknown ship class: ${card.name}`);
+    if (!classId || !SHIP_CLASS_POOL[classId]) return;
+    const existingShip = state.ships.find((ship) => normalizeSearchText(ship.name) === normalizeSearchText(card.name));
+    const assignedFleetId = isStationClass(classId) ? '' : fleet.id;
+    const locationPlanetId = fleet.locationPlanetId || fleet.planetId || '';
+    if (existingShip) {
+      existingShip.classId = classId;
+      existingShip.commander = parseCommanderFromLabel(card.desc || '') || existingShip.commander || '';
+      existingShip.faction = 'GAR';
+      existingShip.status = existingShip.status === 'lost' ? 'lost' : 'active';
+      existingShip.locationPlanetId = locationPlanetId || existingShip.locationPlanetId || '';
+      existingShip.assignedFleetId = assignedFleetId;
+      existingShip.createdFrom = existingShip.createdFrom || 'trello';
       return;
     }
-    const exists = state.ships.some((ship) => normalizeSearchText(ship.name) === normalizeSearchText(card.name) && ship.assignedFleetId === fleet.id);
-    if (exists) return;
     state.ships.push(createShipRecord({
       classId,
       name: card.name,
       commander: parseCommanderFromLabel(card.desc || ''),
       faction: 'GAR',
       status: 'active',
-      locationPlanetId: fleet.locationPlanetId || fleet.planetId || '',
-      assignedFleetId: fleet.id,
+      locationPlanetId,
+      assignedFleetId,
       createdFrom: 'trello'
     }));
   });
@@ -4759,11 +4823,19 @@ function openPlanet(id) {
   refreshFleetSelectionState();
   refreshRouteSelectionState();
   const disabled = canEditPlanet() ? '' : 'disabled';
-  const resourceDisabled = isResourceAssignmentEditable(p) ? '' : 'disabled';
   const resourceSlots = getPlanetResourceSlots(p.id);
   const resourceOptions = ['<option value="">Leer</option>']
     .concat(RESOURCE_DEFS.map((entry) => `<option value="${entry.key}">${entry.label}</option>`))
     .join('');
+  const resourceSlotControls = resourceSlots.map((slot, index) => {
+    const slotEditable = canEditPlanetResourceSlot(p, index);
+    return `
+      <div class="resource-slot-cell">
+        <select id="planetResource${index}" ${slotEditable ? '' : 'disabled'}>${resourceOptions.replace(`value="${slot || ''}"`, `value="${slot || ''}" selected`)}</select>
+        <small>${index < 3 ? 'Event' : 'Admin'}</small>
+      </div>
+    `;
+  }).join('');
   infoPanel.style.display = 'block';
   infoPanel.innerHTML = `
     ${getInfoPanelHeader(p.name)}
@@ -4777,14 +4849,12 @@ function openPlanet(id) {
     <div class="form-row"><label>Wiki-Link</label><input id="planetWiki" value="${p.wiki || ''}" ${disabled}></div>
     <div class="form-row"><label>Infocard / RP-Notiz</label><textarea id="planetDesc" ${disabled}>${p.description || ''}</textarea></div>
     <div class="form-row">
-      <label>Rohstoff-Slots</label>
+      <label>Minen-Slots</label>
       <div>${renderResourcePills(resourceSlots)}</div>
       <div class="resource-slot-row">
-        <select id="planetResource0" ${resourceDisabled}>${resourceOptions.replace(`value="${resourceSlots[0] || ''}"`, `value="${resourceSlots[0] || ''}" selected`)}</select>
-        <select id="planetResource1" ${resourceDisabled}>${resourceOptions.replace(`value="${resourceSlots[1] || ''}"`, `value="${resourceSlots[1] || ''}" selected`)}</select>
-        <select id="planetResource2" ${resourceDisabled}>${resourceOptions.replace(`value="${resourceSlots[2] || ''}"`, `value="${resourceSlots[2] || ''}" selected`)}</select>
+        ${resourceSlotControls}
       </div>
-      <small>${currentRole() === 'Admin' ? 'Admin kann auf allen Planeten bis zu 3 Rohstoff-Slots pflegen. Eventleiter nur auf KUS- und Neutral-Planeten.' : (isResourceAssignmentEditable(p) ? 'Eventleiter können auf KUS- und Neutral-Planeten bis zu 3 Rohstoff-Slots zuweisen.' : 'Rohstoff-Slots sind für deine Rolle auf diesem Planeten nicht editierbar.')}</small>
+      <small>${currentRole() === 'Admin' ? 'Admin kann alle 10 Minen-Slots pflegen. Eventleitung darf nur die ersten 3 Slots auf KUS- und Neutral-Planeten ändern.' : (isResourceAssignmentEditable(p) ? 'Eventleitung darf nur die ersten 3 Minen-Slots auf KUS- und Neutral-Planeten ändern.' : 'Minen-Slots sind für deine Rolle auf diesem Planeten nicht editierbar.')}</small>
     </div>
     <p><a href="${p.wiki}" target="_blank">Wiki öffnen</a></p>
     <button class="primary" onclick="savePlanet('${p.id}')" ${disabled}>Planet speichern</button>
@@ -4799,11 +4869,12 @@ function savePlanet(id) {
   p.wiki = document.getElementById('planetWiki').value;
   p.description = document.getElementById('planetDesc').value;
   if (isResourceAssignmentEditable(p)) {
-    setPlanetResourceSlots(p.id, [
-      document.getElementById('planetResource0')?.value,
-      document.getElementById('planetResource1')?.value,
-      document.getElementById('planetResource2')?.value
-    ]);
+    const nextSlots = getPlanetResourceSlots(p.id);
+    for (let index = 0; index < 10; index += 1) {
+      if (!canEditPlanetResourceSlot(p, index)) continue;
+      nextSlots[index] = document.getElementById(`planetResource${index}`)?.value || '';
+    }
+    setPlanetResourceSlots(p.id, nextSlots);
   }
   let rewardText = '';
   if (previousOwner !== 'GAR' && p.owner === 'GAR') {
@@ -4836,21 +4907,22 @@ function openFleet(id) {
   const travel = fleetTravelState.get(f.id);
   const jumpDisabled = (!canEditFaction(f.faction) || travel) ? 'disabled' : '';
   const assignedShips = state.ships.filter((ship) => ship.assignedFleetId === f.id);
+  const activeShips = assignedShips.filter((ship) => !isStationClass(ship.classId));
   const classSummaryMap = new Map();
-  assignedShips.forEach((ship) => {
+  activeShips.forEach((ship) => {
     const classMeta = getShipClassMeta(ship.classId);
     const label = classMeta?.displayName || ship.classId || 'Unbekannte Klasse';
     classSummaryMap.set(label, (classSummaryMap.get(label) || 0) + 1);
   });
-  const classSummary = assignedShips.length
+  const classSummary = activeShips.length
     ? [...classSummaryMap.entries()].map(([label, count]) => `${count}x ${label}`).join('<br>')
     : 'Keine Schiffe zugeteilt.';
-  const shipManifest = assignedShips.length
-    ? assignedShips.map((ship) => {
-      const classMeta = getShipClassMeta(ship.classId);
-      const isHighlighted = pendingFleetManifestHighlightShipId === ship.id;
-      return `<div data-manifest-ship-id="${ship.id}" class="${isHighlighted ? 'focus-highlight' : ''}"><strong>${ship.name}</strong><br><small>${classMeta?.displayName || ship.classId}${ship.commander ? ` • CO ${ship.commander}` : ''}</small></div>`;
-    }).join('')
+  const shipManifest = activeShips.length
+    ? activeShips.map((ship) => {
+        const classMeta = getShipClassMeta(ship.classId);
+        const isHighlighted = pendingFleetManifestHighlightShipId === ship.id;
+        return `<div data-manifest-ship-id="${ship.id}" class="${isHighlighted ? 'focus-highlight' : ''}"><strong>${ship.name}</strong><br><small>${classMeta?.displayName || ship.classId}${ship.commander ? ` • CO ${ship.commander}` : ''}</small></div>`;
+      }).join('')
     : '<span class="muted">Dieser Flotte sind aktuell keine einzelnen Schiffe zugewiesen.</span>';
   fleetJumpSearchState.fleetId = f.id;
   fleetJumpSearchState.selectedPlanetId = null;
@@ -4997,6 +5069,7 @@ function createFleetManagementFleet() {
 function saveManagedShip(id) {
   const ship = state.ships.find((entry) => entry.id === id);
   if (!ship || !canEditFaction(ship.faction)) return;
+  const station = isStationClass(ship.classId);
   const nameInput = document.getElementById(`shipName_${id}`);
   const commanderInput = document.getElementById(`shipCommander_${id}`);
   const fleetSelect = document.getElementById(`shipFleet_${id}`);
@@ -5007,12 +5080,12 @@ function saveManagedShip(id) {
   let nextFleet = null;
   if (fleetSelect) {
     nextFleet = state.fleets.find((entry) => entry.id === fleetSelect.value);
-    ship.assignedFleetId = nextFleet && nextFleet.faction === ship.faction ? nextFleet.id : '';
+    ship.assignedFleetId = station ? '' : (nextFleet && nextFleet.faction === ship.faction ? nextFleet.id : '');
   }
   if (statusSelect) ship.status = statusSelect.value;
   const sourceFleet = previousFleetId ? state.fleets.find((entry) => entry.id === previousFleetId) : null;
   const nextFleetId = ship.assignedFleetId || '';
-  if (sourceFleet && nextFleetId && nextFleetId !== previousFleetId) {
+  if (!station && sourceFleet && nextFleetId && nextFleetId !== previousFleetId) {
     ship.assignedFleetId = previousFleetId;
     animateShipTransferBetweenFleets(ship, sourceFleet, nextFleet);
     return;
@@ -5029,6 +5102,7 @@ function saveManagedShip(id) {
 function removeManagedShipFromFleet(id) {
   const ship = state.ships.find((entry) => entry.id === id);
   if (!ship || !canEditFaction(ship.faction)) return;
+  if (isStationClass(ship.classId)) return;
   ship.assignedFleetId = '';
   normalizeFleetShipAssignments();
   saveLocal();
@@ -5404,6 +5478,20 @@ function renderFleetManagementView() {
           </thead>
           <tbody>
             ${ships.map((ship) => `
+              ${(() => {
+                const station = isStationClass(ship.classId);
+                const fleetCell = station
+                  ? `<div class="muted-box">Planetgebunden</div>`
+                  : `<select id="shipFleet_${ship.id}">
+                      <option value="">Nicht zugeteilt</option>
+                      ${visibleFleets.filter((fleet) => fleet.faction === ship.faction).map((fleet) => `<option value="${fleet.id}" ${ship.assignedFleetId === fleet.id ? 'selected' : ''}>${fleet.name}</option>`).join('')}
+                    </select>`;
+                const actions = `
+                  <button class="mini-btn primary" onclick="saveManagedShip('${ship.id}')">Speichern</button>
+                  ${station ? '' : `<button class="mini-btn" onclick="removeManagedShipFromFleet('${ship.id}')">Lösen</button>`}
+                  ${ship.locationPlanetId ? `<button class="mini-btn" onclick="focusShipOnMap('${ship.id}')">Auf Map</button>` : ''}
+                `;
+                return `
               <tr data-focus-key="ship:${ship.id}">
                 <td><input id="shipName_${ship.id}" value="${ship.name}"></td>
                 <td>${getShipClassMeta(ship.classId)?.displayName || ship.classId}</td>
@@ -5413,19 +5501,12 @@ function renderFleetManagementView() {
                   </select>
                 </td>
                 <td>${getShipDisplayLocation(ship)}</td>
-                <td>
-                  <select id="shipFleet_${ship.id}">
-                    <option value="">Nicht zugeteilt</option>
-                    ${visibleFleets.filter((fleet) => fleet.faction === ship.faction).map((fleet) => `<option value="${fleet.id}" ${ship.assignedFleetId === fleet.id ? 'selected' : ''}>${fleet.name}</option>`).join('')}
-                  </select>
-                </td>
+                <td>${fleetCell}</td>
                 <td><input id="shipCommander_${ship.id}" value="${ship.commander || ''}" placeholder="Player-Leitung"></td>
-                <td class="actions">
-                  <button class="mini-btn primary" onclick="saveManagedShip('${ship.id}')">Speichern</button>
-                  <button class="mini-btn" onclick="removeManagedShipFromFleet('${ship.id}')">Lösen</button>
-                  ${ship.locationPlanetId ? `<button class="mini-btn" onclick="focusShipOnMap('${ship.id}')">Auf Map</button>` : ''}
-                </td>
+                <td class="actions">${actions}</td>
               </tr>
+            `;
+              })()}
             `).join('')}
           </tbody>
         </table>
