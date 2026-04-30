@@ -25,7 +25,7 @@ const COOKIE_NAME = 'gcb_session';
 const PORT = Number(process.env.PORT || 3000);
 const RESOURCE_KEYS = ['metal', 'technology', 'fuel', 'chemicals', 'supplies'];
 const RESOURCE_PRODUCTION_TICK_MS = 60 * 60 * 1000;
-const OWNER_FRONTLINE_PASS_VERSION = 'excel_owner_visibility_v1';
+const OWNER_FRONTLINE_PASS_VERSION = 'excel_owner_visibility_v2';
 function normalizeOwnershipReferenceName(text) {
   return String(text || '')
     .toLowerCase()
