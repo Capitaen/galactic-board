@@ -1812,6 +1812,7 @@ function makeServerCampaignPayload(nextState) {
     fleetMotions: Array.isArray(nextState?.fleetMotions) ? nextState.fleetMotions : [],
     resources: nextState?.resources && typeof nextState.resources === 'object' ? nextState.resources : {},
     planetResources: nextState?.planetResources && typeof nextState.planetResources === 'object' ? nextState.planetResources : {},
+    lastResourceTickAt: Number(nextState?.lastResourceTickAt) || Date.now(),
     importWarnings: Array.isArray(nextState?.importWarnings) ? nextState.importWarnings : [],
     meta: sanitizeCampaignMeta(nextState?.meta)
   };

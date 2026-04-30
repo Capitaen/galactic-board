@@ -21,6 +21,31 @@ const io = new SocketServer(server, {
 const sessions = new Map();
 const COOKIE_NAME = 'gcb_session';
 const PORT = Number(process.env.PORT || 3000);
+const RESOURCE_KEYS = ['metal', 'technology', 'fuel', 'chemicals', 'supplies'];
+const RESOURCE_PRODUCTION_TICK_MS = 60 * 60 * 1000;
+const OWNER_FRONTLINE_PASS_VERSION = 'cw_image_v1';
+const OWNER_FRONTLINE_OVERRIDES = {
+  balmorra: 'GAR',
+  bothawui: 'GAR',
+  corellia: 'GAR',
+  kuat: 'GAR',
+  mandalore: 'GAR',
+  mon_calamari: 'GAR',
+  rendili: 'GAR',
+  christophsis: 'KUS',
+  dathomir: 'KUS',
+  felucia: 'KUS',
+  ossus: 'KUS',
+  saleucami: 'KUS',
+  sullust: 'KUS',
+  yavin: 'KUS',
+  geonosis: 'NEUTRAL',
+  nal_hutta: 'NEUTRAL',
+  nar_shaddaa: 'NEUTRAL',
+  ryloth: 'NEUTRAL',
+  tatooine: 'NEUTRAL',
+  toydaria: 'NEUTRAL'
+};
 
 function findIndexHtml() {
   const candidates = [
@@ -83,6 +108,75 @@ function sanitizeStateForRole(state, role) {
   };
 }
 
+function createEmptyFactionResources() {
+  return Object.fromEntries(RESOURCE_KEYS.map((key) => [key, 0]));
+}
+
+function getPlanetResourceSlotsFromState(state, planetId) {
+  const slots = state?.planetResources?.[planetId];
+  const normalized = Array.isArray(slots)
+    ? slots.filter((slot) => RESOURCE_KEYS.includes(slot)).slice(0, 10)
+    : [];
+  while (normalized.length < 10) normalized.push('');
+  return normalized;
+}
+
+function getFactionProductionRateFromState(state, faction = 'GAR') {
+  const totals = createEmptyFactionResources();
+  for (const planet of Array.isArray(state?.planets) ? state.planets : []) {
+    if (planet?.owner !== faction) continue;
+    for (const slot of getPlanetResourceSlotsFromState(state, planet.id)) {
+      if (!slot) continue;
+      totals[slot] += 1;
+    }
+  }
+  return totals;
+}
+
+function applyServerProductionTicks(previousState, now = Date.now()) {
+  const nextState = JSON.parse(JSON.stringify(previousState || {}));
+  nextState.resources = nextState.resources || {};
+  nextState.resources.GAR = {
+    ...createEmptyFactionResources(),
+    ...(nextState.resources.GAR || {})
+  };
+  const lastTick = Number(nextState.lastResourceTickAt) || now;
+  const elapsed = Math.max(0, now - lastTick);
+  const ticks = Math.floor(elapsed / RESOURCE_PRODUCTION_TICK_MS);
+  if (ticks <= 0) {
+    nextState.lastResourceTickAt = lastTick;
+    return { changed: false, ticks: 0, state: nextState };
+  }
+  const rate = getFactionProductionRateFromState(nextState, 'GAR');
+  for (const key of RESOURCE_KEYS) {
+    nextState.resources.GAR[key] = Number(nextState.resources.GAR[key] || 0) + (Number(rate[key] || 0) * ticks);
+  }
+  nextState.lastResourceTickAt = lastTick + (ticks * RESOURCE_PRODUCTION_TICK_MS);
+  return { changed: true, ticks, state: nextState };
+}
+
+function applyOwnerFrontlineImagePass(previousState) {
+  const nextState = JSON.parse(JSON.stringify(previousState || {}));
+  nextState.meta = nextState.meta || {};
+  if (nextState.meta.ownerMapPassVersion === OWNER_FRONTLINE_PASS_VERSION) {
+    return { changed: false, state: nextState };
+  }
+  const planets = Array.isArray(nextState.planets) ? nextState.planets : [];
+  let changed = false;
+  for (const planet of planets) {
+    if (!planet?.id) continue;
+    const nextOwner = OWNER_FRONTLINE_OVERRIDES[planet.id];
+    if (!nextOwner || planet.owner === nextOwner) continue;
+    planet.owner = nextOwner;
+    changed = true;
+  }
+  nextState.meta.ownerMapPassVersion = OWNER_FRONTLINE_PASS_VERSION;
+  if (!changed && previousState?.meta?.ownerMapPassVersion === OWNER_FRONTLINE_PASS_VERSION) {
+    return { changed: false, state: nextState };
+  }
+  return { changed: changed || previousState?.meta?.ownerMapPassVersion !== OWNER_FRONTLINE_PASS_VERSION, state: nextState };
+}
+
 function sanitizeIncomingCampaignPayload(nextState) {
   const meta = nextState?.meta && typeof nextState.meta === 'object' ? nextState.meta : {};
   const blockedMetaKeys = new Set([
@@ -116,6 +210,7 @@ function sanitizeIncomingCampaignPayload(nextState) {
     fleetMotions: Array.isArray(nextState?.fleetMotions) ? nextState.fleetMotions : [],
     resources: nextState?.resources && typeof nextState.resources === 'object' ? nextState.resources : {},
     planetResources: nextState?.planetResources && typeof nextState.planetResources === 'object' ? nextState.planetResources : {},
+    lastResourceTickAt: Number(nextState?.lastResourceTickAt) || 0,
     importWarnings: Array.isArray(nextState?.importWarnings) ? nextState.importWarnings : [],
     meta: Object.fromEntries(Object.entries(meta).filter(([key]) => !blockedMetaKeys.has(key)))
   };
@@ -188,7 +283,7 @@ function validateAdminUserInput(body) {
 }
 
 function detectChangedCampaignKeys(previousState, nextState) {
-  const keys = ['planets', 'fleets', 'ships', 'buildJobs', 'fleetMotions', 'resources', 'planetResources', 'meta'];
+  const keys = ['planets', 'fleets', 'ships', 'buildJobs', 'fleetMotions', 'resources', 'planetResources', 'lastResourceTickAt', 'meta'];
   return keys.filter((key) => JSON.stringify(previousState?.[key] ?? null) !== JSON.stringify(nextState?.[key] ?? null));
 }
 
@@ -200,11 +295,34 @@ app.get('/api/bootstrap', (req, res) => {
   const session = getSession(req);
   const me = session || { id: null, username: '', role: 'Viewer' };
   const { state, revision, updatedAt } = readCampaignState(db);
+  const productionResult = applyServerProductionTicks(state);
+  const ownerPassResult = applyOwnerFrontlineImagePass(productionResult.state);
+  const changedKeys = [];
+  let effectiveState = state;
+  let effectiveRevision = revision;
+  let effectiveUpdatedAt = updatedAt;
+  if (ownerPassResult.changed || productionResult.changed) {
+    effectiveState = ownerPassResult.state;
+    if (ownerPassResult.changed) changedKeys.push('planets', 'meta');
+    if (productionResult.changed) changedKeys.push('resources', 'lastResourceTickAt');
+    effectiveRevision = revision + 1;
+    effectiveUpdatedAt = writeCampaignState(db, effectiveState, effectiveRevision);
+    broadcastCampaignChange({
+      revision: effectiveRevision,
+      updatedAt: effectiveUpdatedAt,
+      changedKeys: [...new Set(changedKeys)],
+      actor: {
+        id: 'server',
+        username: 'server',
+        role: 'System'
+      }
+    });
+  }
   res.json({
     me,
-    campaign: sanitizeStateForRole(state, me.role),
-    revision,
-    updatedAt
+    campaign: sanitizeStateForRole(effectiveState, me.role),
+    revision: effectiveRevision,
+    updatedAt: effectiveUpdatedAt
   });
 });
 
@@ -327,6 +445,7 @@ app.put('/api/campaign/state', requireAuth, (req, res) => {
     const mergedState = {
       ...previousState,
       ...nextState,
+      lastResourceTickAt: Number(nextState.lastResourceTickAt) || Number(previousState.lastResourceTickAt) || Date.now(),
       authUsers: previousState.authUsers || []
     };
     const changedKeys = detectChangedCampaignKeys(previousState, mergedState);
