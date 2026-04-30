@@ -23,7 +23,7 @@ const COOKIE_NAME = 'gcb_session';
 const PORT = Number(process.env.PORT || 3000);
 const RESOURCE_KEYS = ['metal', 'technology', 'fuel', 'chemicals', 'supplies'];
 const RESOURCE_PRODUCTION_TICK_MS = 60 * 60 * 1000;
-const OWNER_FRONTLINE_PASS_VERSION = 'cw_image_v5';
+const OWNER_FRONTLINE_PASS_VERSION = 'cw_image_v6';
 const OWNER_FRONTLINE_OVERRIDES = {
   coruscant: 'GAR',
   corellia: 'GAR',
@@ -65,36 +65,52 @@ function classifyOwnerFromReferenceMap(planet) {
   const x = Number(planet.x);
   const y = Number(planet.y);
 
+  // The user asked to mirror the reference text/map where BLUE = CIS/KUS.
+  // Prioritize those blue territories first, then fall back to Hutt and core GAR areas.
+  const inBlueNorthArm = pointInEllipse(x, y, 1535, 500, 520, 315);
+  const inBlueNorthWestRun = pointInEllipse(x, y, 1320, 365, 245, 145);
+  const inBlueUnknownRegions = pointInEllipse(x, y, 565, 1100, 845, 640);
+  const inBlueCentralPocket = pointInEllipse(x, y, 1095, 1125, 315, 255);
+  const inBlueColoniesPocket = pointInEllipse(x, y, 1005, 1295, 290, 215);
+  const inBlueEastSlice = pointInEllipse(x, y, 1555, 1085, 420, 455);
+  const inBlueFarSouth = pointInEllipse(x, y, 1115, 1830, 760, 360);
+  const inBlueSouthWest = pointInEllipse(x, y, 640, 1770, 500, 285);
+  const inBlueExpansionSouth = pointInEllipse(x, y, 1210, 1490, 255, 245);
+  const inBlueKesselBand = pointInEllipse(x, y, 1510, 1265, 215, 165);
+  const inBlueAblajeck = pointInEllipse(x, y, 355, 1460, 165, 175);
+
+  if (
+    inBlueNorthArm
+    || inBlueNorthWestRun
+    || inBlueUnknownRegions
+    || inBlueCentralPocket
+    || inBlueColoniesPocket
+    || inBlueEastSlice
+    || inBlueFarSouth
+    || inBlueSouthWest
+    || inBlueExpansionSouth
+    || inBlueKesselBand
+    || inBlueAblajeck
+  ) {
+    return 'KUS';
+  }
+
   if (region === 'Hutt Space') return 'HUTT';
-  const inHuttCore = pointInEllipse(x, y, 1500, 1280, 150, 170);
-  const inHuttNorth = pointInEllipse(x, y, 1520, 1110, 140, 140);
-  if (inHuttCore || inHuttNorth) return 'HUTT';
+  const inHuttCore = pointInEllipse(x, y, 1495, 1280, 145, 165);
+  if (inHuttCore) return 'HUTT';
 
-  const inGarCore = pointInEllipse(x, y, 1015, 1015, 470, 360);
-  const inGarNorthBand = pointInEllipse(x, y, 1180, 760, 500, 245);
-  const inGarEastMid = pointInEllipse(x, y, 1450, 860, 255, 250);
-  const inGarSouthBand = pointInEllipse(x, y, 1080, 1565, 430, 260);
-  const inGarSouthWest = pointInEllipse(x, y, 820, 1510, 300, 260);
-  const inGarDeepCore = pointInEllipse(x, y, 965, 1115, 260, 180);
+  const inGarCore = pointInEllipse(x, y, 1010, 1035, 455, 345);
+  const inGarNorthBand = pointInEllipse(x, y, 1190, 760, 490, 235);
+  const inGarSouthBand = pointInEllipse(x, y, 980, 1560, 395, 240);
+  const inGarDeepCore = pointInEllipse(x, y, 955, 1110, 240, 165);
 
-  const inKusNorthWest = pointInEllipse(x, y, 1120, 470, 330, 180);
-  const inKusNorthEast = pointInEllipse(x, y, 1540, 520, 420, 300);
-  const inKusUnknownWest = pointInEllipse(x, y, 640, 1100, 700, 520);
-  const inKusCentralSouth = pointInEllipse(x, y, 1135, 1360, 420, 470);
-  const inKusFarEast = pointInEllipse(x, y, 1680, 1060, 330, 360);
-  const inKusFarSouthWest = pointInEllipse(x, y, 720, 1800, 520, 285);
-  const inKusFarSouthEast = pointInEllipse(x, y, 1425, 1830, 430, 320);
-
-  if (inGarCore || inGarNorthBand || inGarEastMid || inGarSouthBand || inGarSouthWest || inGarDeepCore) return 'GAR';
-  if (inKusNorthWest || inKusNorthEast || inKusUnknownWest || inKusCentralSouth || inKusFarEast || inKusFarSouthWest || inKusFarSouthEast) return 'KUS';
+  if (inGarCore || inGarNorthBand || inGarSouthBand || inGarDeepCore) return 'GAR';
 
   if (region === 'Deep Core' || region === 'Core') return 'GAR';
-  if (region === 'Colonies') return y > 1320 ? 'KUS' : 'GAR';
-  if (region === 'Inner Rim') return (x > 930 || y > 1360) ? 'KUS' : 'GAR';
-  if (region === 'Expansion Region') return 'KUS';
-  if (region === 'Mid Rim') return y < 1040 ? 'GAR' : 'KUS';
-  if (region === 'Outer Rim') return x > 1380 && y > 980 && y < 1500 ? 'HUTT' : 'KUS';
-  if (region === 'Unknown Regions' || region === 'Wild Space') return 'KUS';
+  if (region === 'Colonies') return 'GAR';
+  if (region === 'Inner Rim' && x < 980 && y < 1450) return 'GAR';
+  if (region === 'Unknown Regions' || region === 'Wild Space' || region === 'Expansion Region' || region === 'Outer Rim') return 'KUS';
+  if (region === 'Mid Rim' && y > 1320) return 'KUS';
 
   return null;
 }
