@@ -11,6 +11,7 @@ import { validateNextCampaignState } from './stateValidation.js';
 
 const projectRoot = process.cwd();
 const db = createDb(projectRoot);
+const PLANET_OWNERSHIP_REFERENCE_PATH = path.join(projectRoot, 'server', 'data', 'planetOwnershipReference.json');
 
 const app = express();
 const server = createServer(app);
@@ -50,6 +51,79 @@ const OWNER_FRONTLINE_OVERRIDES = {
   ylesia: 'HUTT'
 };
 
+function normalizeOwnershipReferenceName(text) {
+  return String(text || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\/legends\b/g, '')
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/\bhomeworld\b/g, ' ')
+    .replace(/\bunknown\b/g, ' ')
+    .replace(/\bunidentified\b/g, ' ')
+    .replace(/\bprime\b/g, ' prime ')
+    .replace(/\biii\b/g, ' 3 ')
+    .replace(/\biii\b/g, ' 3 ')
+    .replace(/\bii\b/g, ' 2 ')
+    .replace(/\biv\b/g, ' 4 ')
+    .replace(/\bvi\b/g, ' 6 ')
+    .replace(/\bvii\b/g, ' 7 ')
+    .replace(/\bviii\b/g, ' 8 ')
+    .replace(/\bix\b/g, ' 9 ')
+    .replace(/\bx\b/g, ' 10 ')
+    .replace(/['’`"]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function buildOwnershipReferenceAliases(text) {
+  const raw = String(text || '').trim();
+  if (!raw) return [];
+  const aliases = new Set();
+  const pushAlias = (value) => {
+    const normalized = normalizeOwnershipReferenceName(value);
+    if (normalized) aliases.add(normalized);
+  };
+  pushAlias(raw);
+  pushAlias(raw.replace(/\/.*$/g, ''));
+  pushAlias(raw.replace(/\([^)]*\)/g, ' '));
+  pushAlias(raw.replace(/\b(homeworld|unidentified|unknown)\b/gi, ' '));
+  pushAlias(raw.replace(/\b(iii|iii|ii|iv|vi|vii|viii|ix|x)\b/gi, ' '));
+  return [...aliases];
+}
+
+function mapReferenceOwner(owner) {
+  const normalized = String(owner || '').trim().toLowerCase();
+  if (!normalized) return null;
+  if (normalized === 'gar' || normalized === 'republic') return 'GAR';
+  if (normalized === 'kus' || normalized === 'cis') return 'KUS';
+  if (normalized === 'hutt') return 'HUTT';
+  if (normalized === 'neutral') return 'NEUTRAL';
+  return null;
+}
+
+function loadPlanetOwnershipReference() {
+  if (!fs.existsSync(PLANET_OWNERSHIP_REFERENCE_PATH)) return new Map();
+  try {
+    const rows = JSON.parse(fs.readFileSync(PLANET_OWNERSHIP_REFERENCE_PATH, 'utf8'));
+    const reference = new Map();
+    for (const row of Array.isArray(rows) ? rows : []) {
+      const owner = mapReferenceOwner(row?.owner);
+      if (!owner) continue;
+      for (const alias of buildOwnershipReferenceAliases(row?.name)) {
+        if (!reference.has(alias)) reference.set(alias, owner);
+      }
+    }
+    return reference;
+  } catch (error) {
+    console.warn('Failed to load planet ownership reference', error);
+    return new Map();
+  }
+}
+
+const PLANET_OWNERSHIP_REFERENCE = loadPlanetOwnershipReference();
+
 function pointInEllipse(x, y, cx, cy, rx, ry) {
   if (![x, y, cx, cy, rx, ry].every(Number.isFinite)) return false;
   const dx = (x - cx) / rx;
@@ -59,6 +133,12 @@ function pointInEllipse(x, y, cx, cy, rx, ry) {
 
 function classifyOwnerFromReferenceMap(planet) {
   if (!planet) return null;
+  for (const candidate of [planet.name, String(planet.id || '').replace(/_/g, ' ')]) {
+    for (const alias of buildOwnershipReferenceAliases(candidate)) {
+      const referencedOwner = PLANET_OWNERSHIP_REFERENCE.get(alias);
+      if (referencedOwner) return referencedOwner;
+    }
+  }
   const explicitOwner = OWNER_FRONTLINE_OVERRIDES[planet.id];
   if (explicitOwner) return explicitOwner;
   const region = String(planet.region || '').trim();
@@ -99,18 +179,10 @@ function classifyOwnerFromReferenceMap(planet) {
   const inHuttCore = pointInEllipse(x, y, 1495, 1280, 145, 165);
   if (inHuttCore) return 'HUTT';
 
-  const inGarCore = pointInEllipse(x, y, 1010, 1035, 455, 345);
-  const inGarNorthBand = pointInEllipse(x, y, 1190, 760, 490, 235);
-  const inGarSouthBand = pointInEllipse(x, y, 980, 1560, 395, 240);
-  const inGarDeepCore = pointInEllipse(x, y, 955, 1110, 240, 165);
-
-  if (inGarCore || inGarNorthBand || inGarSouthBand || inGarDeepCore) return 'GAR';
-
   if (region === 'Deep Core' || region === 'Core') return 'GAR';
   if (region === 'Colonies') return 'GAR';
-  if (region === 'Inner Rim' && x < 980 && y < 1450) return 'GAR';
   if (region === 'Unknown Regions' || region === 'Wild Space' || region === 'Expansion Region' || region === 'Outer Rim') return 'KUS';
-  if (region === 'Mid Rim' && y > 1320) return 'KUS';
+  if (region === 'Mid Rim' || region === 'Inner Rim') return y > 1180 ? 'KUS' : 'GAR';
 
   return null;
 }

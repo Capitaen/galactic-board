@@ -1010,6 +1010,34 @@ function resolvePlanetBySearchValue(value) {
   return state.planets.find((planet) => planetMatchesExactSearch(planet, normalizedValue)) || null;
 }
 
+function planetHasPersistentMapNote(planet) {
+  return Boolean(String(planet?.description || '').trim());
+}
+
+function planetHasAnchoredGameplayContent(planetId) {
+  if (!planetId) return false;
+  return state.fleets.some((fleet) => fleet?.planetId === planetId)
+    || state.ships.some((ship) => ship?.locationPlanetId === planetId && ship?.status !== 'lost');
+}
+
+function shouldRevealPlanetTemporarily(planet) {
+  if (!planet) return false;
+  return activePlanetSearchHighlightId === planet.id
+    || hoveredPlanetId === planet.id
+    || (selected?.type === 'planet' && selected.id === planet.id);
+}
+
+function shouldDisplayPlanetByDefault(planet) {
+  if (!planet) return false;
+  return isPriorityWorld(planet)
+    || planetHasPersistentMapNote(planet)
+    || planetHasAnchoredGameplayContent(planet.id);
+}
+
+function shouldRenderPlanetOnMap(planet) {
+  return shouldDisplayPlanetByDefault(planet) || shouldRevealPlanetTemporarily(planet);
+}
+
 function playAudioCue(audio) {
   try {
     audio.currentTime = 0;
@@ -3869,7 +3897,7 @@ function updatePlanetElement(planet) {
   const entry = planetElements.get(planet.id);
   if (!entry) return;
   const display = getPlanetDisplayPosition(planet);
-  const isVisible = isPlanetVisibleInClusterZoom(planet);
+  const isVisible = shouldRenderPlanetOnMap(planet) && isPlanetVisibleInClusterZoom(planet);
   const isSearchHighlighted = activePlanetSearchHighlightId === planet.id;
   entry.point.className = 'planet ' + ownerClass(planet.owner) + (isPriorityWorld(planet) ? ' priority-world' : '') + (isSearchHighlighted ? ' search-highlight' : '');
   entry.point.style.left = display.x + 'px';
