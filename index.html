@@ -53,10 +53,12 @@ body { margin:0; background:#05070b; color:var(--text); font-family: Inter, Sego
 .planet.NEUTRAL { background:var(--neutral); }
 .planet:hover { width:18px; height:18px; z-index:7; }
 .planet.priority-world:hover { width:22px; height:22px; z-index:9; }
+.planet.search-highlight { width:24px; height:24px; border-width:3px; border-color:rgba(255,243,159,.98); box-shadow:0 0 0 8px rgba(255,226,92,.18), 0 0 22px rgba(255,232,92,.72); z-index:10; animation:planetSearchPulse 1.05s ease-in-out infinite; }
 .planet-label { position:absolute; transform:translate(6px,-10px); font-size:11px; color:#dfe7ff; text-shadow:0 1px 3px #000, 0 0 2px #000; pointer-events:none; white-space:nowrap; display:none; }
 .planet-label.priority-world { color:#b8ffc8; font-weight:700; }
 .show-labels .planet-label { display:block; }
 .planet-label.hover-visible { display:block !important; }
+.planet-label.search-highlight { display:block !important; color:#fff6bf; text-shadow:0 0 10px rgba(255,230,110,.75), 0 1px 3px #000; font-weight:700; }
 .fleet { position:absolute; width:29px; height:29px; transform:translate(-50%,-50%); border-radius:50%; cursor:grab; pointer-events:auto; z-index:10; filter:drop-shadow(0 0 8px #000); opacity:.68; }
 .fleet.dragging { cursor:grabbing; opacity:.88; }
 .fleet.selected { opacity:.96; z-index:12; }
@@ -156,9 +158,23 @@ textarea { min-height:82px; resize:vertical; }
 .resource-pill { display:inline-flex; align-items:center; gap:6px; padding:5px 9px; border-radius:999px; background:rgba(69,123,255,.12); color:#cfe0ff; border:1px solid rgba(69,123,255,.24); font-size:12px; margin:0 6px 6px 0; }
 .fleet-card-list { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:12px; }
 .fleet-card { background:rgba(255,255,255,.035); border:1px solid rgba(255,255,255,.08); border-radius:14px; padding:14px; }
+.fleet-card[draggable="true"] { cursor:grab; }
+.fleet-card[draggable="true"]:active { cursor:grabbing; }
 .fleet-card h4 { margin:0 0 8px; font-size:17px; }
 .fleet-card p { margin:6px 0; color:var(--muted); font-size:13px; }
 .fleet-card .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+.fleet-category-list { display:flex; flex-direction:column; gap:14px; }
+.fleet-category-card { background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.09); border-radius:16px; padding:14px; }
+.fleet-category-card.drop-target,
+.fleet-category-ungrouped.drop-target { border-color:rgba(255,214,102,.95); box-shadow:0 0 0 4px rgba(255,214,102,.14); }
+.fleet-category-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:12px; }
+.fleet-category-head h4 { margin:0 0 6px; font-size:16px; }
+.fleet-category-head p { margin:0; color:var(--muted); font-size:12px; }
+.fleet-category-actions { display:flex; gap:8px; flex-wrap:wrap; }
+.fleet-category-body.collapsed { display:none; }
+.fleet-category-ungrouped { background:rgba(255,255,255,.025); border:1px dashed rgba(255,255,255,.14); border-radius:14px; padding:12px; margin-bottom:14px; }
+.fleet-category-ungrouped h4 { margin:0 0 10px; font-size:15px; }
+.fleet-category-empty { padding:12px; border-radius:12px; background:rgba(255,255,255,.025); color:var(--muted); font-size:13px; }
 .fleet-transfer-token { position:absolute; width:18px; height:18px; transform:translate(-50%,-50%); pointer-events:none; z-index:20; filter:drop-shadow(0 0 10px rgba(255,255,255,.45)); }
 .fleet-transfer-token img { width:100%; height:100%; display:block; opacity:.95; }
 .focus-highlight { position:relative; outline:2px solid rgba(255,214,102,.95); outline-offset:4px; box-shadow:0 0 0 5px rgba(255,214,102,.18), 0 0 24px rgba(255,214,102,.28); border-radius:14px; animation:focusPulse 1.1s ease-in-out infinite; }
@@ -166,6 +182,10 @@ textarea { min-height:82px; resize:vertical; }
 @keyframes focusPulse {
   0%, 100% { box-shadow:0 0 0 5px rgba(255,214,102,.18), 0 0 24px rgba(255,214,102,.28); }
   50% { box-shadow:0 0 0 8px rgba(255,214,102,.1), 0 0 30px rgba(255,214,102,.4); }
+}
+@keyframes planetSearchPulse {
+  0%, 100% { box-shadow:0 0 0 8px rgba(255,226,92,.16), 0 0 18px rgba(255,232,92,.58); }
+  50% { box-shadow:0 0 0 11px rgba(255,226,92,.22), 0 0 28px rgba(255,232,92,.82); }
 }
 .mini-btn { background:#232937; color:#eef4ff; border:1px solid rgba(255,255,255,.11); border-radius:8px; padding:8px 10px; cursor:pointer; }
 .mini-btn.primary { background:#315dff; border-color:#5174ff; }
@@ -498,8 +518,12 @@ let pendingFleetManifestHighlightShipId = '';
 let fleetManagementSearchResultsState = [];
 let fleetManagementSearchActiveIndex = -1;
 let activeFleetManifestFilterFleetId = '';
+let activePlanetSearchHighlightId = '';
+let activePlanetSearchHighlightTimer = 0;
+let draggedFleetManagementFleetId = '';
 let currentAuthenticatedUsername = '';
 const CLIENT_UI_PREFS_KEY = 'gcb_ui_v1';
+let fleetCategoryCollapsedIds = new Set();
 const serverSync = {
   enabled: window.location.protocol.startsWith('http'),
   socket: null,
@@ -565,6 +589,31 @@ function normalizeFleetShipAssignments() {
   });
 }
 
+function ensureFleetCategoriesStore() {
+  state.meta = state.meta || {};
+  if (!Array.isArray(state.meta.fleetCategories)) state.meta.fleetCategories = [];
+  return state.meta.fleetCategories;
+}
+
+function createFleetCategoryRecord(data = {}) {
+  return {
+    id: data.id || `fleetcat_${Math.random().toString(36).slice(2, 10)}`,
+    name: String(data.name || 'Neue Kategorie').trim() || 'Neue Kategorie',
+    faction: data.faction === 'KUS' ? 'KUS' : 'GAR'
+  };
+}
+
+function normalizeFleetCategories() {
+  const categories = ensureFleetCategoriesStore()
+    .map((category) => createFleetCategoryRecord(category))
+    .filter((category, index, array) => category.id && array.findIndex((entry) => entry.id === category.id) === index);
+  state.meta.fleetCategories = categories;
+  const validCategoryIds = new Set(categories.map((category) => category.id));
+  state.fleets.forEach((fleet) => {
+    fleet.categoryId = validCategoryIds.has(fleet.categoryId) ? fleet.categoryId : '';
+  });
+}
+
 function normalizeCampaignState() {
   state.resources = state.resources || {};
   state.resources.GAR = { ...createEmptyFactionResources(), ...(state.resources.GAR || {}) };
@@ -586,6 +635,7 @@ function normalizeCampaignState() {
     fleet.commander = fleet.commander || fleet.leader || '';
     fleet.shipIds = Array.isArray(fleet.shipIds) ? fleet.shipIds : [];
     fleet.locationPlanetId = fleet.locationPlanetId || fleet.planetId || '';
+    fleet.categoryId = String(fleet.categoryId || '');
   });
   state.ships = state.ships
     .map((ship) => ({
@@ -620,6 +670,7 @@ function normalizeCampaignState() {
       durationMs: Math.max(1000, Number(motion?.durationMs) || 0)
     }))
     .filter((motion) => motion.fleetId && motion.sourcePlanetId && motion.targetPlanetId && motion.sourcePlanetId !== motion.targetPlanetId);
+  normalizeFleetCategories();
   normalizeFleetShipAssignments();
 }
 
@@ -711,6 +762,10 @@ function normalizeSearchText(text) {
     .replace(/[\u0300-\u036f]/g, '');
 }
 
+function escapeRegExp(text) {
+  return String(text || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 function compactGridName(grid) {
   return String(grid || '').replace(/-/g, '').trim();
 }
@@ -753,6 +808,12 @@ function planetMatchesExactSearch(planet, normalizedQuery) {
       .filter(Boolean)
   ];
   return candidates.some((entry) => normalizeSearchText(entry).trim() === normalizedQuery);
+}
+
+function resolvePlanetBySearchValue(value) {
+  const normalizedValue = normalizeSearchText(value).trim();
+  if (!normalizedValue) return null;
+  return state.planets.find((planet) => planetMatchesExactSearch(planet, normalizedValue)) || null;
 }
 
 function playAudioCue(audio) {
@@ -1678,7 +1739,8 @@ function saveClientUiPrefs() {
     zoom,
     panX,
     panY,
-    viewMode
+    viewMode,
+    fleetCategoryCollapsedIds: Array.from(fleetCategoryCollapsedIds)
   };
   localStorage.setItem(CLIENT_UI_PREFS_KEY, JSON.stringify(prefs));
 }
@@ -1689,6 +1751,7 @@ function loadClientUiPrefs() {
     if (Number.isFinite(raw.zoom)) zoom = raw.zoom;
     if (Number.isFinite(raw.panX)) panX = raw.panX;
     if (Number.isFinite(raw.panY)) panY = raw.panY;
+    if (Array.isArray(raw.fleetCategoryCollapsedIds)) fleetCategoryCollapsedIds = new Set(raw.fleetCategoryCollapsedIds.map((entry) => String(entry)));
   } catch (error) {
     console.warn('UI prefs could not be restored', error);
   }
@@ -2247,6 +2310,7 @@ function createFleetRecord(data = {}) {
     planetId: data.planetId || data.locationPlanetId || '',
     locationPlanetId: data.locationPlanetId || data.planetId || '',
     shipIds: Array.isArray(data.shipIds) ? data.shipIds : [],
+    categoryId: String(data.categoryId || ''),
     status: data.status || 'Operational',
     contents: data.contents || '',
     visibility: data.visibility || 'public'
@@ -2377,6 +2441,12 @@ function highlightFleetManagementElement(targetKey) {
   activeFleetManagementHighlightKey = targetKey || '';
   if (activeFleetManagementHighlightTimer) clearTimeout(activeFleetManagementHighlightTimer);
   if (!activeFleetManagementHighlightKey) return;
+  if (activeFleetManagementHighlightKey.startsWith('fleet:')) {
+    ensureFleetCategoryVisibleForFleetId(activeFleetManagementHighlightKey.slice(6));
+  } else if (activeFleetManagementHighlightKey.startsWith('ship:')) {
+    const ship = state.ships.find((entry) => entry.id === activeFleetManagementHighlightKey.slice(5));
+    if (ship?.assignedFleetId) ensureFleetCategoryVisibleForFleetId(ship.assignedFleetId);
+  }
   renderFleetManagementView();
   requestAnimationFrame(() => {
     const selector = `[data-focus-key="${activeFleetManagementHighlightKey}"]`;
@@ -2394,6 +2464,22 @@ function highlightFleetManagementElement(targetKey) {
     }
     renderFleetManagementView();
   }, 7000);
+}
+
+function ensureFleetCategoryVisibleForFleetId(fleetId) {
+  const fleet = fleetIndex.get(fleetId) || state.fleets.find((entry) => entry.id === fleetId);
+  if (!fleet?.categoryId) return;
+  if (fleetCategoryCollapsedIds.has(fleet.categoryId)) {
+    fleetCategoryCollapsedIds.delete(fleet.categoryId);
+    saveClientUiPrefs();
+  }
+}
+
+function openFleetInManagement(fleetId) {
+  if (!fleetId) return;
+  ensureFleetCategoryVisibleForFleetId(fleetId);
+  setMainTab('fleetManagement');
+  openFleetManifestInManagement(fleetId);
 }
 
 function focusFleetOnMap(fleetId, shipId = '') {
@@ -2548,8 +2634,72 @@ function detectShipClassId(text) {
 }
 
 function parseCommanderFromLabel(label) {
-  const match = String(label || '').match(/CO\s+([^|]+)/i);
+  const match = String(label || '').match(/(?:^|[|,])\s*CO\s+([^|,\n]+)/i);
   return match ? match[1].trim() : '';
+}
+
+function extractPlayerLeadFromText(text) {
+  const match = String(text || '').match(/(?:spieler|player|leitung|player-leitung)\s*:\s*([^\n|,]+)/i);
+  return match ? match[1].trim() : '';
+}
+
+function extractPositionFromText(text) {
+  const match = String(text || '').match(/position\s*:\s*([^\n|,]+)/i);
+  return match ? match[1].trim() : '';
+}
+
+function extractOfficerFromText(text) {
+  const match = String(text || '').match(/(?:befehlshabender\s+offizier|co)\s*[: ]\s*([^\n|,]+)/i);
+  if (!match) return '';
+  const candidate = match[1].trim();
+  if (!candidate || /^vakant$/i.test(candidate) || /^co$/i.test(candidate)) return '';
+  return candidate;
+}
+
+function getImportClassPatterns(classId) {
+  const meta = getShipClassMeta(classId);
+  const patternEntry = SHIP_CLASS_IMPORT_PATTERNS.find((entry) => entry.classId === classId);
+  return [meta?.displayName, ...(patternEntry?.patterns || [])]
+    .filter(Boolean)
+    .sort((a, b) => b.length - a.length);
+}
+
+function extractImportShipName(rawName, classId) {
+  const baseName = String(rawName || '').trim();
+  if (!baseName) return getShipClassMeta(classId)?.displayName || 'Unbenannt';
+  const quotedMatch = baseName.match(/[\"“„]([^\"“”„]+)[\"”]/);
+  if (quotedMatch?.[1]) return quotedMatch[1].trim();
+  let working = baseName
+    .replace(/\s*\|\s*\d+\s*tage?\s*bauzeit.*$/i, '')
+    .replace(/\s*\|\s*co\b.*$/i, '')
+    .replace(/\s*,\s*co\b.*$/i, '')
+    .trim();
+  for (const pattern of getImportClassPatterns(classId)) {
+    const regex = new RegExp(`^${escapeRegExp(pattern).replace(/\s+/g, '[\\\\s-]*')}\\s*[-,:|]*\\s*`, 'i');
+    const next = working.replace(regex, '').trim();
+    if (next && next !== working) {
+      working = next;
+      break;
+    }
+  }
+  working = working.replace(/^RSS\s+/i, 'RSS ').trim();
+  working = working.replace(/^["'„“]+|["'“”]+$/g, '').trim();
+  return working || getShipClassMeta(classId)?.displayName || 'Unbenannt';
+}
+
+function parseImportCardMeta(card, fleet, classId) {
+  const name = String(card?.name || '');
+  const desc = String(card?.desc || '');
+  const playerLead = extractPlayerLeadFromText(desc) || extractPlayerLeadFromText(name);
+  const commander = playerLead || extractOfficerFromText(desc) || parseCommanderFromLabel(name) || parseCommanderFromLabel(desc) || fleet.commander || fleet.leader || '';
+  const rawPosition = extractPositionFromText(desc) || extractPositionFromText(name);
+  const resolvedPlanet = resolvePlanetBySearchValue(rawPosition) || planetIndex.get(fleet.locationPlanetId || fleet.planetId) || null;
+  return {
+    cleanName: extractImportShipName(name, classId),
+    commander,
+    locationPlanetId: resolvedPlanet?.id || '',
+    sourcePositionLabel: rawPosition || resolvedPlanet?.name || ''
+  };
 }
 
 function importTrelloData(payload) {
@@ -2579,12 +2729,18 @@ function importTrelloData(payload) {
     if (!fleet) return;
     const classId = detectShipClassId(card.name || '');
     if (!classId || !SHIP_CLASS_POOL[classId]) return;
-    const existingShip = state.ships.find((ship) => normalizeSearchText(ship.name) === normalizeSearchText(card.name));
+    const parsed = parseImportCardMeta(card, fleet, classId);
+    const candidateNames = new Set([
+      normalizeSearchText(card.name),
+      normalizeSearchText(parsed.cleanName)
+    ]);
+    const existingShip = state.ships.find((ship) => ship.classId === classId && candidateNames.has(normalizeSearchText(ship.name)));
     const assignedFleetId = isStationClass(classId) ? '' : fleet.id;
-    const locationPlanetId = fleet.locationPlanetId || fleet.planetId || '';
+    const locationPlanetId = parsed.locationPlanetId || fleet.locationPlanetId || fleet.planetId || '';
     if (existingShip) {
       existingShip.classId = classId;
-      existingShip.commander = parseCommanderFromLabel(card.desc || '') || existingShip.commander || '';
+      existingShip.name = parsed.cleanName || existingShip.name;
+      existingShip.commander = parsed.commander || existingShip.commander || '';
       existingShip.faction = 'GAR';
       existingShip.status = existingShip.status === 'lost' ? 'lost' : 'active';
       existingShip.locationPlanetId = locationPlanetId || existingShip.locationPlanetId || '';
@@ -2594,8 +2750,8 @@ function importTrelloData(payload) {
     }
     state.ships.push(createShipRecord({
       classId,
-      name: card.name,
-      commander: parseCommanderFromLabel(card.desc || ''),
+      name: parsed.cleanName,
+      commander: parsed.commander,
       faction: 'GAR',
       status: 'active',
       locationPlanetId,
@@ -3069,6 +3225,7 @@ function focusPlanetFromSearch(id) {
     (rect.width / 2) - (position.x * targetZoom),
     (rect.height / 2) - (position.y * targetZoom)
   );
+  highlightPlanetSearchFocus(id);
   openPlanet(id);
   planetSearchInput.value = planet.name;
   closePlanetSearchResults();
@@ -3472,14 +3629,15 @@ function updatePlanetElement(planet) {
   if (!entry) return;
   const display = getPlanetDisplayPosition(planet);
   const isVisible = isPlanetVisibleInClusterZoom(planet);
-  entry.point.className = 'planet ' + ownerClass(planet.owner) + (isPriorityWorld(planet) ? ' priority-world' : '');
+  const isSearchHighlighted = activePlanetSearchHighlightId === planet.id;
+  entry.point.className = 'planet ' + ownerClass(planet.owner) + (isPriorityWorld(planet) ? ' priority-world' : '') + (isSearchHighlighted ? ' search-highlight' : '');
   entry.point.style.left = display.x + 'px';
   entry.point.style.top = display.y + 'px';
   entry.point.title = `${planet.name} [${planet.owner}]`;
   entry.label.style.left = display.x + 'px';
   entry.label.style.top = display.y + 'px';
   entry.label.textContent = planet.name;
-  entry.label.className = 'planet-label' + (isPriorityWorld(planet) ? ' priority-world' : '');
+  entry.label.className = 'planet-label' + (isPriorityWorld(planet) ? ' priority-world' : '') + (isSearchHighlighted ? ' search-highlight' : '');
   entry.label.classList.toggle('hover-visible', hoveredPlanetId === planet.id);
   entry.point.classList.toggle('hidden', !isVisible);
   entry.label.classList.toggle('hidden', !isVisible);
@@ -3491,6 +3649,20 @@ function setHoveredPlanet(id) {
   hoveredPlanetId = id || null;
   if (prevId && planetIndex.has(prevId)) updatePlanetElement(planetIndex.get(prevId));
   if (hoveredPlanetId && planetIndex.has(hoveredPlanetId)) updatePlanetElement(planetIndex.get(hoveredPlanetId));
+}
+
+function highlightPlanetSearchFocus(planetId) {
+  const previousId = activePlanetSearchHighlightId;
+  activePlanetSearchHighlightId = planetId || '';
+  if (activePlanetSearchHighlightTimer) window.clearTimeout(activePlanetSearchHighlightTimer);
+  if (previousId && previousId !== activePlanetSearchHighlightId && planetIndex.has(previousId)) updatePlanetElement(planetIndex.get(previousId));
+  if (activePlanetSearchHighlightId && planetIndex.has(activePlanetSearchHighlightId)) updatePlanetElement(planetIndex.get(activePlanetSearchHighlightId));
+  if (!activePlanetSearchHighlightId) return;
+  activePlanetSearchHighlightTimer = window.setTimeout(() => {
+    const currentId = activePlanetSearchHighlightId;
+    activePlanetSearchHighlightId = '';
+    if (currentId && planetIndex.has(currentId)) updatePlanetElement(planetIndex.get(currentId));
+  }, 7000);
 }
 
 function updateFleetElement(fleet) {
@@ -4948,6 +5120,7 @@ function openFleet(id) {
     </div>
     <p class="muted">Reisezeit orientiert sich an Hyperraumdistanz. Eine Strecke von Kartenmitte oben nach Kartenmitte unten dauert etwa 5 Minuten.</p>
     <button class="primary" onclick="startFleetJump('${f.id}')" ${jumpDisabled}>Jump</button>
+    <button class="secondary" onclick="openFleetInManagement('${f.id}')">Im Flottenmanagement</button>
     <button class="primary" onclick="saveFleet('${f.id}')" ${disabled}>Flotte speichern</button>
     <button class="secondary danger" onclick="deleteFleet('${f.id}')" ${disabled}>Flotte löschen</button>
   `;
@@ -5038,7 +5211,7 @@ function saveFleetManagementFleet(id) {
     fleet.leader = fleet.commander;
   }
   if (locationInput) {
-    const planet = state.planets.find((entry) => normalizeSearchText(entry.name) === normalizeSearchText(locationInput.value));
+    const planet = resolvePlanetBySearchValue(locationInput.value);
     fleet.locationPlanetId = planet?.id || '';
     fleet.planetId = fleet.locationPlanetId;
   }
@@ -5073,6 +5246,7 @@ function saveManagedShip(id) {
   const nameInput = document.getElementById(`shipName_${id}`);
   const commanderInput = document.getElementById(`shipCommander_${id}`);
   const fleetSelect = document.getElementById(`shipFleet_${id}`);
+  const stationPlanetInput = document.getElementById(`shipPlanet_${id}`);
   const statusSelect = document.getElementById(`shipStatus_${id}`);
   const previousFleetId = ship.assignedFleetId || '';
   if (nameInput) ship.name = nameInput.value.trim() || ship.name;
@@ -5081,6 +5255,15 @@ function saveManagedShip(id) {
   if (fleetSelect) {
     nextFleet = state.fleets.find((entry) => entry.id === fleetSelect.value);
     ship.assignedFleetId = station ? '' : (nextFleet && nextFleet.faction === ship.faction ? nextFleet.id : '');
+  }
+  if (station && isAdminRole() && stationPlanetInput) {
+    const rawPlanetName = stationPlanetInput.value.trim();
+    const targetPlanet = rawPlanetName ? resolvePlanetBySearchValue(rawPlanetName) : null;
+    if (rawPlanetName && !targetPlanet) {
+      setStatus('Planet für Station nicht gefunden. Bitte exakten Planetennamen verwenden.');
+      return;
+    }
+    ship.locationPlanetId = targetPlanet?.id || '';
   }
   if (statusSelect) ship.status = statusSelect.value;
   const sourceFleet = previousFleetId ? state.fleets.find((entry) => entry.id === previousFleetId) : null;
@@ -5343,6 +5526,7 @@ function playShipTransferFx(ship, sourceFleet, targetFleet) {
 }
 
 function openFleetManifestInManagement(fleetId) {
+  ensureFleetCategoryVisibleForFleetId(fleetId);
   activeFleetManifestFilterFleetId = fleetId || '';
   renderFleetManagementView();
   requestAnimationFrame(() => {
@@ -5354,6 +5538,134 @@ function openFleetManifestInManagement(fleetId) {
 function clearFleetManifestFilter() {
   activeFleetManifestFilterFleetId = '';
   renderFleetManagementView();
+}
+
+function createFleetManagementCategory() {
+  const role = currentRole();
+  if (role === 'Viewer') return;
+  const faction = role === 'Eventleiter / KUS'
+    ? 'KUS'
+    : (fleetManagementFactionFilter === 'KUS' ? 'KUS' : 'GAR');
+  const category = createFleetCategoryRecord({ faction, name: 'Neue Navy-Kategorie' });
+  ensureFleetCategoriesStore().push(category);
+  saveLocal();
+  playAudioCue(datapadAcceptAudio);
+  renderFleetManagementView();
+  setStatus(`Kategorie erstellt: ${category.name}`);
+}
+
+function saveFleetManagementCategory(id) {
+  const category = ensureFleetCategoriesStore().find((entry) => entry.id === id);
+  if (!category || !canEditFaction(category.faction)) return;
+  const input = document.getElementById(`fleetCategoryName_${id}`);
+  if (input) category.name = input.value.trim() || category.name;
+  saveLocal();
+  playAudioCue(datapadAcceptAudio);
+  renderFleetManagementView();
+  setStatus(`Kategorie gespeichert: ${category.name}`);
+}
+
+function deleteFleetManagementCategory(id) {
+  const category = ensureFleetCategoriesStore().find((entry) => entry.id === id);
+  if (!category || !canEditFaction(category.faction)) return;
+  state.fleets.forEach((fleet) => {
+    if (fleet.categoryId === id) fleet.categoryId = '';
+  });
+  state.meta.fleetCategories = ensureFleetCategoriesStore().filter((entry) => entry.id !== id);
+  fleetCategoryCollapsedIds.delete(id);
+  saveLocal();
+  playAudioCue(datapadDeleteAudio);
+  renderFleetManagementView();
+  setStatus(`Kategorie gelöscht: ${category.name}`);
+}
+
+function toggleFleetManagementCategory(id) {
+  if (!id) return;
+  if (fleetCategoryCollapsedIds.has(id)) fleetCategoryCollapsedIds.delete(id);
+  else fleetCategoryCollapsedIds.add(id);
+  saveClientUiPrefs();
+  renderFleetManagementView();
+}
+
+function startFleetManagementFleetDrag(fleetId, event) {
+  const fleet = fleetIndex.get(fleetId) || state.fleets.find((entry) => entry.id === fleetId);
+  if (!fleet || !canEditFaction(fleet.faction)) {
+    event?.preventDefault?.();
+    return;
+  }
+  draggedFleetManagementFleetId = fleetId;
+  if (event?.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', fleetId);
+  }
+}
+
+function endFleetManagementFleetDrag() {
+  draggedFleetManagementFleetId = '';
+}
+
+function allowFleetCategoryDrop(event) {
+  event.preventDefault();
+  if (event.currentTarget) event.currentTarget.classList.add('drop-target');
+}
+
+function clearFleetCategoryDrop(event) {
+  if (event?.currentTarget) event.currentTarget.classList.remove('drop-target');
+}
+
+function assignFleetToCategory(fleetId, categoryId) {
+  const fleet = fleetIndex.get(fleetId) || state.fleets.find((entry) => entry.id === fleetId);
+  if (!fleet || !canEditFaction(fleet.faction)) return;
+  if (categoryId) {
+    const category = ensureFleetCategoriesStore().find((entry) => entry.id === categoryId);
+    if (!category || category.faction !== fleet.faction) return;
+    fleet.categoryId = category.id;
+    fleetCategoryCollapsedIds.delete(category.id);
+  } else {
+    fleet.categoryId = '';
+  }
+  saveClientUiPrefs();
+  saveLocal();
+  playAudioCue(datapadAcceptAudio);
+  renderFleetManagementView();
+  setStatus(categoryId ? `Verband in Kategorie verschoben: ${fleet.name}` : `Verband aus Kategorie gelöst: ${fleet.name}`);
+}
+
+function handleFleetCategoryDrop(categoryId, event) {
+  event.preventDefault();
+  clearFleetCategoryDrop(event);
+  const fleetId = event.dataTransfer?.getData('text/plain') || draggedFleetManagementFleetId;
+  draggedFleetManagementFleetId = '';
+  if (!fleetId) return;
+  assignFleetToCategory(fleetId, categoryId || '');
+}
+
+function renderFleetManagementFleetCard(fleet) {
+  const editable = canEditFaction(fleet.faction);
+  const dragAttrs = editable
+    ? `draggable="true" ondragstart="startFleetManagementFleetDrag('${fleet.id}', event)" ondragend="endFleetManagementFleetDrag()"`
+    : 'draggable="false"';
+  return `
+    <div class="fleet-card" data-focus-key="fleet:${fleet.id}" ${dragAttrs}>
+      <h4>${fleet.name}</h4>
+      <p><span class="badge ${fleet.faction}">${fleet.faction}</span></p>
+      <div class="split-inline">
+        <input id="fmFleetName_${fleet.id}" value="${fleet.name}">
+        <input id="fmFleetCommander_${fleet.id}" value="${fleet.commander || ''}" placeholder="CO / Commander">
+      </div>
+      <div class="form-row">
+        <label>Planetenbindung</label>
+        <input id="fmFleetLocation_${fleet.id}" value="${getFleetDisplayLocation(fleet)}" placeholder="z.B. Coruscant">
+      </div>
+      <p>Schiffe zugewiesen: ${fleet.shipIds?.length || 0}</p>
+      <div class="actions">
+        <button class="mini-btn primary" onclick="saveFleetManagementFleet('${fleet.id}')">Verband speichern</button>
+        <button class="mini-btn" onclick="openFleetManifestInManagement('${fleet.id}')">Schiffsmanifest</button>
+        ${fleet.locationPlanetId || fleet.planetId ? `<button class="mini-btn" onclick="focusFleetOnMap('${fleet.id}')">Auf Map</button>` : ''}
+        <button class="mini-btn danger" onclick="deleteFleetManagementFleet('${fleet.id}')">Verband löschen</button>
+      </div>
+    </div>
+  `;
 }
 
 function animateShipTransferBetweenFleets(ship, sourceFleet, targetFleet) {
@@ -5400,8 +5712,22 @@ function renderFleetManagementView() {
   const role = currentRole();
   const visibleFactions = getFleetManagementVisibleFactions();
   const visibleFleets = state.fleets.filter((fleet) => visibleFactions.has(fleet.faction));
+  const visibleCategories = ensureFleetCategoriesStore()
+    .filter((category) => visibleFactions.has(category.faction))
+    .sort((a, b) => {
+      if (a.faction !== b.faction) return a.faction.localeCompare(b.faction, 'de');
+      return a.name.localeCompare(b.name, 'de');
+    });
   const queryValue = fleetManagementSearchQuery || document.getElementById('fleetMgmtSearch')?.value || '';
   const manifestFleet = activeFleetManifestFilterFleetId ? state.fleets.find((fleet) => fleet.id === activeFleetManifestFilterFleetId) : null;
+  const groupedFleetMap = new Map(visibleCategories.map((category) => [category.id, []]));
+  visibleFleets.forEach((fleet) => {
+    if (fleet.categoryId && groupedFleetMap.has(fleet.categoryId)) groupedFleetMap.get(fleet.categoryId).push(fleet);
+  });
+  groupedFleetMap.forEach((fleets) => fleets.sort((a, b) => a.name.localeCompare(b.name, 'de')));
+  const ungroupedFleets = visibleFleets
+    .filter((fleet) => !fleet.categoryId || !groupedFleetMap.has(fleet.categoryId))
+    .sort((a, b) => a.name.localeCompare(b.name, 'de'));
   const ships = state.ships.filter((ship) => {
     if (!visibleFactions.has(ship.faction)) return false;
     if (manifestFleet) return ship.assignedFleetId === manifestFleet.id;
@@ -5422,6 +5748,7 @@ function renderFleetManagementView() {
           </select>
         ` : ''}
         <button class="mini-btn primary" onclick="createFleetManagementFleet()">Neuen Verband anlegen</button>
+        ${role !== 'Viewer' ? '<button class="mini-btn" onclick="createFleetManagementCategory()">Neue Kategorie</button>' : ''}
         ${role === 'Admin' ? '<button class="mini-btn" onclick="triggerTrelloImport()">Trello JSON importieren</button>' : ''}
       </div>
     </div>
@@ -5435,29 +5762,43 @@ function renderFleetManagementView() {
       </div>
     </div>
     <div class="workspace-section">
-      <h3>Verbände / Taskforces</h3>
-      <div class="fleet-card-list">
-        ${visibleFleets.map((fleet) => `
-          <div class="fleet-card" data-focus-key="fleet:${fleet.id}">
-            <h4>${fleet.name}</h4>
-            <p><span class="badge ${fleet.faction}">${fleet.faction}</span></p>
-            <div class="split-inline">
-              <input id="fmFleetName_${fleet.id}" value="${fleet.name}">
-              <input id="fmFleetCommander_${fleet.id}" value="${fleet.commander || ''}" placeholder="CO / Commander">
+      <h3>Navy-Kategorien / Verbände</h3>
+      <div class="fleet-category-ungrouped" ondragover="allowFleetCategoryDrop(event)" ondragleave="clearFleetCategoryDrop(event)" ondrop="handleFleetCategoryDrop('', event)">
+        <h4>Ohne Kategorie</h4>
+        <div class="fleet-card-list">
+          ${ungroupedFleets.length ? ungroupedFleets.map((fleet) => renderFleetManagementFleetCard(fleet)).join('') : '<div class="fleet-category-empty">Keine ungruppierten Verbände sichtbar.</div>'}
+        </div>
+      </div>
+      <div class="fleet-category-list">
+        ${visibleCategories.map((category) => {
+          const categoryFleets = groupedFleetMap.get(category.id) || [];
+          const collapsed = fleetCategoryCollapsedIds.has(category.id);
+          return `
+            <div class="fleet-category-card" data-focus-key="fleet-category:${category.id}" ondragover="allowFleetCategoryDrop(event)" ondragleave="clearFleetCategoryDrop(event)" ondrop="handleFleetCategoryDrop('${category.id}', event)">
+              <div class="fleet-category-head">
+                <div>
+                  <h4>${category.name}</h4>
+                  <p><span class="badge ${category.faction}">${category.faction}</span> • ${categoryFleets.length} Verband/Verbände</p>
+                </div>
+                <div class="fleet-category-actions">
+                  <button class="mini-btn" onclick="toggleFleetManagementCategory('${category.id}')">${collapsed ? 'Ausklappen' : 'Einklappen'}</button>
+                  ${canEditFaction(category.faction) ? `
+                    <button class="mini-btn primary" onclick="saveFleetManagementCategory('${category.id}')">Kategorie speichern</button>
+                    <button class="mini-btn danger" onclick="deleteFleetManagementCategory('${category.id}')">Kategorie löschen</button>
+                  ` : ''}
+                </div>
+              </div>
+              <div class="split-inline">
+                <input id="fleetCategoryName_${category.id}" value="${category.name}" ${canEditFaction(category.faction) ? '' : 'disabled'}>
+              </div>
+              <div class="fleet-category-body ${collapsed ? 'collapsed' : ''}">
+                <div class="fleet-card-list">
+                  ${categoryFleets.length ? categoryFleets.map((fleet) => renderFleetManagementFleetCard(fleet)).join('') : '<div class="fleet-category-empty">Noch keine Verbände in dieser Kategorie.</div>'}
+                </div>
+              </div>
             </div>
-            <div class="form-row">
-              <label>Planetenbindung</label>
-              <input id="fmFleetLocation_${fleet.id}" value="${getFleetDisplayLocation(fleet)}" placeholder="z.B. Coruscant">
-            </div>
-            <p>Schiffe zugewiesen: ${fleet.shipIds?.length || 0}</p>
-            <div class="actions">
-              <button class="mini-btn primary" onclick="saveFleetManagementFleet('${fleet.id}')">Verband speichern</button>
-              <button class="mini-btn" onclick="openFleetManifestInManagement('${fleet.id}')">Schiffsmanifest</button>
-              ${fleet.locationPlanetId || fleet.planetId ? `<button class="mini-btn" onclick="focusFleetOnMap('${fleet.id}')">Auf Map</button>` : ''}
-              <button class="mini-btn danger" onclick="deleteFleetManagementFleet('${fleet.id}')">Verband löschen</button>
-            </div>
-          </div>
-        `).join('')}
+          `;
+        }).join('')}
       </div>
     </div>
     <div class="workspace-section" id="fleetManagementShipsSection">
@@ -5480,6 +5821,11 @@ function renderFleetManagementView() {
             ${ships.map((ship) => `
               ${(() => {
                 const station = isStationClass(ship.classId);
+                const canAssignStationPlanet = station && isAdminRole();
+                const stationPlanet = ship.locationPlanetId ? planetIndex.get(ship.locationPlanetId) : null;
+                const positionCell = canAssignStationPlanet
+                  ? `<input id="shipPlanet_${ship.id}" value="${stationPlanet?.name || ''}" placeholder="z.B. Corellia">`
+                  : getShipDisplayLocation(ship);
                 const fleetCell = station
                   ? `<div class="muted-box">Planetgebunden</div>`
                   : `<select id="shipFleet_${ship.id}">
@@ -5497,10 +5843,10 @@ function renderFleetManagementView() {
                 <td>${getShipClassMeta(ship.classId)?.displayName || ship.classId}</td>
                 <td>
                   <select id="shipStatus_${ship.id}">
-                    ${['active', 'ready', 'building', 'damaged', 'lost'].map((status) => `<option value="${status}" ${ship.status === status ? 'selected' : ''}>${status}</option>`).join('')}
-                  </select>
+                      ${['active', 'ready', 'building', 'damaged', 'lost'].map((status) => `<option value="${status}" ${ship.status === status ? 'selected' : ''}>${status}</option>`).join('')}
+                    </select>
                 </td>
-                <td>${getShipDisplayLocation(ship)}</td>
+                <td>${positionCell}</td>
                 <td>${fleetCell}</td>
                 <td><input id="shipCommander_${ship.id}" value="${ship.commander || ''}" placeholder="Player-Leitung"></td>
                 <td class="actions">${actions}</td>
@@ -6135,6 +6481,15 @@ window.startBuildOrder = startBuildOrder;
 window.onShipyardClassChange = onShipyardClassChange;
 window.setShipyardFaction = setShipyardFaction;
 window.setFleetManagementFactionFilter = setFleetManagementFactionFilter;
+window.createFleetManagementCategory = createFleetManagementCategory;
+window.saveFleetManagementCategory = saveFleetManagementCategory;
+window.deleteFleetManagementCategory = deleteFleetManagementCategory;
+window.toggleFleetManagementCategory = toggleFleetManagementCategory;
+window.startFleetManagementFleetDrag = startFleetManagementFleetDrag;
+window.endFleetManagementFleetDrag = endFleetManagementFleetDrag;
+window.allowFleetCategoryDrop = allowFleetCategoryDrop;
+window.clearFleetCategoryDrop = clearFleetCategoryDrop;
+window.handleFleetCategoryDrop = handleFleetCategoryDrop;
 window.triggerTrelloImport = triggerTrelloImport;
 window.triggerFleetManagementSearch = triggerFleetManagementSearch;
 window.focusPlanetOnMap = focusPlanetOnMap;
@@ -6142,6 +6497,7 @@ window.focusFleetOnMap = focusFleetOnMap;
 window.focusShipOnMap = focusShipOnMap;
 window.deleteFleetManagementFleet = deleteFleetManagementFleet;
 window.openFleetManifestInManagement = openFleetManifestInManagement;
+window.openFleetInManagement = openFleetInManagement;
 window.clearFleetManifestFilter = clearFleetManifestFilter;
 window.createLoginManagerUser = createLoginManagerUser;
 window.saveLoginManagerUser = saveLoginManagerUser;
