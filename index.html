@@ -872,14 +872,16 @@ function sortFleetsForBucket(fleets, bucketKey) {
   });
 }
 
-function reorderFleetWithinBucket(fleetId, targetFleetId, bucketKey) {
+function reorderFleetWithinBucket(fleetId, targetFleetId, bucketKey, placeAfter = false) {
   if (!fleetId || !targetFleetId || fleetId === targetFleetId || !bucketKey) return;
   const list = getFleetOrderList(bucketKey);
   const fromIndex = list.indexOf(fleetId);
   const toIndex = list.indexOf(targetFleetId);
   if (fromIndex < 0 || toIndex < 0) return;
   const [moved] = list.splice(fromIndex, 1);
-  const nextIndex = toIndex > fromIndex ? toIndex - 1 : toIndex;
+  let nextIndex = toIndex > fromIndex ? toIndex - 1 : toIndex;
+  if (placeAfter) nextIndex += 1;
+  nextIndex = clamp(nextIndex, 0, list.length);
   list.splice(nextIndex, 0, moved);
 }
 
@@ -1179,7 +1181,8 @@ function shouldRevealPlanetTemporarily(planet) {
 
 function shouldDisplayPlanetByDefault(planet) {
   if (!planet) return false;
-  return planetIsListedInReference(planet)
+  return isPriorityWorld(planet)
+    || planetIsListedInReference(planet)
     || planet.isUnofficial
     || planetHasPersistentMapNote(planet)
     || planetHasAnchoredGameplayContent(planet.id);
@@ -5669,26 +5672,25 @@ function openMarker(id) {
     const candidate = ensureMapMarkerStore().find((item) => item.id === markerId);
     if (candidate) updateMarkerElement(candidate);
   });
-  const disabled = canEditPlanet() ? '' : 'disabled';
+  const canEditMarker = canEditPlanet();
+  const disabled = canEditMarker ? '' : 'disabled';
   infoPanel.style.display = 'block';
   infoPanel.innerHTML = `
     ${getInfoPanelHeader(marker.name)}
     <p><span class="badge">Marker</span><span class="badge">${Math.round(marker.x)}, ${Math.round(marker.y)}</span></p>
-    <div class="form-row"><label>Name</label><input id="markerName" value="${marker.name}" ${disabled}></div>
-    <div class="form-row"><label>Farbe</label><select id="markerColor" ${disabled}>${MARKER_COLORS.map((color) => `<option value="${color}" ${marker.color === color ? 'selected' : ''}>${color}</option>`).join('')}</select></div>
     <div class="form-row"><label>RP / Notiz</label><textarea id="markerDesc" ${disabled}>${marker.description || ''}</textarea></div>
-    <div class="toolbar-row">
+    ${canEditMarker ? `<div class="form-row"><label>Farbe</label><select id="markerColor" ${disabled}>${MARKER_COLORS.map((color) => `<option value="${color}" ${marker.color === color ? 'selected' : ''}>${color}</option>`).join('')}</select></div>` : ''}
+    ${canEditMarker ? `<div class="toolbar-row">
       <button class="primary" onclick="saveMarker('${marker.id}')" ${disabled}>Marker speichern</button>
       <button class="secondary" onclick="beginMarkerMove('${marker.id}')" ${disabled}>Marker verschieben</button>
       <button class="secondary danger" onclick="deleteMarker('${marker.id}')" ${disabled}>Marker löschen</button>
-    </div>
+    </div>` : '<p class="muted">Nur Eventleitung und Admin können Marker bearbeiten.</p>'}
   `;
 }
 
 function saveMarker(id) {
   const marker = ensureMapMarkerStore().find((entry) => entry.id === id);
   if (!marker || !canEditPlanet()) return;
-  marker.name = document.getElementById('markerName')?.value.trim() || marker.name;
   marker.color = document.getElementById('markerColor')?.value || marker.color;
   marker.description = document.getElementById('markerDesc')?.value.trim() || '';
   saveLocal();
@@ -6472,7 +6474,9 @@ function handleFleetCardReorderDrop(targetFleetId, bucketKey, event) {
   const effectiveBucketKey = getFleetOrderBucketKey(fleet, targetCategoryId);
   syncFleetIntoOrderBucket(fleet, effectiveBucketKey);
   syncFleetIntoOrderBucket(targetFleet, effectiveBucketKey);
-  reorderFleetWithinBucket(fleet.id, targetFleet.id, effectiveBucketKey);
+  const targetRect = event.currentTarget?.getBoundingClientRect?.();
+  const placeAfter = Boolean(targetRect && event.clientY > (targetRect.top + (targetRect.height / 2)));
+  reorderFleetWithinBucket(fleet.id, targetFleet.id, effectiveBucketKey, placeAfter);
   saveLocal();
   playAudioCue(datapadAcceptAudio);
   renderFleetManagementView();
