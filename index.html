@@ -559,7 +559,8 @@ const RESOURCE_DEFS = [
 ];
 const RESOURCE_KEYS = RESOURCE_DEFS.map((entry) => entry.key);
 const RESOURCE_LABELS = Object.fromEntries(RESOURCE_DEFS.map((entry) => [entry.key, entry.label]));
-const RESOURCE_PRODUCTION_TICK_MS = 2 * 60 * 1000;
+const RESOURCE_PRODUCTION_TICK_MS = 60 * 60 * 1000;
+const RESOURCE_RESET_VERSION = 'resource_reset_2026_05_01';
 const CAPTURE_REWARD_PER_SLOT = 20;
 const DEFAULT_SHIPYARD_PLANET_KEYS = ['anaxes', 'kuat', 'rothana'];
 const KUS_SHIPYARD_PLANET_KEYS = ['geonosis', 'muunilinst', 'serenno', 'raxus'];
@@ -948,6 +949,13 @@ function normalizeCampaignState() {
   state.authUsers = Array.isArray(state.authUsers) ? state.authUsers : [];
   state.lastResourceTickAt = Number(state.lastResourceTickAt) || Date.now();
   state.meta = state.meta || {};
+  if (state.meta.resourceResetVersion !== RESOURCE_RESET_VERSION) {
+    RESOURCE_FACTIONS.forEach((faction) => {
+      state.resources[faction] = createEmptyFactionResources();
+    });
+    state.lastResourceTickAt = Date.now();
+    state.meta.resourceResetVersion = RESOURCE_RESET_VERSION;
+  }
   state.meta.mapMarkers = ensureMapMarkerStore().map((marker) => createMapMarkerRecord(marker));
   state.fleets = Array.isArray(state.fleets) ? state.fleets : [];
   state.fleets.forEach((fleet) => {
@@ -1186,6 +1194,15 @@ function getPlanetBattleRingClass(planet) {
   if (planet.owner === 'GAR') return ' battle-ring-kus';
   if (planet.owner === 'KUS') return ' battle-ring-gar';
   return ' battle-ring-neutral';
+}
+
+function getPlanetInfluenceFaction(planet) {
+  if (!planet) return 'NEUTRAL';
+  if (planet.activeBattle) {
+    if (planet.owner === 'GAR') return 'KUS';
+    if (planet.owner === 'KUS') return 'GAR';
+  }
+  return planet.owner || 'NEUTRAL';
 }
 
 function applyAudioMuteState() {
@@ -4865,9 +4882,9 @@ function getNeutralInfluenceStatus(planet, adjacency) {
   const neighbors = [...(adjacency.get(planet.id) || [])]
     .map((neighborId) => planetIndex.get(neighborId))
     .filter(Boolean);
-  const hasGAR = neighbors.some((neighbor) => neighbor.owner === 'GAR');
-  const hasKUS = neighbors.some((neighbor) => neighbor.owner === 'KUS');
-  const hasHUTT = neighbors.some((neighbor) => neighbor.owner === 'HUTT');
+  const hasGAR = neighbors.some((neighbor) => getPlanetInfluenceFaction(neighbor) === 'GAR');
+  const hasKUS = neighbors.some((neighbor) => getPlanetInfluenceFaction(neighbor) === 'KUS');
+  const hasHUTT = neighbors.some((neighbor) => getPlanetInfluenceFaction(neighbor) === 'HUTT');
   if ((hasGAR && hasKUS) || (hasGAR && hasHUTT) || (hasKUS && hasHUTT)) return 'CONTESTED';
   if (hasGAR) return 'GAR_PRESSURE';
   if (hasKUS) return 'KUS_PRESSURE';
@@ -4876,23 +4893,25 @@ function getNeutralInfluenceStatus(planet, adjacency) {
 }
 
 function getHyperlaneVisualState(a, b, adjacency) {
+  const ownerA = getPlanetInfluenceFaction(a);
+  const ownerB = getPlanetInfluenceFaction(b);
   if (!a || !b) return { color: 'rgba(160,170,188,.28)', contested: false };
-  if (a.owner === 'GAR' && b.owner === 'GAR') return { color: 'rgba(31,124,255,.5)', contested: false };
-  if (a.owner === 'KUS' && b.owner === 'KUS') return { color: 'rgba(208,54,50,.5)', contested: false };
-  if (a.owner === 'HUTT' && b.owner === 'HUTT') return { color: 'rgba(243,154,45,.6)', contested: false };
-  if ((a.owner === 'GAR' && b.owner === 'KUS') || (a.owner === 'KUS' && b.owner === 'GAR')) return { color: 'rgba(156,67,255,.72)', contested: true };
-  if ((a.owner === 'GAR' && b.owner === 'HUTT') || (a.owner === 'HUTT' && b.owner === 'GAR')) return { color: 'rgba(255,181,92,.6)', contested: true };
-  if ((a.owner === 'KUS' && b.owner === 'HUTT') || (a.owner === 'HUTT' && b.owner === 'KUS')) return { color: 'rgba(255,154,72,.62)', contested: true };
-  if (a.owner === 'NEUTRAL' && b.owner === 'NEUTRAL') {
+  if (ownerA === 'GAR' && ownerB === 'GAR') return { color: 'rgba(31,124,255,.5)', contested: false };
+  if (ownerA === 'KUS' && ownerB === 'KUS') return { color: 'rgba(208,54,50,.5)', contested: false };
+  if (ownerA === 'HUTT' && ownerB === 'HUTT') return { color: 'rgba(243,154,45,.6)', contested: false };
+  if ((ownerA === 'GAR' && ownerB === 'KUS') || (ownerA === 'KUS' && ownerB === 'GAR')) return { color: 'rgba(156,67,255,.72)', contested: true };
+  if ((ownerA === 'GAR' && ownerB === 'HUTT') || (ownerA === 'HUTT' && ownerB === 'GAR')) return { color: 'rgba(255,181,92,.6)', contested: true };
+  if ((ownerA === 'KUS' && ownerB === 'HUTT') || (ownerA === 'HUTT' && ownerB === 'KUS')) return { color: 'rgba(255,154,72,.62)', contested: true };
+  if (ownerA === 'NEUTRAL' && ownerB === 'NEUTRAL') {
     const aStatus = getNeutralInfluenceStatus(a, adjacency);
     const bStatus = getNeutralInfluenceStatus(b, adjacency);
     if (aStatus === 'CONTESTED' || bStatus === 'CONTESTED') return { color: 'rgba(156,67,255,.42)', contested: true };
     return { color: 'rgba(170,176,188,.24)', contested: false };
   }
-  const neutral = a.owner === 'NEUTRAL' ? a : (b.owner === 'NEUTRAL' ? b : null);
+  const neutral = ownerA === 'NEUTRAL' ? a : (ownerB === 'NEUTRAL' ? b : null);
   const faction = neutral && neutral.id === a.id ? b : a;
   const neutralStatus = neutral ? getNeutralInfluenceStatus(neutral, adjacency) : null;
-  if (neutralStatus === 'CONTESTED') return { color: faction?.owner === 'GAR' ? 'rgba(110,140,255,.66)' : 'rgba(186,94,255,.66)', contested: true };
+  if (neutralStatus === 'CONTESTED') return { color: getPlanetInfluenceFaction(faction) === 'GAR' ? 'rgba(110,140,255,.66)' : 'rgba(186,94,255,.66)', contested: true };
   if (neutralStatus === 'GAR_PRESSURE') return { color: 'rgba(94,154,255,.44)', contested: true };
   if (neutralStatus === 'KUS_PRESSURE') return { color: 'rgba(222,98,120,.44)', contested: true };
   if (neutralStatus === 'HUTT_PRESSURE') return { color: 'rgba(243,154,45,.5)', contested: true };
@@ -4938,9 +4957,9 @@ function renderInfluenceClouds() {
     influenceCtx.restore();
   };
 
-  drawCloudPass((a, b) => a.owner === 'GAR' && b.owner === 'GAR', 'rgba(31,124,255,.95)', 70, 18, 0.28);
-  drawCloudPass((a, b) => a.owner === 'KUS' && b.owner === 'KUS', 'rgba(208,54,50,.95)', 70, 18, 0.28);
-  drawCloudPass((a, b) => a.owner === 'HUTT' && b.owner === 'HUTT', 'rgba(243,154,45,.92)', 66, 18, 0.26);
+  drawCloudPass((a, b) => getPlanetInfluenceFaction(a) === 'GAR' && getPlanetInfluenceFaction(b) === 'GAR', 'rgba(31,124,255,.95)', 70, 18, 0.28);
+  drawCloudPass((a, b) => getPlanetInfluenceFaction(a) === 'KUS' && getPlanetInfluenceFaction(b) === 'KUS', 'rgba(208,54,50,.95)', 70, 18, 0.28);
+  drawCloudPass((a, b) => getPlanetInfluenceFaction(a) === 'HUTT' && getPlanetInfluenceFaction(b) === 'HUTT', 'rgba(243,154,45,.92)', 66, 18, 0.26);
   if (layers.contested) {
     drawCloudPass((a, b) => {
       const visual = getHyperlaneVisualState(a, b, adjacency);
@@ -4950,15 +4969,16 @@ function renderInfluenceClouds() {
 
   state.planets.forEach((planet) => {
     const position = getPlanetDisplayPosition(planet);
-    if (planet.owner === 'GAR') {
+    const influenceOwner = getPlanetInfluenceFaction(planet);
+    if (influenceOwner === 'GAR') {
       drawInfluencePlanetHalo(influenceCtx, position.x, position.y, 'rgba(115,184,255,.5)', 'rgba(31,124,255,.2)', 68);
       return;
     }
-    if (planet.owner === 'KUS') {
+    if (influenceOwner === 'KUS') {
       drawInfluencePlanetHalo(influenceCtx, position.x, position.y, 'rgba(255,126,126,.46)', 'rgba(208,54,50,.18)', 68);
       return;
     }
-    if (planet.owner === 'HUTT') {
+    if (influenceOwner === 'HUTT') {
       drawInfluencePlanetHalo(influenceCtx, position.x, position.y, 'rgba(255,187,102,.42)', 'rgba(243,154,45,.18)', 62);
       return;
     }

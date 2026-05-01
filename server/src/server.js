@@ -25,7 +25,8 @@ const COOKIE_NAME = 'gcb_session';
 const PORT = Number(process.env.PORT || 3000);
 const RESOURCE_KEYS = ['quadraniumErz', 'agrinium', 'tibannaGas', 'baradium', 'kavamSalz'];
 const RESOURCE_FACTIONS = ['GAR', 'KUS'];
-const RESOURCE_PRODUCTION_TICK_MS = 2 * 60 * 1000;
+const RESOURCE_PRODUCTION_TICK_MS = 60 * 60 * 1000;
+const RESOURCE_RESET_VERSION = 'resource_reset_2026_05_01';
 const OWNER_FRONTLINE_PASS_VERSION = 'excel_owner_visibility_v2';
 function normalizeOwnershipReferenceName(text) {
   return String(text || '')
@@ -242,6 +243,28 @@ function getFactionProductionRateFromState(state, faction = 'GAR') {
   return totals;
 }
 
+function applyOneTimeResourceReset(previousState, now = Date.now()) {
+  const nextState = JSON.parse(JSON.stringify(previousState || {}));
+  nextState.meta = nextState.meta || {};
+  nextState.resources = nextState.resources || {};
+  if (nextState.meta.resourceResetVersion === RESOURCE_RESET_VERSION) {
+    RESOURCE_FACTIONS.forEach((faction) => {
+      nextState.resources[faction] = {
+        ...createEmptyFactionResources(),
+        ...(nextState.resources[faction] || {})
+      };
+    });
+    nextState.lastResourceTickAt = Number(nextState.lastResourceTickAt) || now;
+    return { changed: false, state: nextState };
+  }
+  RESOURCE_FACTIONS.forEach((faction) => {
+    nextState.resources[faction] = createEmptyFactionResources();
+  });
+  nextState.lastResourceTickAt = now;
+  nextState.meta.resourceResetVersion = RESOURCE_RESET_VERSION;
+  return { changed: true, state: nextState };
+}
+
 function applyServerProductionTicks(previousState, now = Date.now()) {
   const nextState = JSON.parse(JSON.stringify(previousState || {}));
   nextState.resources = nextState.resources || {};
@@ -416,14 +439,16 @@ app.get('/api/bootstrap', (req, res) => {
   const session = getSession(req);
   const me = session || { id: null, username: '', role: 'Viewer' };
   const { state, revision, updatedAt } = readCampaignState(db);
-  const productionResult = applyServerProductionTicks(state);
+  const resetResult = applyOneTimeResourceReset(state);
+  const productionResult = applyServerProductionTicks(resetResult.state);
   const ownerPassResult = applyOwnerFrontlineImagePass(productionResult.state);
   const changedKeys = [];
   let effectiveState = state;
   let effectiveRevision = revision;
   let effectiveUpdatedAt = updatedAt;
-  if (ownerPassResult.changed || productionResult.changed) {
+  if (resetResult.changed || ownerPassResult.changed || productionResult.changed) {
     effectiveState = ownerPassResult.state;
+    if (resetResult.changed) changedKeys.push('resources', 'lastResourceTickAt', 'meta');
     if (ownerPassResult.changed) changedKeys.push('planets', 'meta');
     if (productionResult.changed) changedKeys.push('resources', 'lastResourceTickAt');
     effectiveRevision = revision + 1;
@@ -569,10 +594,12 @@ app.put('/api/campaign/state', requireAuth, (req, res) => {
       lastResourceTickAt: Number(nextState.lastResourceTickAt) || Number(previousState.lastResourceTickAt) || Date.now(),
       authUsers: previousState.authUsers || []
     };
-    const changedKeys = detectChangedCampaignKeys(previousState, mergedState);
+    const resetResult = applyOneTimeResourceReset(mergedState);
+    const effectiveMergedState = resetResult.state;
+    const changedKeys = detectChangedCampaignKeys(previousState, effectiveMergedState);
 
     const nextRevision = revision + 1;
-    const updatedAt = writeCampaignState(db, mergedState, nextRevision);
+    const updatedAt = writeCampaignState(db, effectiveMergedState, nextRevision);
 
     broadcastCampaignChange({
       revision: nextRevision,
@@ -666,15 +693,16 @@ io.on('connection', (socket) => {
 });
 
 function runServerCampaignMaintenance() {
-  const { state, revision, updatedAt } = readCampaignState(db);
-  const productionResult = applyServerProductionTicks(state);
-  if (!productionResult.changed) return;
+  const { state, revision } = readCampaignState(db);
+  const resetResult = applyOneTimeResourceReset(state);
+  const productionResult = applyServerProductionTicks(resetResult.state);
+  if (!resetResult.changed && !productionResult.changed) return;
   const nextRevision = revision + 1;
   const nextUpdatedAt = writeCampaignState(db, productionResult.state, nextRevision);
   broadcastCampaignChange({
     revision: nextRevision,
     updatedAt: nextUpdatedAt,
-    changedKeys: ['resources', 'lastResourceTickAt'],
+    changedKeys: resetResult.changed ? ['resources', 'lastResourceTickAt', 'meta'] : ['resources', 'lastResourceTickAt'],
     actor: {
       id: 'server',
       username: 'server',
