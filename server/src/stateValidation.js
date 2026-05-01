@@ -21,11 +21,16 @@ function validatePlanetChanges(role, previousState, nextState) {
   const next = indexById(nextState.planets);
   next.forEach((planet, id) => {
     const before = previous.get(id);
-    if (!before || !hasChanged(before, planet)) return;
     if (role === 'Republic Navy / GAR') {
-      ensure(false, 'GAR role may not change planets', { entity: 'planet', id });
+      ensure(before && !hasChanged(before, planet), 'GAR role may not change planets', { entity: 'planet', id });
+      return;
     }
     if (role === 'Eventleiter / KUS') {
+      if (!before) {
+        ensure(planet.owner !== 'GAR', 'KUS role may not create GAR planets', { entity: 'planet', id });
+        return;
+      }
+      if (!hasChanged(before, planet)) return;
       ensure(before.owner !== 'GAR' && planet.owner !== 'GAR', 'KUS role may not modify GAR planets', { entity: 'planet', id });
     }
   });

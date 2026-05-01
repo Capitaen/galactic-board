@@ -23,7 +23,8 @@ const io = new SocketServer(server, {
 const sessions = new Map();
 const COOKIE_NAME = 'gcb_session';
 const PORT = Number(process.env.PORT || 3000);
-const RESOURCE_KEYS = ['metal', 'technology', 'fuel', 'chemicals', 'supplies'];
+const RESOURCE_KEYS = ['quadraniumErz', 'agrinium', 'tibannaGas', 'baradium', 'kavamSalz'];
+const RESOURCE_FACTIONS = ['GAR', 'KUS'];
 const RESOURCE_PRODUCTION_TICK_MS = 60 * 60 * 1000;
 const OWNER_FRONTLINE_PASS_VERSION = 'excel_owner_visibility_v2';
 function normalizeOwnershipReferenceName(text) {
@@ -244,10 +245,12 @@ function getFactionProductionRateFromState(state, faction = 'GAR') {
 function applyServerProductionTicks(previousState, now = Date.now()) {
   const nextState = JSON.parse(JSON.stringify(previousState || {}));
   nextState.resources = nextState.resources || {};
-  nextState.resources.GAR = {
-    ...createEmptyFactionResources(),
-    ...(nextState.resources.GAR || {})
-  };
+  RESOURCE_FACTIONS.forEach((faction) => {
+    nextState.resources[faction] = {
+      ...createEmptyFactionResources(),
+      ...(nextState.resources[faction] || {})
+    };
+  });
   const lastTick = Number(nextState.lastResourceTickAt) || now;
   const elapsed = Math.max(0, now - lastTick);
   const ticks = Math.floor(elapsed / RESOURCE_PRODUCTION_TICK_MS);
@@ -255,10 +258,12 @@ function applyServerProductionTicks(previousState, now = Date.now()) {
     nextState.lastResourceTickAt = lastTick;
     return { changed: false, ticks: 0, state: nextState };
   }
-  const rate = getFactionProductionRateFromState(nextState, 'GAR');
-  for (const key of RESOURCE_KEYS) {
-    nextState.resources.GAR[key] = Number(nextState.resources.GAR[key] || 0) + (Number(rate[key] || 0) * ticks);
-  }
+  RESOURCE_FACTIONS.forEach((faction) => {
+    const rate = getFactionProductionRateFromState(nextState, faction);
+    for (const key of RESOURCE_KEYS) {
+      nextState.resources[faction][key] = Number(nextState.resources[faction][key] || 0) + (Number(rate[key] || 0) * ticks);
+    }
+  });
   nextState.lastResourceTickAt = lastTick + (ticks * RESOURCE_PRODUCTION_TICK_MS);
   return { changed: true, ticks, state: nextState };
 }
@@ -659,6 +664,32 @@ io.on('connection', (socket) => {
     });
   });
 });
+
+function runServerCampaignMaintenance() {
+  const { state, revision, updatedAt } = readCampaignState(db);
+  const productionResult = applyServerProductionTicks(state);
+  if (!productionResult.changed) return;
+  const nextRevision = revision + 1;
+  const nextUpdatedAt = writeCampaignState(db, productionResult.state, nextRevision);
+  broadcastCampaignChange({
+    revision: nextRevision,
+    updatedAt: nextUpdatedAt,
+    changedKeys: ['resources', 'lastResourceTickAt'],
+    actor: {
+      id: 'server',
+      username: 'server',
+      role: 'System'
+    }
+  });
+}
+
+setInterval(() => {
+  try {
+    runServerCampaignMaintenance();
+  } catch (error) {
+    console.warn('Server maintenance tick failed', error);
+  }
+}, 60000);
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Galactic Campaign Board server listening on http://0.0.0.0:${PORT}`);

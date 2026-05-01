@@ -28,6 +28,7 @@ body { margin:0; background:#05070b; color:var(--text); font-family: Inter, Sego
 #overlay.hide-contested .contestedLine,
 #overlay.hide-contested .route-hitbox.contestedLine { display:none; pointer-events:none; }
 #planetLayer { position:absolute; inset:0; z-index:5; pointer-events:auto; }
+#markerLayer { position:absolute; inset:0; z-index:6; pointer-events:auto; }
 #fleetLayer { position:absolute; inset:0; z-index:8; }
 #fxLayer { position:absolute; inset:0; z-index:16; pointer-events:none; overflow:visible; }
 .grid-line { stroke:rgba(88,222,255,.6); stroke-width:1.15; }
@@ -55,11 +56,21 @@ body { margin:0; background:#05070b; color:var(--text); font-family: Inter, Sego
 .planet:hover { width:18px; height:18px; z-index:7; }
 .planet.priority-world:hover { width:22px; height:22px; z-index:9; }
 .planet.search-highlight { width:24px; height:24px; border-width:3px; border-color:rgba(255,243,159,.98); box-shadow:0 0 0 8px rgba(255,226,92,.18), 0 0 22px rgba(255,232,92,.72); z-index:10; animation:planetSearchPulse 1.05s ease-in-out infinite; }
+.planet.active-battle::after { content:""; position:absolute; left:50%; top:50%; width:28px; height:28px; border-radius:50%; border:2px solid rgba(255,255,255,.95); transform:translate(-50%,-50%); box-shadow:0 0 12px rgba(255,255,255,.3); }
+.planet.active-battle.battle-ring-gar::after { border-color:rgba(31,124,255,.95); box-shadow:0 0 14px rgba(31,124,255,.4); }
+.planet.active-battle.battle-ring-kus::after { border-color:rgba(208,54,50,.95); box-shadow:0 0 14px rgba(208,54,50,.4); }
+.planet.active-battle.battle-ring-neutral::after { border-color:rgba(240,212,75,.95); box-shadow:0 0 14px rgba(240,212,75,.34); }
 .planet-label { position:absolute; transform:translate(6px,-10px); font-size:11px; color:#dfe7ff; text-shadow:0 1px 3px #000, 0 0 2px #000; pointer-events:none; white-space:nowrap; display:none; }
 .planet-label.priority-world { color:#b8ffc8; font-weight:700; }
 .show-labels .planet-label { display:block; }
 .planet-label.hover-visible { display:block !important; }
 .planet-label.search-highlight { display:block !important; color:#fff6bf; text-shadow:0 0 10px rgba(255,230,110,.75), 0 1px 3px #000; font-weight:700; }
+.marker { position:absolute; min-width:18px; height:18px; padding:0 6px; transform:translate(-50%,-50%); border-radius:999px; border:1px solid rgba(255,255,255,.78); background:rgba(20,24,33,.95); color:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; box-shadow:0 0 10px rgba(0,0,0,.38); }
+.marker::before { content:""; width:8px; height:8px; border-radius:50%; background:var(--marker-color, #ffd54d); box-shadow:0 0 8px var(--marker-color, #ffd54d); flex:0 0 auto; }
+.marker-label { font-size:11px; line-height:1; white-space:nowrap; }
+.marker.selected { box-shadow:0 0 0 2px rgba(255,255,255,.18), 0 0 14px rgba(255,255,255,.26); }
+.marker.dragging { opacity:.88; }
+.marker.hidden-label .marker-label { display:none; }
 .fleet { position:absolute; width:29px; height:29px; transform:translate(-50%,-50%); border-radius:50%; cursor:grab; pointer-events:auto; z-index:10; filter:drop-shadow(0 0 8px #000); opacity:.85; }
 .fleet.dragging { cursor:grabbing; opacity:.88; }
 .fleet.selected { opacity:.96; z-index:12; }
@@ -80,6 +91,7 @@ body { margin:0; background:#05070b; color:var(--text); font-family: Inter, Sego
 .toolbtn { width:42px; height:42px; background:#2b2f38; color:#dce7f7; border:1px solid #3a4150; font-size:23px; border-radius:2px; cursor:pointer; }
 .toolbtn:hover { background:#3a4150; }
 #homeBtn { position:absolute; top:22px; right:22px; z-index:40; font-size:18px; }
+#muteBtn { position:absolute; top:22px; right:74px; z-index:40; font-size:16px; }
 .panel { position:absolute; z-index:35; background:rgba(29,32,39,.96); border:1px solid #3c4350; box-shadow:0 16px 45px rgba(0,0,0,.5); border-radius:8px; backdrop-filter: blur(8px); }
 #layersPanel { top:75px; left:75px; width:290px; display:none; padding:10px; }
 .layer-row { display:flex; align-items:center; gap:11px; padding:10px 8px; border-bottom:1px solid rgba(255,255,255,.06); color:#e8edf7; }
@@ -107,6 +119,10 @@ textarea { min-height:82px; resize:vertical; }
 .panel-head h2 { margin:0; }
 .panel-close { width:34px; min-width:34px; height:34px; padding:0; border-radius:999px; border:1px solid rgba(255,255,255,.16); background:rgba(255,255,255,.05); color:#fff; font-size:18px; line-height:1; cursor:pointer; }
 .panel-close:hover { background:rgba(255,255,255,.12); }
+.context-menu { position:absolute; z-index:65; display:none; min-width:220px; padding:8px; background:rgba(18,21,27,.98); border:1px solid rgba(255,255,255,.12); border-radius:12px; box-shadow:0 18px 45px rgba(0,0,0,.45); }
+.context-menu button { width:100%; margin:0; padding:10px 12px; text-align:left; background:transparent; border:0; color:var(--text); border-radius:8px; cursor:pointer; }
+.context-menu button:hover { background:rgba(49,93,255,.18); }
+.context-menu .menu-divider { height:1px; margin:7px 0; background:rgba(255,255,255,.08); }
 .search-wrap { position:relative; width:260px; }
 #planetSearch { width:100%; padding:8px 10px; }
 #planetSearchResults { position:absolute; top:calc(100% + 6px); left:0; right:0; z-index:60; max-height:320px; overflow:auto; background:rgba(18,21,27,.98); border:1px solid #3c4350; border-radius:10px; box-shadow:0 18px 45px rgba(0,0,0,.45); }
@@ -397,6 +413,7 @@ a { color:#8bc7ff; }
       <svg id="overlay" viewBox="0 0 2048 2048" preserveAspectRatio="none"></svg>
       <div id="fxLayer"></div>
       <div id="planetLayer"></div>
+      <div id="markerLayer"></div>
       <div id="fleetLayer"></div>
     </div>
   </div>
@@ -407,6 +424,7 @@ a { color:#8bc7ff; }
     <button class="toolbtn" id="layersBtn">≪</button>
   </div>
   <button class="toolbtn" id="homeBtn">⌂</button>
+  <button class="toolbtn" id="muteBtn" title="OGG-Sounds stummschalten">🔊</button>
 
   <div id="topbar">
     <strong>Galactic Campaign Board</strong>
@@ -443,6 +461,8 @@ a { color:#8bc7ff; }
     <label class="layer-row"><span class="handle">⋮⋮</span><input type="checkbox" data-layer="grid" checked> Raster</label>
     <label class="layer-row"><span class="handle">⋮⋮</span><input type="checkbox" data-layer="sectorLabels" checked> Sektoren / Regionen</label>
   </div>
+
+  <div id="contextMenu" class="context-menu"></div>
 
   <div id="infoPanel" class="panel"></div>
 
@@ -541,6 +561,8 @@ const RESOURCE_PRODUCTION_TICK_MS = 60 * 60 * 1000;
 const CAPTURE_REWARD_PER_SLOT = 20;
 const DEFAULT_SHIPYARD_PLANET_KEYS = ['anaxes', 'kuat', 'rothana'];
 const KUS_SHIPYARD_PLANET_KEYS = ['geonosis', 'muunilinst', 'serenno', 'raxus'];
+const RESOURCE_FACTIONS = ['GAR', 'KUS'];
+const MARKER_COLORS = ['#ffd54d', '#4ecdc4', '#ff6b6b', '#6ea8ff', '#c084fc', '#7ee081'];
 const STATION_CLASS_IDS = new Set(['golan_1', 'haven_medistation', 'cardan_station', 'galactic_orbital_station', 'nis_black_site']);
 const GAR_SHIP_COST_MULTIPLIER = 70;
 const TRELLO_EXCLUDED_LISTS = new Set([
@@ -662,15 +684,17 @@ let serverRevision = 0;
 let saveSyncTimer = null;
 let isRendering = false;
 const world = document.getElementById('world'), viewport = document.getElementById('viewport'), overlay = document.getElementById('overlay'), tacticalOverlay = document.getElementById('tacticalOverlay'), influenceCanvas = document.getElementById('influenceCanvas'), tacticalCanvas = document.getElementById('tacticalCanvas'), mapEl = document.getElementById('map');
-const planetLayer = document.getElementById('planetLayer'), fleetLayer = document.getElementById('fleetLayer'), fxLayer = document.getElementById('fxLayer');
+const planetLayer = document.getElementById('planetLayer'), markerLayer = document.getElementById('markerLayer'), fleetLayer = document.getElementById('fleetLayer'), fxLayer = document.getElementById('fxLayer');
 const influenceCtx = influenceCanvas.getContext('2d');
 const tacticalCtx = tacticalCanvas.getContext('2d');
 const infoPanel = document.getElementById('infoPanel');
 const workspacePanel = document.getElementById('workspacePanel');
 const planetSearchInput = document.getElementById('planetSearch');
 const planetSearchResults = document.getElementById('planetSearchResults');
+const contextMenu = document.getElementById('contextMenu');
 const roleSelect = document.getElementById('roleSelect');
 const saveBtn = document.getElementById('saveBtn');
+const muteBtn = document.getElementById('muteBtn');
 const roleFactionBadge = document.getElementById('roleFactionBadge');
 const loginBtn = document.getElementById('loginBtn');
 const orientationGuardEl = document.getElementById('orientationGuard');
@@ -680,6 +704,7 @@ const loginManagerTabBtn = document.getElementById('loginManagerTabBtn');
 const planetIndex = new Map();
 const fleetIndex = new Map();
 const planetElements = new Map();
+const markerElements = new Map();
 const fleetElements = new Map();
 const fleetRenderPositions = new Map();
 let routeCache = [];
@@ -697,6 +722,7 @@ let dirtyLayers = true;
 let activeInteraction = null;
 let activeSnapPlanetId = null;
 let hoveredPlanetId = null;
+let hoveredMarkerId = null;
 let hoveredRouteId = null;
 let hoveredZoneInfo = null;
 let pendingRouteHoverId = null;
@@ -716,6 +742,8 @@ let draggedFleetManagementFleetId = '';
 let draggedFleetCategoryId = '';
 let currentAuthenticatedUsername = '';
 let mobileOrientationDismissed = false;
+let audioMuted = false;
+let contextMenuState = null;
 const CLIENT_UI_PREFS_KEY = 'gcb_ui_v1';
 let fleetCategoryCollapsedIds = new Set();
 const serverSync = {
@@ -808,9 +836,46 @@ function normalizeFleetCategories() {
   });
 }
 
+function ensureMapMarkerStore() {
+  state.meta = state.meta || {};
+  if (!Array.isArray(state.meta.mapMarkers)) state.meta.mapMarkers = [];
+  return state.meta.mapMarkers;
+}
+
+function createMapMarkerRecord(data = {}) {
+  return {
+    id: data.id || `marker_${Math.random().toString(36).slice(2, 10)}`,
+    name: String(data.name || 'Marker').trim() || 'Marker',
+    description: String(data.description || '').trim(),
+    color: MARKER_COLORS.includes(data.color) ? data.color : '#ffd54d',
+    x: clamp(Number(data.x) || (WORLD_SIZE / 2), 0, WORLD_SIZE),
+    y: clamp(Number(data.y) || (WORLD_SIZE / 2), 0, WORLD_SIZE)
+  };
+}
+
+function createCustomPlanetRecord(data = {}) {
+  return {
+    id: data.id || `custom_planet_${Math.random().toString(36).slice(2, 10)}`,
+    name: String(data.name || 'Inoffizieller Planet').trim() || 'Inoffizieller Planet',
+    grid: String(data.grid || '').trim(),
+    sector: String(data.sector || '').trim(),
+    region: String(data.region || '').trim(),
+    x: clamp(Number(data.x) || (WORLD_SIZE / 2), 0, WORLD_SIZE),
+    y: clamp(Number(data.y) || (WORLD_SIZE / 2), 0, WORLD_SIZE),
+    owner: ['GAR', 'KUS', 'HUTT', 'NEUTRAL'].includes(data.owner) ? data.owner : 'NEUTRAL',
+    wiki: String(data.wiki || '').trim(),
+    description: String(data.description || '').trim(),
+    referenceListed: false,
+    isUnofficial: true,
+    activeBattle: Boolean(data.activeBattle)
+  };
+}
+
 function normalizeCampaignState() {
   state.resources = state.resources || {};
-  state.resources.GAR = { ...createEmptyFactionResources(), ...(state.resources.GAR || {}) };
+  RESOURCE_FACTIONS.forEach((faction) => {
+    state.resources[faction] = { ...createEmptyFactionResources(), ...(state.resources[faction] || {}) };
+  });
   state.planetResources = Object.fromEntries(
     Object.entries(state.planetResources || {}).map(([planetId, slots]) => [
       planetId,
@@ -824,6 +889,7 @@ function normalizeCampaignState() {
   state.authUsers = Array.isArray(state.authUsers) ? state.authUsers : [];
   state.lastResourceTickAt = Number(state.lastResourceTickAt) || Date.now();
   state.meta = state.meta || {};
+  state.meta.mapMarkers = ensureMapMarkerStore().map((marker) => createMapMarkerRecord(marker));
   state.fleets = Array.isArray(state.fleets) ? state.fleets : [];
   state.fleets.forEach((fleet) => {
     fleet.commander = fleet.commander || fleet.leader || '';
@@ -845,6 +911,18 @@ function normalizeCampaignState() {
       createdFrom: ship.createdFrom || 'manual'
     }))
     .filter((ship) => ship.classId && SHIP_CLASS_POOL[ship.classId]);
+  state.planets = (Array.isArray(state.planets) ? state.planets : []).map((planet) => ({
+    ...planet,
+    name: String(planet.name || '').trim() || 'Unbenannter Planet',
+    grid: String(planet.grid || '').trim(),
+    sector: String(planet.sector || '').trim(),
+    region: String(planet.region || '').trim(),
+    wiki: String(planet.wiki || '').trim(),
+    description: String(planet.description || '').trim(),
+    referenceListed: Boolean(planet.referenceListed),
+    isUnofficial: Boolean(planet.isUnofficial),
+    activeBattle: Boolean(planet.activeBattle)
+  }));
   state.authUsers = state.authUsers
     .map((user) => ({
       id: user.id || `auth_${Math.random().toString(36).slice(2, 10)}`,
@@ -1034,6 +1112,7 @@ function shouldRevealPlanetTemporarily(planet) {
 function shouldDisplayPlanetByDefault(planet) {
   if (!planet) return false;
   return planetIsListedInReference(planet)
+    || planet.isUnofficial
     || planetHasPersistentMapNote(planet)
     || planetHasAnchoredGameplayContent(planet.id);
 }
@@ -1042,7 +1121,33 @@ function shouldRenderPlanetOnMap(planet) {
   return shouldDisplayPlanetByDefault(planet) || shouldRevealPlanetTemporarily(planet);
 }
 
+function getPlanetBattleRingClass(planet) {
+  if (!planet?.activeBattle) return '';
+  if (planet.owner === 'GAR') return ' battle-ring-kus';
+  if (planet.owner === 'KUS') return ' battle-ring-gar';
+  return ' battle-ring-neutral';
+}
+
+function applyAudioMuteState() {
+  [hyperspaceStartAudio, hyperspaceFinishAudio, garVictoryAudio, fleetDeleteAudio, datapadClickAudio, datapadAcceptAudio, datapadDeleteAudio]
+    .forEach((audio) => {
+      audio.muted = audioMuted;
+    });
+  if (muteBtn) {
+    muteBtn.textContent = audioMuted ? '🔇' : '🔊';
+    muteBtn.title = audioMuted ? 'OGG-Sounds aktivieren' : 'OGG-Sounds stummschalten';
+  }
+}
+
+function toggleAudioMute() {
+  audioMuted = !audioMuted;
+  applyAudioMuteState();
+  saveClientUiPrefs();
+  setStatus(audioMuted ? 'Clientseitige OGG-Sounds stummgeschaltet.' : 'Clientseitige OGG-Sounds aktiviert.');
+}
+
 function playAudioCue(audio) {
+  if (audioMuted) return;
   try {
     audio.currentTime = 0;
     const result = audio.play();
@@ -1975,7 +2080,8 @@ function saveClientUiPrefs() {
     panX,
     panY,
     viewMode,
-    fleetCategoryCollapsedIds: Array.from(fleetCategoryCollapsedIds)
+    fleetCategoryCollapsedIds: Array.from(fleetCategoryCollapsedIds),
+    audioMuted
   };
   localStorage.setItem(CLIENT_UI_PREFS_KEY, JSON.stringify(prefs));
 }
@@ -1987,6 +2093,7 @@ function loadClientUiPrefs() {
     if (Number.isFinite(raw.panX)) panX = raw.panX;
     if (Number.isFinite(raw.panY)) panY = raw.panY;
     if (Array.isArray(raw.fleetCategoryCollapsedIds)) fleetCategoryCollapsedIds = new Set(raw.fleetCategoryCollapsedIds.map((entry) => String(entry)));
+    audioMuted = Boolean(raw.audioMuted);
   } catch (error) {
     console.warn('UI prefs could not be restored', error);
   }
@@ -2386,9 +2493,14 @@ function getActiveShipyardFaction() {
 }
 
 function closeInfoPanel() {
+  const previousSelection = selected;
   selected = null;
   refreshFleetSelectionState();
   refreshRouteSelectionState();
+  if (previousSelection?.type === 'marker') {
+    const marker = ensureMapMarkerStore().find((entry) => entry.id === previousSelection.id);
+    if (marker) updateMarkerElement(marker);
+  }
   infoPanel.style.display = 'none';
 }
 
@@ -2440,12 +2552,14 @@ function applyProductionTicks(now = Date.now()) {
   const elapsed = Math.max(0, now - lastTick);
   const ticks = Math.floor(elapsed / RESOURCE_PRODUCTION_TICK_MS);
   if (ticks <= 0) return 0;
-  const rate = getFactionProductionRate('GAR');
-  const delta = createEmptyFactionResources();
-  RESOURCE_KEYS.forEach((key) => {
-    delta[key] = rate[key] * ticks;
+  RESOURCE_FACTIONS.forEach((faction) => {
+    const rate = getFactionProductionRate(faction);
+    const delta = createEmptyFactionResources();
+    RESOURCE_KEYS.forEach((key) => {
+      delta[key] = rate[key] * ticks;
+    });
+    addFactionResources(faction, delta);
   });
-  addFactionResources('GAR', delta);
   state.lastResourceTickAt = lastTick + (ticks * RESOURCE_PRODUCTION_TICK_MS);
   return ticks;
 }
@@ -2512,14 +2626,14 @@ function getAvailableBuildLocations(classId) {
   return getShipyardLocationChoices(classId).filter((planet) => planet.enabled);
 }
 
-function canAffordCost(cost) {
-  const pool = getFactionResourcePool('GAR');
+function canAffordCost(cost, faction = 'GAR') {
+  const pool = getFactionResourcePool(faction);
   return RESOURCE_KEYS.every((key) => (pool[key] || 0) >= (cost?.[key] || 0));
 }
 
-function spendResources(cost) {
-  if (!canAffordCost(cost)) return false;
-  const pool = getFactionResourcePool('GAR');
+function spendResources(cost, faction = 'GAR') {
+  if (!canAffordCost(cost, faction)) return false;
+  const pool = getFactionResourcePool(faction);
   RESOURCE_KEYS.forEach((key) => {
     pool[key] -= cost?.[key] || 0;
   });
@@ -3004,13 +3118,14 @@ function importTrelloData(payload) {
 }
 
 function runCampaignMaintenance() {
-  const producedTicks = applyProductionTicks();
+  const producedTicks = serverSync.enabled ? 0 : applyProductionTicks();
   const buildChanged = processBuildJobs();
   const ruleChanged = enforceStrategicOwnershipRules();
   if (producedTicks || buildChanged || ruleChanged) {
     rebuildIndexes();
     saveLocal();
   }
+  return Boolean(producedTicks || buildChanged || ruleChanged);
 }
 
 function ensureRouteMetaStore() {
@@ -3724,6 +3839,12 @@ function canEditPlanet() {
   return r === 'Admin' || r === 'Eventleiter / KUS';
 }
 
+function canEditPlanetRecord(planet) {
+  if (!planet) return false;
+  if (isAdminRole()) return true;
+  return currentRole() === 'Eventleiter / KUS' && planet.owner !== 'GAR';
+}
+
 function ownerClass(o) {
   return o === 'GAR' ? 'GAR' : (o === 'KUS' ? 'KUS' : (o === 'HUTT' ? 'HUTT' : 'NEUTRAL'));
 }
@@ -3798,6 +3919,21 @@ function nearestDisplayedPlanet(x, y, maxDistance = 16) {
   return best;
 }
 
+function nearestDisplayedMarker(x, y, maxDistance = 20) {
+  let best = null;
+  let bestDistanceSq = maxDistance * maxDistance;
+  ensureMapMarkerStore().forEach((marker) => {
+    const dx = marker.x - x;
+    const dy = marker.y - y;
+    const distanceSq = dx * dx + dy * dy;
+    if (distanceSq <= bestDistanceSq) {
+      bestDistanceSq = distanceSq;
+      best = marker;
+    }
+  });
+  return best;
+}
+
 function pointToSegmentDistanceSq(px, py, ax, ay, bx, by) {
   const abx = bx - ax;
   const aby = by - ay;
@@ -3848,6 +3984,7 @@ function rebuildIndexes() {
   ensureImportantCampaignPlanets();
   planetIndex.clear();
   fleetIndex.clear();
+  state.meta.mapMarkers = ensureMapMarkerStore().map((marker) => createMapMarkerRecord(marker));
   state.planets.forEach((planet) => {
     syncPlanetCoords(planet);
     planetIndex.set(planet.id, planet);
@@ -3903,10 +4040,10 @@ function updatePlanetElement(planet) {
   const display = getPlanetDisplayPosition(planet);
   const isVisible = shouldRenderPlanetOnMap(planet) && isPlanetVisibleInClusterZoom(planet);
   const isSearchHighlighted = activePlanetSearchHighlightId === planet.id;
-  entry.point.className = 'planet ' + ownerClass(planet.owner) + (isPriorityWorld(planet) ? ' priority-world' : '') + (isSearchHighlighted ? ' search-highlight' : '');
+  entry.point.className = 'planet ' + ownerClass(planet.owner) + (isPriorityWorld(planet) ? ' priority-world' : '') + (isSearchHighlighted ? ' search-highlight' : '') + (planet.activeBattle ? ` active-battle${getPlanetBattleRingClass(planet)}` : '');
   entry.point.style.left = display.x + 'px';
   entry.point.style.top = display.y + 'px';
-  entry.point.title = `${planet.name} [${planet.owner}]`;
+  entry.point.title = `${planet.name} [${planet.owner}]${planet.isUnofficial ? ' • Inoffizieller Planet' : ''}${planet.activeBattle ? ' • Aktives Gefecht' : ''}`;
   entry.label.style.left = display.x + 'px';
   entry.label.style.top = display.y + 'px';
   entry.label.textContent = planet.name;
@@ -3914,6 +4051,47 @@ function updatePlanetElement(planet) {
   entry.label.classList.toggle('hover-visible', hoveredPlanetId === planet.id);
   entry.point.classList.toggle('hidden', !isVisible);
   entry.label.classList.toggle('hidden', !isVisible);
+}
+
+function updateMarkerElement(marker) {
+  const entry = markerElements.get(marker.id);
+  if (!entry) return;
+  const isSelected = selected?.type === 'marker' && selected.id === marker.id;
+  entry.className = 'marker' + (isSelected ? ' selected' : '') + (activeInteraction?.mode === 'marker-drag' && activeInteraction.id === marker.id ? ' dragging' : '') + (zoom < LABEL_ZOOM_THRESHOLD ? ' hidden-label' : '');
+  entry.style.left = `${marker.x}px`;
+  entry.style.top = `${marker.y}px`;
+  entry.style.setProperty('--marker-color', marker.color || '#ffd54d');
+  entry.title = marker.description ? `${marker.name}\n${marker.description}` : marker.name;
+  const label = entry.querySelector('.marker-label');
+  if (label) label.textContent = marker.name;
+}
+
+function ensureMarkerElements() {
+  const seen = new Set();
+  const frag = document.createDocumentFragment();
+  ensureMapMarkerStore().forEach((marker) => {
+    seen.add(marker.id);
+    if (!markerElements.has(marker.id)) {
+      const el = document.createElement('button');
+      el.type = 'button';
+      el.dataset.id = marker.id;
+      el.innerHTML = '<span class="marker-label"></span>';
+      el.addEventListener('click', (event) => {
+        event.stopPropagation();
+        openMarker(marker.id);
+      });
+      markerElements.set(marker.id, el);
+      frag.appendChild(el);
+    }
+    updateMarkerElement(marker);
+  });
+  if (frag.childNodes.length) markerLayer.appendChild(frag);
+  for (const [markerId, entry] of markerElements.entries()) {
+    if (!seen.has(markerId)) {
+      entry.remove();
+      markerElements.delete(markerId);
+    }
+  }
 }
 
 function setHoveredPlanet(id) {
@@ -5179,6 +5357,7 @@ function flushRender() {
     }
     if (dirtyPositions) {
       ensurePlanetElements();
+      ensureMarkerElements();
       ensureFleetElements();
       dirtyPositions = false;
     }
@@ -5286,13 +5465,152 @@ function saveRoute(id) {
   setStatus('Hyperraumroute gespeichert: ' + store[id].name);
 }
 
+function closeContextMenu() {
+  contextMenu.style.display = 'none';
+  contextMenu.innerHTML = '';
+  contextMenuState = null;
+}
+
+function openContextMenu(x, y, actions = []) {
+  if (!actions.length) {
+    closeContextMenu();
+    return;
+  }
+  contextMenuState = { x, y };
+  contextMenu.innerHTML = actions.map((action, index) => action.type === 'divider'
+    ? '<div class="menu-divider"></div>'
+    : `<button type="button" data-action-index="${index}">${action.label}</button>`).join('');
+  contextMenu.style.left = `${x}px`;
+  contextMenu.style.top = `${y}px`;
+  contextMenu.style.display = 'block';
+  contextMenu.querySelectorAll('button[data-action-index]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const action = actions[Number(button.dataset.actionIndex)];
+      closeContextMenu();
+      action?.run?.();
+    });
+  });
+}
+
+function beginPlanetMove(id) {
+  const planet = planetIndex.get(id);
+  if (!planet || !canEditPlanetRecord(planet)) return;
+  closeContextMenu();
+  activeInteraction = { mode: 'planet-drag', id };
+  viewport.classList.add('dragging');
+  setStatus(`Planet verschieben aktiv: ${planet.name}`);
+}
+
+function createCustomPlanetAt(x, y) {
+  if (!canEditPlanet()) return;
+  const planet = createCustomPlanetRecord({ x, y });
+  state.planets.push(planet);
+  rebuildIndexes();
+  saveLocal();
+  render({ positions: true, frontline: true, influence: true, layers: true });
+  openPlanet(planet.id);
+  setStatus(`Inoffizieller Planet erstellt bei ${Math.round(x)}, ${Math.round(y)}.`);
+}
+
+function deletePlanet(id) {
+  const planet = planetIndex.get(id);
+  if (!planet || !planet.isUnofficial || !canEditPlanetRecord(planet)) return;
+  state.planets = state.planets.filter((entry) => entry.id !== id);
+  if (state.planetResources) delete state.planetResources[id];
+  state.fleets.forEach((fleet) => {
+    if (fleet.locationPlanetId === id || fleet.planetId === id) {
+      fleet.locationPlanetId = '';
+      fleet.planetId = '';
+    }
+  });
+  state.ships.forEach((ship) => {
+    if (ship.locationPlanetId === id) ship.locationPlanetId = '';
+  });
+  closeInfoPanel();
+  rebuildIndexes();
+  saveLocal();
+  render({ positions: true, frontline: true, influence: true, layers: true });
+  setStatus(`Inoffizieller Planet gelöscht: ${planet.name}`);
+}
+
+function createMapMarkerAt(x, y) {
+  if (!canEditPlanet()) return;
+  const marker = createMapMarkerRecord({ x, y });
+  ensureMapMarkerStore().push(marker);
+  rebuildIndexes();
+  saveLocal();
+  render({ positions: true, layers: true });
+  openMarker(marker.id);
+  setStatus(`Marker erstellt bei ${Math.round(x)}, ${Math.round(y)}.`);
+}
+
+function openMarker(id) {
+  const marker = ensureMapMarkerStore().find((entry) => entry.id === id);
+  if (!marker) return;
+  selected = { type: 'marker', id };
+  refreshFleetSelectionState();
+  refreshRouteSelectionState();
+  ensureMarkerElements();
+  markerElements.forEach((entry, markerId) => {
+    const candidate = ensureMapMarkerStore().find((item) => item.id === markerId);
+    if (candidate) updateMarkerElement(candidate);
+  });
+  const disabled = canEditPlanet() ? '' : 'disabled';
+  infoPanel.style.display = 'block';
+  infoPanel.innerHTML = `
+    ${getInfoPanelHeader(marker.name)}
+    <p><span class="badge">Marker</span><span class="badge">${Math.round(marker.x)}, ${Math.round(marker.y)}</span></p>
+    <div class="form-row"><label>Name</label><input id="markerName" value="${marker.name}" ${disabled}></div>
+    <div class="form-row"><label>Farbe</label><select id="markerColor" ${disabled}>${MARKER_COLORS.map((color) => `<option value="${color}" ${marker.color === color ? 'selected' : ''}>${color}</option>`).join('')}</select></div>
+    <div class="form-row"><label>RP / Notiz</label><textarea id="markerDesc" ${disabled}>${marker.description || ''}</textarea></div>
+    <div class="toolbar-row">
+      <button class="primary" onclick="saveMarker('${marker.id}')" ${disabled}>Marker speichern</button>
+      <button class="secondary" onclick="beginMarkerMove('${marker.id}')" ${disabled}>Marker verschieben</button>
+      <button class="secondary danger" onclick="deleteMarker('${marker.id}')" ${disabled}>Marker löschen</button>
+    </div>
+  `;
+}
+
+function saveMarker(id) {
+  const marker = ensureMapMarkerStore().find((entry) => entry.id === id);
+  if (!marker || !canEditPlanet()) return;
+  marker.name = document.getElementById('markerName')?.value.trim() || marker.name;
+  marker.color = document.getElementById('markerColor')?.value || marker.color;
+  marker.description = document.getElementById('markerDesc')?.value.trim() || '';
+  saveLocal();
+  render({ positions: true, layers: true });
+  openMarker(id);
+  setStatus(`Marker gespeichert: ${marker.name}`);
+}
+
+function beginMarkerMove(id) {
+  const marker = ensureMapMarkerStore().find((entry) => entry.id === id);
+  if (!marker || !canEditPlanet()) return;
+  closeContextMenu();
+  activeInteraction = { mode: 'marker-drag', id };
+  viewport.classList.add('dragging');
+  setStatus(`Marker verschieben aktiv: ${marker.name}`);
+}
+
+function deleteMarker(id) {
+  if (!canEditPlanet()) return;
+  const marker = ensureMapMarkerStore().find((entry) => entry.id === id);
+  state.meta.mapMarkers = ensureMapMarkerStore().filter((entry) => entry.id !== id);
+  closeInfoPanel();
+  rebuildIndexes();
+  saveLocal();
+  render({ positions: true, layers: true });
+  setStatus(marker ? `Marker gelöscht: ${marker.name}` : 'Marker gelöscht.');
+}
+
 function openPlanet(id) {
   const p = planetIndex.get(id);
   if (!p) return;
   selected = { type: 'planet', id };
   refreshFleetSelectionState();
   refreshRouteSelectionState();
-  const disabled = canEditPlanet() ? '' : 'disabled';
+  ensureMarkerElements();
+  const disabled = canEditPlanetRecord(p) ? '' : 'disabled';
   const resourceSlots = getPlanetResourceSlots(p.id);
   const resourceOptions = ['<option value="">Leer</option>']
     .concat(RESOURCE_DEFS.map((entry) => `<option value="${entry.key}">${entry.label}</option>`))
@@ -5309,17 +5627,18 @@ function openPlanet(id) {
   const stationShips = state.ships
     .filter((ship) => isStationClass(ship.classId) && ship.locationPlanetId === p.id && ship.status !== 'lost')
     .sort((a, b) => a.name.localeCompare(b.name, 'de'));
+  const ownerOptions = ['GAR', 'KUS', 'HUTT', 'NEUTRAL']
+    .filter((owner) => isAdminRole() || currentRole() !== 'Eventleiter / KUS' || owner !== 'GAR' || p.owner === 'GAR')
+    .map((owner) => `<option ${p.owner === owner ? 'selected' : ''}>${owner}</option>`)
+    .join('');
   infoPanel.style.display = 'block';
   infoPanel.innerHTML = `
     ${getInfoPanelHeader(p.name)}
-    <p><span class="badge ${ownerClass(p.owner)}">${p.owner}</span><span class="badge">${p.grid}</span><span class="badge">${p.region || 'Unknown Region'}</span></p>
+    <p><span class="badge ${ownerClass(p.owner)}">${p.owner}</span><span class="badge">${p.grid || '—'}</span><span class="badge">${p.region || 'Unknown Region'}</span>${p.isUnofficial ? '<span class="badge">Inoffizieller Planet</span>' : ''}${p.activeBattle ? '<span class="badge">Aktives Gefecht</span>' : ''}</p>
     <p class="muted">Sector: ${p.sector || '—'} • World: ${Math.round(p.x)}, ${Math.round(p.y)} • Norm: ${p.xNorm.toFixed(4)}, ${p.yNorm.toFixed(4)}</p>
-    <div class="form-row"><label>Owner</label><select id="planetOwner" ${disabled}>
-      <option ${p.owner === 'GAR' ? 'selected' : ''}>GAR</option>
-      <option ${p.owner === 'KUS' ? 'selected' : ''}>KUS</option>
-      <option ${p.owner === 'HUTT' ? 'selected' : ''}>HUTT</option>
-      <option ${p.owner === 'NEUTRAL' ? 'selected' : ''}>NEUTRAL</option>
-    </select></div>
+    <div class="form-row"><label>Name</label><input id="planetName" value="${p.name}" ${disabled}></div>
+    <div class="form-row"><label>Owner</label><select id="planetOwner" ${disabled}>${ownerOptions}</select></div>
+    <div class="form-row"><label><input id="planetBattle" type="checkbox" ${p.activeBattle ? 'checked' : ''} ${disabled}> Aktives Gefecht</label></div>
     <div class="form-row"><label>Wiki-Link</label><input id="planetWiki" value="${p.wiki || ''}" ${disabled}></div>
     <div class="form-row"><label>Infocard / RP-Notiz</label><textarea id="planetDesc" ${disabled}>${p.description || ''}</textarea></div>
     <div class="form-row">
@@ -5338,18 +5657,24 @@ function openPlanet(id) {
       </div>
       <small>${currentRole() === 'Admin' ? 'Admin kann alle 10 Minen-Slots pflegen. Eventleitung darf nur die ersten 3 Slots auf KUS- und Neutral-Planeten ändern.' : (isResourceAssignmentEditable(p) ? 'Eventleitung darf nur die ersten 3 Minen-Slots auf KUS- und Neutral-Planeten ändern.' : 'Minen-Slots sind für deine Rolle auf diesem Planeten nicht editierbar.')}</small>
     </div>
-    <p><a href="${p.wiki}" target="_blank">Wiki öffnen</a></p>
-    <button class="primary" onclick="savePlanet('${p.id}')" ${disabled}>Planet speichern</button>
+    <p>${p.wiki ? `<a href="${p.wiki}" target="_blank">Wiki öffnen</a>` : '<span class="muted">Kein Wiki-Link gesetzt.</span>'}</p>
+    <div class="toolbar-row">
+      <button class="primary" onclick="savePlanet('${p.id}')" ${disabled}>Planet speichern</button>
+      <button class="secondary" onclick="beginPlanetMove('${p.id}')" ${disabled}>Planet verschieben</button>
+      ${p.isUnofficial ? `<button class="secondary danger" onclick="deletePlanet('${p.id}')" ${disabled}>Planet löschen</button>` : ''}
+    </div>
   `;
 }
 
 function savePlanet(id) {
   const p = planetIndex.get(id);
-  if (!p || !canEditPlanet()) return;
+  if (!p || !canEditPlanetRecord(p)) return;
   const previousOwner = p.owner;
+  p.name = document.getElementById('planetName').value.trim() || p.name;
   p.owner = document.getElementById('planetOwner').value;
   p.wiki = document.getElementById('planetWiki').value;
   p.description = document.getElementById('planetDesc').value;
+  p.activeBattle = Boolean(document.getElementById('planetBattle')?.checked);
   if (isResourceAssignmentEditable(p)) {
     const nextSlots = getPlanetResourceSlots(p.id);
     for (let index = 0; index < 10; index += 1) {
@@ -5661,7 +5986,7 @@ function startBuildOrder() {
     setStatus('Dieser Bauort ist für die gewählte Klasse nicht erlaubt.');
     return;
   }
-  if (faction === 'GAR' && !spendResources(meta.cost)) {
+  if (faction === 'GAR' && !spendResources(meta.cost, 'GAR')) {
     setStatus('Nicht genug Ressourcen für diesen Bauauftrag.');
     renderShipyardView();
     return;
@@ -6435,20 +6760,18 @@ function renderShipyardView() {
   const locationChoices = getShipyardLocationChoices(selectedClassId);
   const locations = locationChoices.filter((planet) => planet.enabled);
   const selectedLocationId = document.getElementById('shipyardLocation')?.value || locations[0]?.id || locationChoices[0]?.id || '';
-  const production = getFactionProductionRate('GAR');
-  const pool = getFactionResourcePool('GAR');
   const faction = getActiveShipyardFaction();
+  const production = getFactionProductionRate(faction);
+  const pool = getFactionResourcePool(faction);
   const canBuildAnything = role !== 'Viewer' && ((role === 'Admin') || (role === 'Republic Navy / GAR' && faction === 'GAR') || (role === 'Eventleiter / KUS' && faction === 'KUS'));
-  const resourceSummary = faction === 'GAR'
-    ? RESOURCE_KEYS.map((key) => `<div class="stat-card"><strong>${RESOURCE_LABELS[key]}</strong><span>${pool[key] || 0}</span></div>`).join('')
-    : `<div class="stat-card"><strong>KUS Schiffbau</strong><span>Ohne Rohstoffbindung</span></div>`;
+  const resourceSummary = RESOURCE_KEYS.map((key) => `<div class="stat-card"><strong>${RESOURCE_LABELS[key]}</strong><span>${pool[key] || 0}</span></div>`).join('');
   const buildJobs = state.buildJobs.filter((job) => job.faction === faction && job.status === 'building');
   const readyShips = state.ships.filter((ship) => ship.faction === faction && ship.status === 'ready');
   workspacePanel.innerHTML = `
     <div class="workspace-head">
       <div>
         <h2>Schiffbau</h2>
-        <p>${faction === 'GAR' ? 'GAR-Rohstoffe, stündliche Produktion und Bauaufträge verwalten.' : 'KUS-Schiffbau ohne Rohstoffbindung. Eventleitung/Admin können direkt produzieren.'}</p>
+        <p>${faction === 'GAR' ? 'GAR-Rohstoffe, stündliche Produktion und Bauaufträge verwalten.' : 'KUS-Schiffbau mit eigener stündlicher Rohstoffproduktion und direkter Eventleitungskontrolle.'}</p>
       </div>
       <div class="toolbar-row">
         ${role === 'Admin' ? `
@@ -6485,22 +6808,20 @@ function renderShipyardView() {
         </div>
         <div class="workspace-card compact">
           <strong>Kosten</strong>
-          <p>${faction === 'GAR' ? RESOURCE_KEYS.map((key) => `${RESOURCE_LABELS[key]}: ${selectedMeta?.cost?.[key] || 0}`).join(' • ') : 'KUS-Bau ignoriert Rohstoffkosten.'}</p>
+          <p>${faction === 'GAR' ? RESOURCE_KEYS.map((key) => `${RESOURCE_LABELS[key]}: ${selectedMeta?.cost?.[key] || 0}`).join(' • ') : 'KUS-Bau bleibt sofort verfügbar und ignoriert aktuell Rohstoffkosten.'}</p>
           <p><strong>Bauzeit:</strong> ${faction === 'KUS' ? 'Sofort' : `${selectedMeta?.buildTimeHours || 0}h`}</p>
           <p><strong>Bauorte:</strong> ${faction === 'KUS' ? 'Geonosis, Muunilinst, Serenno, Raxus' : (selectedMeta?.buildLocations === 'anyGARPlanet' ? 'Jeder GAR-Planet' : (selectedMeta?.buildLocations || []).join(', '))}</p>
         </div>
         <button class="primary" onclick="startBuildOrder()" ${canBuildAnything && locations.length && (faction === 'KUS' || canAffordCost(selectedMeta?.cost)) ? '' : 'disabled'}>${faction === 'KUS' ? 'KUS-Schiff bauen' : 'Bau starten'}</button>
       </div>
       <div class="workspace-card">
-        <h3>${faction === 'GAR' ? 'Stündliche Produktion' : 'Event-Hinweis'}</h3>
-        ${faction === 'GAR' ? `
-          <table class="data-table">
-            <thead><tr><th>Rohstoff</th><th>Pro Stunde</th></tr></thead>
-            <tbody>
-              ${RESOURCE_KEYS.map((key) => `<tr><td>${RESOURCE_LABELS[key]}</td><td>+${production[key] || 0}</td></tr>`).join('')}
-            </tbody>
-          </table>
-        ` : '<div class="muted-box">KUS sammelt und speichert keine globalen Rohstoffe. Bauaufträge laufen direkt über Eventleitung/Admin.</div>'}
+        <h3>Stündliche Produktion</h3>
+        <table class="data-table">
+          <thead><tr><th>Rohstoff</th><th>Pro Stunde</th></tr></thead>
+          <tbody>
+            ${RESOURCE_KEYS.map((key) => `<tr><td>${RESOURCE_LABELS[key]}</td><td>+${production[key] || 0}</td></tr>`).join('')}
+          </tbody>
+        </table>
       </div>
     </div>
     <div class="workspace-section">
@@ -6583,7 +6904,15 @@ function finishInteraction(event) {
       saveLocal();
       render({ positions: true, frontline: true, layers: true });
       if (selected?.type === 'planet' && selected.id === planet.id) openPlanet(planet.id);
-      setStatus(`Planetposition kalibriert: ${planet.name} bei ${Math.round(planet.x)}, ${Math.round(planet.y)}`);
+      setStatus(`Planet verschoben: ${planet.name} bei ${Math.round(planet.x)}, ${Math.round(planet.y)}`);
+    }
+  } else if (interaction.mode === 'marker-drag') {
+    const marker = ensureMapMarkerStore().find((entry) => entry.id === interaction.id);
+    if (marker) {
+      saveLocal();
+      render({ positions: true, layers: true });
+      if (selected?.type === 'marker' && selected.id === marker.id) openMarker(marker.id);
+      setStatus(`Marker verschoben: ${marker.name} bei ${Math.round(marker.x)}, ${Math.round(marker.y)}`);
     }
   } else if (interaction.mode === 'fleet-drag') {
     const fleet = fleetIndex.get(interaction.id);
@@ -6613,7 +6942,9 @@ window.addEventListener('pointermove', (event) => {
     const hoveredRoute = nearestDisplayedRoute(worldPos.x, worldPos.y, 18);
     queueHoveredRoute(hoveredRoute ? hoveredRoute.id : null);
     setHoveredZone(nearestDisplayedZone(worldPos.x, worldPos.y));
-    const hoveredPlanet = hoveredRoute ? null : nearestDisplayedPlanet(worldPos.x, worldPos.y, 16);
+    const hoveredMarker = hoveredRoute ? null : nearestDisplayedMarker(worldPos.x, worldPos.y, 20);
+    hoveredMarkerId = hoveredMarker?.id || null;
+    const hoveredPlanet = (hoveredRoute || hoveredMarker) ? null : nearestDisplayedPlanet(worldPos.x, worldPos.y, 16);
     setHoveredPlanet(hoveredPlanet ? hoveredPlanet.id : null);
   }
   if (!activeInteraction) return;
@@ -6631,6 +6962,15 @@ window.addEventListener('pointermove', (event) => {
       }
     });
     markDirty({ routeOverlay: true });
+    return;
+  }
+  if (activeInteraction.mode === 'marker-drag') {
+    const marker = ensureMapMarkerStore().find((entry) => entry.id === activeInteraction.id);
+    if (!marker) return;
+    const worldPos = eventToWorld(event);
+    marker.x = clamp(worldPos.x, 0, WORLD_SIZE);
+    marker.y = clamp(worldPos.y, 0, WORLD_SIZE);
+    updateMarkerElement(marker);
     return;
   }
   if (activeInteraction.mode === 'fleet-drag') {
@@ -6667,11 +7007,13 @@ viewport.addEventListener('pointerleave', () => {
   setHoveredPlanet(null);
   queueHoveredRoute(null);
   setHoveredZone(null);
+  hoveredMarkerId = null;
 });
 
 viewport.addEventListener('pointerdown', (event) => {
   if (event.button !== 0) return;
-  if (event.target.closest('.planet, .fleet, #infoPanel, #layersPanel, #topbar, .toolstack, #homeBtn')) return;
+  closeContextMenu();
+  if (event.target.closest('.planet, .marker, .fleet, #infoPanel, #layersPanel, #topbar, .toolstack, #homeBtn, #muteBtn, #contextMenu')) return;
   const worldPos = eventToWorld(event);
   const clickedRoute = nearestDisplayedRoute(worldPos.x, worldPos.y, 22);
   if (clickedRoute) {
@@ -6712,6 +7054,7 @@ planetLayer.addEventListener('click', (event) => {
   const point = event.target.closest('.planet');
   if (!point) return;
   event.stopPropagation();
+  closeContextMenu();
   openPlanet(point.dataset.id);
 });
 
@@ -6725,6 +7068,45 @@ planetLayer.addEventListener('pointerdown', (event) => {
   viewport.classList.add('dragging');
   const planet = planetIndex.get(point.dataset.id);
   if (planet) setStatus('Kalibrierung aktiv: ' + planet.name);
+});
+
+markerLayer.addEventListener('click', (event) => {
+  const marker = event.target.closest('.marker');
+  if (!marker) return;
+  event.stopPropagation();
+  closeContextMenu();
+  openMarker(marker.dataset.id);
+});
+
+viewport.addEventListener('contextmenu', (event) => {
+  if (!canEditPlanet()) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const worldPos = eventToWorld(event);
+  const marker = nearestDisplayedMarker(worldPos.x, worldPos.y, 20);
+  const planet = marker ? null : nearestDisplayedPlanet(worldPos.x, worldPos.y, 18);
+  if (marker) {
+    openContextMenu(event.clientX, event.clientY, [
+      { label: 'Marker bearbeiten', run: () => openMarker(marker.id) },
+      { label: 'Marker verschieben', run: () => beginMarkerMove(marker.id) },
+      { type: 'divider' },
+      { label: 'Marker löschen', run: () => deleteMarker(marker.id) }
+    ]);
+    return;
+  }
+  if (planet) {
+    const canEditTargetPlanet = canEditPlanetRecord(planet);
+    openContextMenu(event.clientX, event.clientY, [
+      { label: 'Planet ansehen', run: () => openPlanet(planet.id) },
+      ...(canEditTargetPlanet ? [{ label: 'Planet verschieben', run: () => beginPlanetMove(planet.id) }] : []),
+      ...(planet.isUnofficial && canEditTargetPlanet ? [{ type: 'divider' }, { label: 'Planet löschen', run: () => deletePlanet(planet.id) }] : [])
+    ]);
+    return;
+  }
+  openContextMenu(event.clientX, event.clientY, [
+    { label: 'Inoffiziellen Planeten erstellen', run: () => createCustomPlanetAt(worldPos.x, worldPos.y) },
+    { label: 'Marker erstellen', run: () => createMapMarkerAt(worldPos.x, worldPos.y) }
+  ]);
 });
 
 viewport.addEventListener('wheel', (event) => {
@@ -6835,6 +7217,7 @@ document.addEventListener('keydown', (event) => {
     planetSearchInput.focus();
     planetSearchInput.select();
   }
+  if (event.key === 'Escape') closeContextMenu();
 });
 
 document.addEventListener('pointerdown', (event) => {
@@ -6843,6 +7226,7 @@ document.addEventListener('pointerdown', (event) => {
   if (event.target.closest('.inline-search-wrap')) return;
   closeFleetJumpResults();
   closeFleetManagementSearchResults(false);
+  if (!event.target.closest('#contextMenu')) closeContextMenu();
 });
 document.getElementById('saveBtn').onclick = () => {
   const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
@@ -6853,6 +7237,7 @@ document.getElementById('saveBtn').onclick = () => {
   a.click();
   URL.revokeObjectURL(url);
 };
+muteBtn.onclick = () => toggleAudioMute();
 orientationLockBtn?.addEventListener('click', async () => {
   const locked = await requestLandscapeOrientation();
   if (!locked) {
@@ -6874,14 +7259,34 @@ document.getElementById('loginPassword').addEventListener('keydown', (event) => 
 });
 applyDefaultAnonymousRole();
 loadClientUiPrefs();
+applyAudioMuteState();
 refreshRoleChrome();
 bootstrapFromServer();
 syncMobileOrientationUi();
 window.addEventListener('resize', syncMobileOrientationUi);
 window.addEventListener('orientationchange', syncMobileOrientationUi);
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden) syncMobileOrientationUi();
+  if (!document.hidden) {
+    syncMobileOrientationUi();
+    const changed = runCampaignMaintenance();
+    if (changed) {
+      render({ positions: true, frontline: true, influence: true, layers: true });
+      if (selected?.type === 'planet') openPlanet(selected.id);
+      if (selected?.type === 'marker') openMarker(selected.id);
+      if (activeMainTab === 'shipyard') renderShipyardView();
+      if (activeMainTab === 'fleetManagement') renderFleetManagementView();
+    }
+  }
 });
+window.setInterval(() => {
+  const changed = runCampaignMaintenance();
+  if (!changed) return;
+  render({ positions: true, frontline: true, influence: true, layers: true });
+  if (selected?.type === 'planet') openPlanet(selected.id);
+  if (selected?.type === 'marker') openMarker(selected.id);
+  if (activeMainTab === 'shipyard') renderShipyardView();
+  if (activeMainTab === 'fleetManagement') renderFleetManagementView();
+}, 60000);
 window.savePlanet = savePlanet;
 window.saveFleet = saveFleet;
 window.deleteFleet = deleteFleet;
