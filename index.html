@@ -78,6 +78,7 @@ body { margin:0; background:#05070b; color:var(--text); font-family: Inter, Sego
 .fleet img { width:100%; height:100%; pointer-events:none; opacity:1; }
 .fleet.selected img { opacity:1; }
 .fleet .fleet-tag { position:absolute; left:31px; top:4px; padding:2px 7px; border-radius:8px; background:rgba(0,0,0,.72); font-size:12px; white-space:nowrap; border:1px solid rgba(255,255,255,.2); display:none; }
+.fleet .fleet-assignment { position:absolute; left:50%; top:33px; transform:translateX(-50%); min-width:36px; padding:1px 4px; text-align:center; font-size:11px; line-height:1.15; color:#eef4ff; text-shadow:0 1px 3px rgba(0,0,0,.9); white-space:nowrap; pointer-events:none; opacity:inherit; }
 .fleet.selected .fleet-tag { display:block; }
 .planet.snap-target { width:20px; height:20px; outline:2px solid #fff; z-index:9; }
 .lane { opacity:.5; filter:drop-shadow(0 0 5px rgba(0,0,0,.9)); }
@@ -188,6 +189,7 @@ textarea { min-height:82px; resize:vertical; }
 .fleet-category-card.drop-target,
 .fleet-category-ungrouped.drop-target { border-color:rgba(255,214,102,.95); box-shadow:0 0 0 4px rgba(255,214,102,.14); }
 .fleet-category-card.reorder-target { border-color:rgba(115,196,255,.92); box-shadow:0 0 0 4px rgba(115,196,255,.14); }
+.fleet-card.reorder-target { border-color:rgba(115,196,255,.92); box-shadow:0 0 0 4px rgba(115,196,255,.14); }
 .fleet-category-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:12px; }
 .fleet-category-head h4 { margin:0 0 6px; font-size:16px; }
 .fleet-category-head p { margin:0; color:var(--muted); font-size:12px; }
@@ -442,7 +444,7 @@ a { color:#8bc7ff; }
     </div>
     <div id="roleFactionBadge" class="role-faction-badge hidden"></div>
     <div class="search-wrap">
-      <input id="planetSearch" type="search" placeholder="Planeten suchen..." autocomplete="off">
+      <input id="planetSearch" type="search" placeholder="Planeten / Flotten suchen..." autocomplete="off">
       <div id="planetSearchResults" class="hidden"></div>
     </div>
     <button class="secondary" id="viewModeBtn">Schematic Map</button>
@@ -557,7 +559,7 @@ const RESOURCE_DEFS = [
 ];
 const RESOURCE_KEYS = RESOURCE_DEFS.map((entry) => entry.key);
 const RESOURCE_LABELS = Object.fromEntries(RESOURCE_DEFS.map((entry) => [entry.key, entry.label]));
-const RESOURCE_PRODUCTION_TICK_MS = 60 * 60 * 1000;
+const RESOURCE_PRODUCTION_TICK_MS = 2 * 60 * 1000;
 const CAPTURE_REWARD_PER_SLOT = 20;
 const DEFAULT_SHIPYARD_PLANET_KEYS = ['anaxes', 'kuat', 'rothana'];
 const KUS_SHIPYARD_PLANET_KEYS = ['geonosis', 'muunilinst', 'serenno', 'raxus'];
@@ -565,6 +567,7 @@ const RESOURCE_FACTIONS = ['GAR', 'KUS'];
 const MARKER_COLORS = ['#ffd54d', '#4ecdc4', '#ff6b6b', '#6ea8ff', '#c084fc', '#7ee081'];
 const STATION_CLASS_IDS = new Set(['golan_1', 'haven_medistation', 'cardan_station', 'galactic_orbital_station', 'nis_black_site']);
 const GAR_SHIP_COST_MULTIPLIER = 70;
+const DEBUG_DISABLE_GAR_BUILD_LIMITS = true;
 const TRELLO_EXCLUDED_LISTS = new Set([
   'informationen',
   'vorlage',
@@ -825,14 +828,70 @@ function createFleetCategoryRecord(data = {}) {
   };
 }
 
+function ensureFleetCardOrderStore() {
+  state.meta = state.meta || {};
+  if (!state.meta.fleetCardOrder || typeof state.meta.fleetCardOrder !== 'object' || Array.isArray(state.meta.fleetCardOrder)) state.meta.fleetCardOrder = {};
+  return state.meta.fleetCardOrder;
+}
+
+function getFleetOrderBucketKey(fleet, categoryId = fleet?.categoryId || '') {
+  const faction = fleet?.faction === 'KUS' ? 'KUS' : 'GAR';
+  return categoryId ? `category:${categoryId}` : `ungrouped:${faction}`;
+}
+
+function getFleetOrderList(bucketKey) {
+  const store = ensureFleetCardOrderStore();
+  if (!Array.isArray(store[bucketKey])) store[bucketKey] = [];
+  return store[bucketKey];
+}
+
+function syncFleetIntoOrderBucket(fleet, bucketKey = getFleetOrderBucketKey(fleet)) {
+  if (!fleet?.id) return;
+  const list = getFleetOrderList(bucketKey);
+  if (!list.includes(fleet.id)) list.push(fleet.id);
+}
+
+function removeFleetFromOrderBuckets(fleetId) {
+  const store = ensureFleetCardOrderStore();
+  Object.keys(store).forEach((bucketKey) => {
+    store[bucketKey] = getFleetOrderList(bucketKey).filter((entry) => entry !== fleetId);
+  });
+}
+
+function sortFleetsForBucket(fleets, bucketKey) {
+  const order = getFleetOrderList(bucketKey);
+  fleets.forEach((fleet) => syncFleetIntoOrderBucket(fleet, bucketKey));
+  return [...fleets].sort((a, b) => {
+    const aIndex = order.indexOf(a.id);
+    const bIndex = order.indexOf(b.id);
+    if (aIndex >= 0 && bIndex >= 0 && aIndex !== bIndex) return aIndex - bIndex;
+    if (aIndex >= 0 && bIndex < 0) return -1;
+    if (bIndex >= 0 && aIndex < 0) return 1;
+    return a.name.localeCompare(b.name, 'de');
+  });
+}
+
+function reorderFleetWithinBucket(fleetId, targetFleetId, bucketKey) {
+  if (!fleetId || !targetFleetId || fleetId === targetFleetId || !bucketKey) return;
+  const list = getFleetOrderList(bucketKey);
+  const fromIndex = list.indexOf(fleetId);
+  const toIndex = list.indexOf(targetFleetId);
+  if (fromIndex < 0 || toIndex < 0) return;
+  const [moved] = list.splice(fromIndex, 1);
+  const nextIndex = toIndex > fromIndex ? toIndex - 1 : toIndex;
+  list.splice(nextIndex, 0, moved);
+}
+
 function normalizeFleetCategories() {
   const categories = ensureFleetCategoriesStore()
     .map((category) => createFleetCategoryRecord(category))
     .filter((category, index, array) => category.id && array.findIndex((entry) => entry.id === category.id) === index);
   state.meta.fleetCategories = categories;
+  ensureFleetCardOrderStore();
   const validCategoryIds = new Set(categories.map((category) => category.id));
   state.fleets.forEach((fleet) => {
     fleet.categoryId = validCategoryIds.has(fleet.categoryId) ? fleet.categoryId : '';
+    syncFleetIntoOrderBucket(fleet);
   });
 }
 
@@ -893,6 +952,7 @@ function normalizeCampaignState() {
   state.fleets = Array.isArray(state.fleets) ? state.fleets : [];
   state.fleets.forEach((fleet) => {
     fleet.commander = fleet.commander || fleet.leader || '';
+    fleet.assignment = String(fleet.assignment || '').trim();
     fleet.shipIds = Array.isArray(fleet.shipIds) ? fleet.shipIds : [];
     fleet.locationPlanetId = fleet.locationPlanetId || fleet.planetId || '';
     fleet.categoryId = String(fleet.categoryId || '');
@@ -2627,11 +2687,13 @@ function getAvailableBuildLocations(classId) {
 }
 
 function canAffordCost(cost, faction = 'GAR') {
+  if (DEBUG_DISABLE_GAR_BUILD_LIMITS && faction === 'GAR') return true;
   const pool = getFactionResourcePool(faction);
   return RESOURCE_KEYS.every((key) => (pool[key] || 0) >= (cost?.[key] || 0));
 }
 
 function spendResources(cost, faction = 'GAR') {
+  if (DEBUG_DISABLE_GAR_BUILD_LIMITS && faction === 'GAR') return true;
   if (!canAffordCost(cost, faction)) return false;
   const pool = getFactionResourcePool(faction);
   RESOURCE_KEYS.forEach((key) => {
@@ -2656,6 +2718,7 @@ function createFleetRecord(data = {}) {
     name: data.name || 'Neue Taskforce',
     commander: data.commander || data.leader || '',
     leader: data.commander || data.leader || '',
+    assignment: String(data.assignment || '').trim(),
     faction: data.faction || 'GAR',
     planetId: data.planetId || data.locationPlanetId || '',
     locationPlanetId: data.locationPlanetId || data.planetId || '',
@@ -2859,13 +2922,13 @@ function getFleetManagementSearchCandidates() {
   const visibleFactions = getFleetManagementVisibleFactions();
   const fleetCandidates = state.fleets
     .filter((fleet) => visibleFactions.has(fleet.faction))
-    .map((fleet) => ({
-      type: 'fleet',
-      id: fleet.id,
-      label: fleet.name,
-      meta: `${fleet.faction} • ${fleet.commander || fleet.leader || 'kein CO'} • ${getFleetDisplayLocation(fleet)}`,
-      search: normalizeSearchText(`${fleet.name} ${fleet.commander || fleet.leader || ''} ${getFleetDisplayLocation(fleet)}`)
-    }));
+      .map((fleet) => ({
+        type: 'fleet',
+        id: fleet.id,
+        label: fleet.name,
+        meta: `${fleet.faction} • ${fleet.assignment || 'ohne Zuordnung'} • ${fleet.commander || fleet.leader || 'kein CO'} • ${getFleetDisplayLocation(fleet)}`,
+        search: normalizeSearchText(`${fleet.name} ${fleet.commander || fleet.leader || ''} ${fleet.assignment || ''} ${getFleetDisplayLocation(fleet)}`)
+      }));
   const shipCandidates = state.ships
     .filter((ship) => visibleFactions.has(ship.faction))
     .map((ship) => {
@@ -3562,14 +3625,15 @@ function renderPlanetSearchResults() {
   }
   planetSearchResults.innerHTML = '';
   const frag = document.createDocumentFragment();
-  searchResultsState.forEach((planet, index) => {
+  searchResultsState.forEach((entry, index) => {
     const row = document.createElement('div');
     row.className = 'search-result' + (index === activeSearchResultIndex ? ' active' : '');
-    row.dataset.planetId = planet.id;
-    row.innerHTML = `<strong>${planet.name}</strong><small>${planet.grid || '—'} • ${planet.sector || '—'} • ${planet.region || 'Unknown Region'}</small>`;
+    row.dataset.searchType = entry.type;
+    row.dataset.targetId = entry.id;
+    row.innerHTML = `<strong>${entry.label}</strong><small>${entry.meta}</small>`;
     row.addEventListener('mousedown', (event) => {
       event.preventDefault();
-      focusPlanetFromSearch(planet.id);
+      focusSearchResult(entry);
     });
     frag.appendChild(row);
   });
@@ -3583,25 +3647,37 @@ function updatePlanetSearchResults(query) {
     closePlanetSearchResults();
     return;
   }
-  searchResultsState = state.planets
-    .map((planet) => ({
-      planet,
-      haystack: getPlanetSearchHaystack(planet)
+  searchResultsState = [
+    ...state.planets.map((planet) => ({
+      type: 'planet',
+      id: planet.id,
+      label: planet.name,
+      meta: `${planet.grid || '—'} • ${planet.sector || '—'} • ${planet.region || 'Unknown Region'}`,
+      search: getPlanetSearchHaystack(planet)
+    })),
+    ...state.fleets.map((fleet) => ({
+      type: 'fleet',
+      id: fleet.id,
+      label: fleet.name,
+      meta: `${fleet.faction} • ${fleet.assignment || 'ohne Zuordnung'} • ${fleet.commander || fleet.leader || 'kein CO'} • ${getFleetDisplayLocation(fleet)}`,
+      search: normalizeSearchText(`${fleet.name} ${fleet.commander || fleet.leader || ''} ${fleet.assignment || ''} ${getFleetDisplayLocation(fleet)}`)
     }))
-    .filter((entry) => entry.haystack.includes(normalizedQuery))
+  ]
+    .filter((entry) => entry.search.includes(normalizedQuery))
     .sort((a, b) => {
-      const aStarts = normalizeSearchText(a.planet.name).startsWith(normalizedQuery) ? 0 : 1;
-      const bStarts = normalizeSearchText(b.planet.name).startsWith(normalizedQuery) ? 0 : 1;
+      const aStarts = normalizeSearchText(a.label).startsWith(normalizedQuery) ? 0 : 1;
+      const bStarts = normalizeSearchText(b.label).startsWith(normalizedQuery) ? 0 : 1;
       if (aStarts !== bStarts) return aStarts - bStarts;
-      return a.planet.name.localeCompare(b.planet.name, 'de');
+      if (a.type !== b.type) return a.type.localeCompare(b.type, 'de');
+      return a.label.localeCompare(b.label, 'de');
     })
     .slice(0, 12)
-    .map((entry) => entry.planet);
+    .map(({ search, ...entry }) => entry);
   activeSearchResultIndex = searchResultsState.length ? 0 : -1;
   renderPlanetSearchResults();
 }
 
-function focusPlanetFromSearch(id) {
+function focusPlanetFromSearch(id, options = {}) {
   const planet = planetIndex.get(id);
   if (!planet) return;
   const rect = viewport.getBoundingClientRect();
@@ -3614,11 +3690,28 @@ function focusPlanetFromSearch(id) {
     (rect.height / 2) - (position.y * targetZoom)
   );
   highlightPlanetSearchFocus(id);
-  openPlanet(id);
+  if (options.openFleetId) openFleet(options.openFleetId);
+  else openPlanet(id);
   planetSearchInput.value = planet.name;
   closePlanetSearchResults();
   planetSearchInput.blur();
-  setStatus(`Planet gefunden: ${planet.name}`);
+  setStatus(options.openFleetId ? `Flotte gefunden: ${options.fleetName || 'Unbenannte Flotte'} @ ${planet.name}` : `Planet gefunden: ${planet.name}`);
+}
+
+function focusSearchResult(result) {
+  if (!result) return;
+  if (result.type === 'fleet') {
+    const fleet = fleetIndex.get(result.id);
+    const planetId = fleet?.locationPlanetId || fleet?.planetId || '';
+    if (!fleet || !planetId) {
+      setStatus(`Flotte gefunden, aber ohne gültige Planetenbindung: ${result.label}`);
+      return;
+    }
+    focusPlanetFromSearch(planetId, { openFleetId: fleet.id, fleetName: fleet.name });
+    planetSearchInput.value = fleet.name;
+    return;
+  }
+  focusPlanetFromSearch(result.id);
 }
 
 function closeFleetJumpResults() {
@@ -4136,6 +4229,7 @@ function updateFleetElement(fleet) {
   entry.querySelector('img').src = iconFor(fleet);
   const travel = fleetTravelState.get(fleet.id);
   entry.querySelector('.fleet-tag').textContent = travel ? `${fleet.name} -> ${travel.targetPlanetName}` : fleet.name;
+  entry.querySelector('.fleet-assignment').textContent = fleet.assignment || '';
 }
 
 function ensurePlanetElements() {
@@ -4188,7 +4282,7 @@ function ensureFleetElements() {
     if (!fleetElements.has(fleet.id)) {
       const el = document.createElement('div');
       el.dataset.id = fleet.id;
-      el.innerHTML = `<img src="${iconFor(fleet)}" alt=""><div class="fleet-tag"></div>`;
+      el.innerHTML = `<img src="${iconFor(fleet)}" alt=""><div class="fleet-tag"></div><div class="fleet-assignment"></div>`;
       el.addEventListener('click', (event) => {
         event.stopPropagation();
         if (isFleetTraveling(fleet.id)) return;
@@ -5743,6 +5837,7 @@ function openFleet(id) {
     <div class="form-row"><label>Flottenname</label><input id="fleetName" value="${f.name}" ${disabled}></div>
     <div class="form-row"><label>Fraktion</label><select id="fleetFaction" ${disabled}><option ${f.faction === 'GAR' ? 'selected' : ''}>GAR</option><option ${f.faction === 'KUS' ? 'selected' : ''}>KUS</option></select></div>
     <div class="form-row"><label>Leitung</label><input id="fleetLeader" value="${f.leader || ''}" ${disabled}></div>
+    <div class="form-row"><label>Zuordnung</label><input id="fleetAssignment" value="${f.assignment || ''}" placeholder="z.B. 1.1.1" ${disabled}></div>
     <div class="form-row"><label>Status</label><input id="fleetStatus" value="${f.status || ''}" ${disabled}></div>
     <div class="form-row"><label>Inhalt</label><textarea id="fleetContents" ${disabled}>${f.contents || ''}</textarea></div>
     <div class="form-row">
@@ -5806,6 +5901,7 @@ function saveFleet(id) {
   f.faction = document.getElementById('fleetFaction').value;
   f.leader = document.getElementById('fleetLeader').value;
   f.commander = f.leader;
+  f.assignment = document.getElementById('fleetAssignment').value.trim();
   f.status = document.getElementById('fleetStatus').value;
   f.contents = document.getElementById('fleetContents').value;
   rebuildFleetRenderPositions();
@@ -5827,6 +5923,7 @@ function deleteFleet(id) {
   removeFleetMotionRecord(id);
   emitLiveSocketEvent('fx:fleet-delete', { fleetId: id });
   state.fleets = state.fleets.filter((item) => item.id !== id);
+  removeFleetFromOrderBuckets(id);
   rebuildIndexes();
   saveLocal();
   render({ positions: true, layers: true });
@@ -5839,12 +5936,14 @@ function saveFleetManagementFleet(id) {
   if (!fleet || !canEditFaction(fleet.faction)) return;
   const nameInput = document.getElementById(`fmFleetName_${id}`);
   const commanderInput = document.getElementById(`fmFleetCommander_${id}`);
+  const assignmentInput = document.getElementById(`fmFleetAssignment_${id}`);
   const locationInput = document.getElementById(`fmFleetLocation_${id}`);
   if (nameInput) fleet.name = nameInput.value.trim() || fleet.name;
   if (commanderInput) {
     fleet.commander = commanderInput.value.trim();
     fleet.leader = fleet.commander;
   }
+  if (assignmentInput) fleet.assignment = assignmentInput.value.trim();
   if (locationInput) {
     const planet = resolvePlanetBySearchValue(locationInput.value);
     fleet.locationPlanetId = planet?.id || '';
@@ -5991,23 +6090,23 @@ function startBuildOrder() {
     renderShipyardView();
     return;
   }
-  if (faction === 'KUS') {
+  if (faction === 'KUS' || (faction === 'GAR' && DEBUG_DISABLE_GAR_BUILD_LIMITS)) {
     const ship = createReadyShipFromBuild({
       classId,
       shipName: shipName || meta.displayName,
       faction,
       locationPlanetId,
-      createdFrom: 'shipyard_instant'
+      createdFrom: DEBUG_DISABLE_GAR_BUILD_LIMITS && faction === 'GAR' ? 'shipyard_debug_instant' : 'shipyard_instant'
     });
     if (!ship) {
-      setStatus('KUS-Schiff konnte nicht erzeugt werden.');
+      setStatus(`${faction}-Schiff konnte nicht erzeugt werden.`);
       return;
     }
     saveLocal();
     playAudioCue(datapadAcceptAudio);
     renderShipyardView();
     if (activeMainTab === 'fleetManagement') renderFleetManagementView();
-    setStatus(`KUS-Spawn sofort bereit: ${ship.name} in ${planet.name}`);
+    setStatus(`${faction}-Spawn sofort bereit: ${ship.name} in ${planet.name}`);
     return;
   }
   state.buildJobs.push(createBuildJobRecord({
@@ -6105,6 +6204,7 @@ function deleteFleetManagementFleet(id) {
   removeFleetMotionRecord(fleet.id);
   emitLiveSocketEvent('fx:fleet-delete', { fleetId: fleet.id });
   state.fleets = state.fleets.filter((entry) => entry.id !== fleet.id);
+  removeFleetFromOrderBuckets(fleet.id);
   normalizeFleetShipAssignments();
   rebuildFleetRenderPositions();
   rebuildIndexes();
@@ -6222,6 +6322,7 @@ function deleteFleetManagementCategory(id) {
     if (fleet.categoryId === id) fleet.categoryId = '';
   });
   state.meta.fleetCategories = ensureFleetCategoriesStore().filter((entry) => entry.id !== id);
+  delete ensureFleetCardOrderStore()[`category:${id}`];
   fleetCategoryCollapsedIds.delete(id);
   saveLocal();
   playAudioCue(datapadDeleteAudio);
@@ -6295,10 +6396,14 @@ function assignFleetToCategory(fleetId, categoryId) {
   if (categoryId) {
     const category = ensureFleetCategoriesStore().find((entry) => entry.id === categoryId);
     if (!category || category.faction !== fleet.faction) return;
+    removeFleetFromOrderBuckets(fleet.id);
     fleet.categoryId = category.id;
     fleetCategoryCollapsedIds.delete(category.id);
+    syncFleetIntoOrderBucket(fleet, getFleetOrderBucketKey(fleet, category.id));
   } else {
+    removeFleetFromOrderBuckets(fleet.id);
     fleet.categoryId = '';
+    syncFleetIntoOrderBucket(fleet, getFleetOrderBucketKey(fleet, ''));
   }
   saveClientUiPrefs();
   saveLocal();
@@ -6317,6 +6422,41 @@ function handleFleetCategoryDrop(categoryId, event) {
     draggedFleetManagementFleetId = '';
     assignFleetToCategory(fleetId, categoryId || '');
   }
+}
+
+function allowFleetCardReorder(event) {
+  event.preventDefault();
+  autoScrollFleetManagementPanel(event.clientY);
+  if (event.currentTarget) event.currentTarget.classList.add('reorder-target');
+}
+
+function clearFleetCardReorder(event) {
+  if (event?.currentTarget) event.currentTarget.classList.remove('reorder-target');
+}
+
+function handleFleetCardReorderDrop(targetFleetId, bucketKey, event) {
+  event.preventDefault();
+  event.stopPropagation();
+  clearFleetCardReorder(event);
+  const payload = event.dataTransfer?.getData('text/plain') || (draggedFleetManagementFleetId ? `fleet:${draggedFleetManagementFleetId}` : '');
+  if (!payload || !payload.startsWith('fleet:')) return;
+  const fleetId = payload.slice(6);
+  const fleet = fleetIndex.get(fleetId) || state.fleets.find((entry) => entry.id === fleetId);
+  if (!fleet || !canEditFaction(fleet.faction)) return;
+  const targetFleet = fleetIndex.get(targetFleetId) || state.fleets.find((entry) => entry.id === targetFleetId);
+  if (!targetFleet || targetFleet.faction !== fleet.faction) return;
+  const targetCategoryId = bucketKey.startsWith('category:') ? bucketKey.slice(9) : '';
+  if ((fleet.categoryId || '') !== targetCategoryId) {
+    assignFleetToCategory(fleet.id, targetCategoryId);
+  }
+  const effectiveBucketKey = getFleetOrderBucketKey(fleet, targetCategoryId);
+  syncFleetIntoOrderBucket(fleet, effectiveBucketKey);
+  syncFleetIntoOrderBucket(targetFleet, effectiveBucketKey);
+  reorderFleetWithinBucket(fleet.id, targetFleet.id, effectiveBucketKey);
+  saveLocal();
+  playAudioCue(datapadAcceptAudio);
+  renderFleetManagementView();
+  setStatus(`Kartenreihenfolge aktualisiert: ${fleet.name}`);
 }
 
 function reorderFleetCategory(draggedCategoryId, targetCategoryId) {
@@ -6356,19 +6496,26 @@ function handleFleetCategoryReorderDrop(targetCategoryId, event) {
   reorderFleetCategory(draggedCategoryId, targetCategoryId);
 }
 
-function renderFleetManagementFleetCard(fleet) {
+function renderFleetManagementFleetCard(fleet, bucketKey = getFleetOrderBucketKey(fleet)) {
   const editable = canEditFaction(fleet.faction);
   const dragAttrs = editable
     ? `draggable="true" ondragstart="startFleetManagementFleetDrag('${fleet.id}', event)" ondragend="endFleetManagementFleetDrag(event)"`
     : 'draggable="false"';
+  const reorderAttrs = editable
+    ? `ondragover="allowFleetCardReorder(event)" ondragleave="clearFleetCardReorder(event)" ondrop="handleFleetCardReorderDrop('${fleet.id}', '${bucketKey}', event)"`
+    : '';
   return `
-    <div class="fleet-card" data-focus-key="fleet:${fleet.id}" ${dragAttrs}>
+    <div class="fleet-card" data-focus-key="fleet:${fleet.id}" ${dragAttrs} ${reorderAttrs}>
       ${editable ? '<div class="card-drag-handle" title="Verband ziehen">::</div>' : ''}
       <h4>${fleet.name}</h4>
       <p><span class="badge ${fleet.faction}">${fleet.faction}</span></p>
       <div class="split-inline">
         <input id="fmFleetName_${fleet.id}" value="${fleet.name}">
         <input id="fmFleetCommander_${fleet.id}" value="${fleet.commander || ''}" placeholder="CO / Commander">
+      </div>
+      <div class="form-row">
+        <label>Zuordnung</label>
+        <input id="fmFleetAssignment_${fleet.id}" value="${fleet.assignment || ''}" placeholder="z.B. 1.1.1">
       </div>
       <div class="form-row">
         <label>Planetenbindung</label>
@@ -6441,10 +6588,14 @@ function renderFleetManagementView() {
   visibleFleets.forEach((fleet) => {
     if (fleet.categoryId && groupedFleetMap.has(fleet.categoryId)) groupedFleetMap.get(fleet.categoryId).push(fleet);
   });
-  groupedFleetMap.forEach((fleets) => fleets.sort((a, b) => a.name.localeCompare(b.name, 'de')));
-  const ungroupedFleets = visibleFleets
-    .filter((fleet) => !fleet.categoryId || !groupedFleetMap.has(fleet.categoryId))
-    .sort((a, b) => a.name.localeCompare(b.name, 'de'));
+  groupedFleetMap.forEach((fleets, categoryId) => {
+    groupedFleetMap.set(categoryId, sortFleetsForBucket(fleets, `category:${categoryId}`));
+  });
+  const rawUngroupedFleets = visibleFleets.filter((fleet) => !fleet.categoryId || !groupedFleetMap.has(fleet.categoryId));
+  const ungroupedFleets = [
+    ...sortFleetsForBucket(rawUngroupedFleets.filter((fleet) => fleet.faction === 'GAR'), 'ungrouped:GAR'),
+    ...sortFleetsForBucket(rawUngroupedFleets.filter((fleet) => fleet.faction === 'KUS'), 'ungrouped:KUS')
+  ];
   const ships = state.ships.filter((ship) => {
     if (!visibleFactions.has(ship.faction)) return false;
     if (manifestFleet) return ship.assignedFleetId === manifestFleet.id;
@@ -6483,7 +6634,7 @@ function renderFleetManagementView() {
       <div class="fleet-category-ungrouped" ondragover="allowFleetCategoryDrop(event)" ondragleave="clearFleetCategoryDrop(event)" ondrop="handleFleetCategoryDrop('', event)">
         <h4>Ohne Kategorie</h4>
         <div class="fleet-card-list">
-          ${ungroupedFleets.length ? ungroupedFleets.map((fleet) => renderFleetManagementFleetCard(fleet)).join('') : '<div class="fleet-category-empty">Keine ungruppierten Verbände sichtbar.</div>'}
+          ${ungroupedFleets.length ? ungroupedFleets.map((fleet) => renderFleetManagementFleetCard(fleet, `ungrouped:${fleet.faction}`)).join('') : '<div class="fleet-category-empty">Keine ungruppierten Verbände sichtbar.</div>'}
         </div>
       </div>
       <div class="fleet-category-list">
@@ -6515,7 +6666,7 @@ function renderFleetManagementView() {
               </div>
               <div class="fleet-category-body ${collapsed ? 'collapsed' : ''}">
                 <div class="fleet-card-list">
-                  ${categoryFleets.length ? categoryFleets.map((fleet) => renderFleetManagementFleetCard(fleet)).join('') : '<div class="fleet-category-empty">Noch keine Verbände in dieser Kategorie.</div>'}
+                  ${categoryFleets.length ? categoryFleets.map((fleet) => renderFleetManagementFleetCard(fleet, `category:${category.id}`)).join('') : '<div class="fleet-category-empty">Noch keine Verbände in dieser Kategorie.</div>'}
                 </div>
               </div>
             </div>
@@ -6771,7 +6922,11 @@ function renderShipyardView() {
     <div class="workspace-head">
       <div>
         <h2>Schiffbau</h2>
-        <p>${faction === 'GAR' ? 'GAR-Rohstoffe, stündliche Produktion und Bauaufträge verwalten.' : 'KUS-Schiffbau mit eigener stündlicher Rohstoffproduktion und direkter Eventleitungskontrolle.'}</p>
+        <p>${faction === 'GAR'
+          ? (DEBUG_DISABLE_GAR_BUILD_LIMITS
+            ? 'GAR-Debugmodus aktiv: Sofortbau ohne Rohstoff- und Zeitbegrenzung. Produktionswerte laufen weiter zu Testzwecken im 2-Minuten-Takt.'
+            : 'GAR-Rohstoffe, stündliche Produktion und Bauaufträge verwalten.')
+          : 'KUS-Schiffbau mit eigener stündlicher Rohstoffproduktion und direkter Eventleitungskontrolle.'}</p>
       </div>
       <div class="toolbar-row">
         ${role === 'Admin' ? `
@@ -6808,11 +6963,15 @@ function renderShipyardView() {
         </div>
         <div class="workspace-card compact">
           <strong>Kosten</strong>
-          <p>${faction === 'GAR' ? RESOURCE_KEYS.map((key) => `${RESOURCE_LABELS[key]}: ${selectedMeta?.cost?.[key] || 0}`).join(' • ') : 'KUS-Bau bleibt sofort verfügbar und ignoriert aktuell Rohstoffkosten.'}</p>
-          <p><strong>Bauzeit:</strong> ${faction === 'KUS' ? 'Sofort' : `${selectedMeta?.buildTimeHours || 0}h`}</p>
+          <p>${faction === 'GAR'
+            ? (DEBUG_DISABLE_GAR_BUILD_LIMITS
+              ? 'Debug aktiv: GAR-Kosten derzeit deaktiviert.'
+              : RESOURCE_KEYS.map((key) => `${RESOURCE_LABELS[key]}: ${selectedMeta?.cost?.[key] || 0}`).join(' • '))
+            : 'KUS-Bau bleibt sofort verfügbar und ignoriert aktuell Rohstoffkosten.'}</p>
+          <p><strong>Bauzeit:</strong> ${faction === 'KUS' || DEBUG_DISABLE_GAR_BUILD_LIMITS ? 'Sofort' : `${selectedMeta?.buildTimeHours || 0}h`}</p>
           <p><strong>Bauorte:</strong> ${faction === 'KUS' ? 'Geonosis, Muunilinst, Serenno, Raxus' : (selectedMeta?.buildLocations === 'anyGARPlanet' ? 'Jeder GAR-Planet' : (selectedMeta?.buildLocations || []).join(', '))}</p>
         </div>
-        <button class="primary" onclick="startBuildOrder()" ${canBuildAnything && locations.length && (faction === 'KUS' || canAffordCost(selectedMeta?.cost)) ? '' : 'disabled'}>${faction === 'KUS' ? 'KUS-Schiff bauen' : 'Bau starten'}</button>
+        <button class="primary" onclick="startBuildOrder()" ${canBuildAnything && locations.length && (faction === 'KUS' || DEBUG_DISABLE_GAR_BUILD_LIMITS || canAffordCost(selectedMeta?.cost)) ? '' : 'disabled'}>${faction === 'KUS' || DEBUG_DISABLE_GAR_BUILD_LIMITS ? `${faction}-Schiff sofort erzeugen` : 'Bau starten'}</button>
       </div>
       <div class="workspace-card">
         <h3>Stündliche Produktion</h3>
@@ -7206,8 +7365,8 @@ planetSearchInput.addEventListener('keydown', (event) => {
   }
   if (event.key === 'Enter') {
     event.preventDefault();
-    const planet = searchResultsState[Math.max(0, activeSearchResultIndex)];
-    if (planet) focusPlanetFromSearch(planet.id);
+    const result = searchResultsState[Math.max(0, activeSearchResultIndex)];
+    if (result) focusSearchResult(result);
   }
 });
 
