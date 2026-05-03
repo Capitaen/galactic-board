@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "start": "node server/src/server.js",
-    "dev": "node --watch server/src/server.js"
+    "dev": "node --watch server/src/server.js",
+    "dispatch:audit": "node server/scripts/dispatchAuditToDiscord.js"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",

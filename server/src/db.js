@@ -27,6 +27,19 @@ export function createDb(projectRoot) {
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS audit_log (
+      id TEXT PRIMARY KEY,
+      actor_user_id TEXT,
+      actor_username TEXT,
+      actor_role TEXT,
+      action TEXT NOT NULL,
+      entity_type TEXT,
+      entity_id TEXT,
+      payload_json TEXT,
+      created_at TEXT NOT NULL,
+      dispatched_at TEXT
+    );
   `);
 
   const stateRow = db.prepare('SELECT id FROM app_state WHERE id = ?').get('main');

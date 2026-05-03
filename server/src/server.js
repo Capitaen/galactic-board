@@ -7,6 +7,7 @@ import bcrypt from 'bcryptjs';
 import { createServer } from 'node:https';
 import { Server as SocketServer } from 'socket.io';
 import { createDb, createUser, deleteUser, findUserByNormalizedUsername, listUsers, readCampaignState, updateUser, writeCampaignState } from './db.js';
+import { getFleetMotionArrivalIso, getFleetMotionByFleetId, getFleetMotionStartedAtIso, getFleetPlanetId, getPlanetNameById, writeAuditLog } from './audit.js';
 import { validateNextCampaignState } from './stateValidation.js';
 
 const projectRoot = process.cwd();
@@ -437,6 +438,108 @@ function detectChangedCampaignKeys(previousState, nextState) {
   return keys.filter((key) => JSON.stringify(previousState?.[key] ?? null) !== JSON.stringify(nextState?.[key] ?? null));
 }
 
+function createFleetAuditPayload({
+  fleet,
+  state,
+  fromPlanetId,
+  toPlanetId,
+  startedAt,
+  arrivesAt,
+  routePlanetIds,
+  actor
+}) {
+  return {
+    fleetId: fleet.id,
+    fleetName: fleet.name || fleet.id,
+    faction: fleet.faction || '',
+    fromPlanetId: fromPlanetId || null,
+    fromPlanetName: getPlanetNameById(state, fromPlanetId),
+    toPlanetId: toPlanetId || null,
+    toPlanetName: getPlanetNameById(state, toPlanetId),
+    startedAt: startedAt || new Date().toISOString(),
+    arrivesAt: arrivesAt || null,
+    routePlanetIds: Array.isArray(routePlanetIds) ? routePlanetIds : [],
+    source: 'website',
+    actorUsername: actor?.username || '',
+    actorUserId: actor?.id || ''
+  };
+}
+
+function stampFleetLastMove(fleet, actor, fromPlanetId, toPlanetId, movedAtIso) {
+  if (!fleet || !actor) return;
+  fleet.lastMovedBy = actor.username || '';
+  fleet.lastMovedByUserId = actor.id || '';
+  fleet.lastMovedAt = movedAtIso;
+  fleet.lastMoveFromPlanetId = fromPlanetId || null;
+  fleet.lastMoveToPlanetId = toPlanetId || null;
+}
+
+function buildFleetAuditEntries(previousState, nextState, actor) {
+  const previousFleets = new Map((Array.isArray(previousState?.fleets) ? previousState.fleets : []).map((fleet) => [fleet.id, fleet]));
+  const auditEntries = [];
+
+  for (const nextFleet of Array.isArray(nextState?.fleets) ? nextState.fleets : []) {
+    const previousFleet = previousFleets.get(nextFleet.id);
+    if (!previousFleet) continue;
+
+    const previousPlanetId = getFleetPlanetId(previousFleet);
+    const nextPlanetId = getFleetPlanetId(nextFleet);
+    const previousMotion = getFleetMotionByFleetId(previousState, nextFleet.id);
+    const nextMotion = getFleetMotionByFleetId(nextState, nextFleet.id);
+    const movementRecordedAt = new Date().toISOString();
+
+    const motionChanged = JSON.stringify(previousMotion || null) !== JSON.stringify(nextMotion || null);
+    if (nextMotion && motionChanged) {
+      const startedAt = getFleetMotionStartedAtIso(nextMotion, movementRecordedAt);
+      const fromPlanetId = String(nextMotion.sourcePlanetId || previousPlanetId || '').trim();
+      const toPlanetId = String(nextMotion.targetPlanetId || nextPlanetId || '').trim();
+      stampFleetLastMove(nextFleet, actor, fromPlanetId, toPlanetId, startedAt);
+      auditEntries.push({
+        actorUserId: actor.id,
+        actorUsername: actor.username,
+        actorRole: actor.role,
+        action: 'fleet.jump.started',
+        entityType: 'fleet',
+        entityId: nextFleet.id,
+        payload: createFleetAuditPayload({
+          fleet: nextFleet,
+          state: nextState,
+          fromPlanetId,
+          toPlanetId,
+          startedAt,
+          arrivesAt: getFleetMotionArrivalIso(nextMotion),
+          routePlanetIds: Array.isArray(nextMotion.routePlanetIds) ? nextMotion.routePlanetIds : [],
+          actor
+        })
+      });
+    }
+
+    if (previousPlanetId !== nextPlanetId) {
+      stampFleetLastMove(nextFleet, actor, previousPlanetId, nextPlanetId, movementRecordedAt);
+      auditEntries.push({
+        actorUserId: actor.id,
+        actorUsername: actor.username,
+        actorRole: actor.role,
+        action: 'fleet.moved',
+        entityType: 'fleet',
+        entityId: nextFleet.id,
+        payload: createFleetAuditPayload({
+          fleet: nextFleet,
+          state: nextState,
+          fromPlanetId: previousPlanetId,
+          toPlanetId: nextPlanetId,
+          startedAt: movementRecordedAt,
+          arrivesAt: null,
+          routePlanetIds: [],
+          actor
+        })
+      });
+    }
+  }
+
+  return auditEntries;
+}
+
 function broadcastCampaignChange(payload) {
   io.emit('campaign:state-changed', payload);
 }
@@ -496,6 +599,21 @@ app.post('/api/auth/login', async (req, res) => {
   }
 
   const token = createSession(user);
+
+  writeAuditLog(db, {
+    actorUserId: user.id,
+    actorUsername: user.username,
+    actorRole: user.role,
+    action: 'auth.login',
+    entityType: 'user',
+    entityId: user.id,
+    payload: {
+      username: user.username,
+      role: user.role,
+      ip: req.ip,
+      userAgent: req.headers['user-agent'] || ''
+    }
+  });
 
   res.cookie(COOKIE_NAME, token, {
     httpOnly: true,
@@ -602,10 +720,15 @@ app.put('/api/campaign/state', requireAuth, (req, res) => {
     };
     const resetResult = applyOneTimeResourceReset(mergedState);
     const effectiveMergedState = resetResult.state;
+    const auditEntries = buildFleetAuditEntries(previousState, effectiveMergedState, req.user);
     const changedKeys = detectChangedCampaignKeys(previousState, effectiveMergedState);
 
     const nextRevision = revision + 1;
-    const updatedAt = writeCampaignState(db, effectiveMergedState, nextRevision);
+    const updatedAt = db.transaction(() => {
+      const persistedAt = writeCampaignState(db, effectiveMergedState, nextRevision);
+      auditEntries.forEach((entry) => writeAuditLog(db, entry));
+      return persistedAt;
+    })();
 
     broadcastCampaignChange({
       revision: nextRevision,
