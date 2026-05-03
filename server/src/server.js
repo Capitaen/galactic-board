@@ -4,7 +4,7 @@ import crypto from 'node:crypto';
 import express from 'express';
 import cookieParser from 'cookie-parser';
 import bcrypt from 'bcryptjs';
-import { createServer } from 'node:http';
+import { createServer } from 'node:https';
 import { Server as SocketServer } from 'socket.io';
 import { createDb, createUser, deleteUser, findUserByNormalizedUsername, listUsers, readCampaignState, updateUser, writeCampaignState } from './db.js';
 import { validateNextCampaignState } from './stateValidation.js';
@@ -15,14 +15,20 @@ const PLANET_OWNERSHIP_REFERENCE_PATH = path.join(projectRoot, 'server', 'data',
 const HIDDEN_PLANET_OWNER_FALLBACK_PATH = path.join(projectRoot, 'server', 'data', 'hiddenPlanetOwnerFallback.json');
 
 const app = express();
-const server = createServer(app);
+const sslOptions = {
+  key: fs.readFileSync('C:/Users/Administrator/galactic-campaign/privkey.pem'),
+  cert: fs.readFileSync('C:/Users/Administrator/galactic-campaign/fullchain.pem')
+};
+
+
+const server = createServer(sslOptions, app);
 const io = new SocketServer(server, {
   cors: { origin: true, credentials: true }
 });
 
 const sessions = new Map();
 const COOKIE_NAME = 'gcb_session';
-const PORT = Number(process.env.PORT || 3000);
+const PORT = Number(process.env.PORT || 443);
 const RESOURCE_KEYS = ['quadraniumErz', 'agrinium', 'tibannaGas', 'baradium', 'kavamSalz'];
 const RESOURCE_FACTIONS = ['GAR', 'KUS'];
 const RESOURCE_PRODUCTION_TICK_MS = 60 * 60 * 1000;
