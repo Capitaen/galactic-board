@@ -6,7 +6,7 @@ const projectRoot = process.cwd();
 const dbPath = path.join(projectRoot, 'server', 'data.sqlite');
 const env = loadEnvFiles(projectRoot);
 const webhookUrl = process.env.DISCORD_FLEET_WEBHOOK_URL || env.DISCORD_FLEET_WEBHOOK_URL || '';
-const supportedActions = ['fleet.jump.started', 'fleet.moved'];
+const supportedActions = ['fleet.jump.started'];
 
 if (!webhookUrl) {
   console.error('DISCORD_FLEET_WEBHOOK_URL is missing. Set it in your environment or .env file.');
@@ -99,7 +99,7 @@ function buildDiscordMessage(event, payload) {
   const toPlanetName = payload.toPlanetName || payload.toPlanetId || 'Unbekannt';
   const actorUsername = payload.actorUsername || event.actor_username || 'Unbekannt';
   const timestamp = event.created_at || new Date().toISOString();
-  const title = event.action === 'fleet.jump.started' ? '🚀 Flottenverband im Hyperraumsprung' : '🛰️ Flottenverband verlegt';
+  const title = '🚀 Flottenverband im Hyperraumsprung';
   const description = `**${fleetName}** bewegt sich von **${fromPlanetName}** nach **${toPlanetName}** auf Anweisung von **${actorUsername}**.`;
 
   return {
@@ -108,7 +108,7 @@ function buildDiscordMessage(event, payload) {
       {
         title,
         description,
-        color: event.action === 'fleet.jump.started' ? 0x5865F2 : 0x2ECC71,
+        color: 0x5865F2,
         fields: [
           { name: 'Verband', value: fleetName, inline: true },
           { name: 'Fraktion', value: faction, inline: true },
