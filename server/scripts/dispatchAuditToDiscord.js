@@ -127,7 +127,21 @@ function buildDiscordMessage(event, payload) {
   const actorUsername = payload.actorUsername || event.actor_username || 'Unbekannt';
   const timestamp = event.created_at || new Date().toISOString();
   const title = event.action === 'fleet.jump.started' ? '🚀 Flottenverband im Hyperraumsprung' : '🛰️ Flottenverband verlegt';
-  const description = `**${fleetName}** bewegt sich von **${fromPlanetName}** nach **${toPlanetName}** auf Anweisung von **${actorUsername}**.`;
+  const description = event.action === 'fleet.moved'
+    ? `**${fleetName}** in **${toPlanetName}** angekommen.`
+    : `**${fleetName}** bewegt sich von **${fromPlanetName}** nach **${toPlanetName}** auf Anweisung von **${actorUsername}**.`;
+  const fields = event.action === 'fleet.moved'
+    ? [
+        { name: 'Zeit', value: `<t:${Math.floor(new Date(timestamp).getTime() / 1000)}:F>`, inline: false }
+      ]
+    : [
+        { name: 'Verband', value: fleetName, inline: true },
+        { name: 'Fraktion', value: faction, inline: true },
+        { name: 'Ausgeloest von', value: actorUsername, inline: true },
+        { name: 'Von', value: fromPlanetName, inline: true },
+        { name: 'Nach', value: toPlanetName, inline: true },
+        { name: 'Zeit', value: `<t:${Math.floor(new Date(timestamp).getTime() / 1000)}:F>`, inline: false }
+      ];
 
   return {
     username: 'Galactic Campaign Board',
@@ -136,14 +150,7 @@ function buildDiscordMessage(event, payload) {
         title,
         description,
         color: event.action === 'fleet.jump.started' ? 0x5865F2 : 0x2ECC71,
-        fields: [
-          { name: 'Verband', value: fleetName, inline: true },
-          { name: 'Fraktion', value: faction, inline: true },
-          { name: 'Ausgeloest von', value: actorUsername, inline: true },
-          { name: 'Von', value: fromPlanetName, inline: true },
-          { name: 'Nach', value: toPlanetName, inline: true },
-          { name: 'Zeit', value: `<t:${Math.floor(new Date(timestamp).getTime() / 1000)}:F>`, inline: false }
-        ],
+        fields,
         footer: {
           text: `Event: ${event.action}`
         },
