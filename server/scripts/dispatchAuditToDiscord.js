@@ -63,6 +63,9 @@ async function pollOnce() {
     for (const event of events) {
       try {
         const payload = safeJsonParse(event.payload_json);
+        if (String(payload.faction || '').trim().toUpperCase() !== 'GAR') {
+          continue;
+        }
         const message = buildDiscordMessage(event, payload);
         await postToDiscord(webhookUrl, message);
         markDispatched.run(new Date().toISOString(), event.id);
