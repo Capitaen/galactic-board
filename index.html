@@ -4240,16 +4240,24 @@ function updateFleetElement(fleet) {
   const renderPos = getFleetDisplayPosition(fleet);
   const isSelected = selected?.type === 'fleet' && selected.id === fleet.id;
   const isMoving = isFleetTraveling(fleet);
+  const isVisible = isFleetElementVisible(fleet);
   entry.className = 'fleet ' + fleet.faction + (activeInteraction?.mode === 'fleet-drag' && activeInteraction.id === fleet.id ? ' dragging' : '') + (isSelected ? ' selected' : '') + (isMoving ? ' moving' : '');
   entry.style.left = renderPos.x + 'px';
   entry.style.top = renderPos.y + 'px';
   entry.title = fleet.name;
   entry.style.pointerEvents = isMoving ? 'none' : 'auto';
-  entry.classList.remove('hidden');
+  entry.classList.toggle('hidden', !isVisible);
   entry.querySelector('img').src = iconFor(fleet);
   const travel = fleetTravelState.get(fleet.id);
   entry.querySelector('.fleet-tag').textContent = travel ? `${fleet.name} -> ${travel.targetPlanetName}` : fleet.name;
   entry.querySelector('.fleet-assignment').textContent = fleet.assignment || '';
+}
+
+function isFleetElementVisible(fleet) {
+  if (!fleet) return false;
+  if (fleet.faction === 'GAR') return Boolean(layers.garFleets);
+  if (fleet.faction === 'KUS') return Boolean(layers.kusFleets);
+  return true;
 }
 
 function ensurePlanetElements() {
@@ -5418,7 +5426,7 @@ function applyLayers() {
   overlay.classList.toggle('hide-contested', layers.hyperlanes && !layers.contested);
   fleetElements.forEach((el, fleetId) => {
     const fleet = fleetIndex.get(fleetId);
-    const isVisible = fleet && ((fleet.faction === 'GAR' && layers.garFleets) || (fleet.faction === 'KUS' && layers.kusFleets));
+    const isVisible = isFleetElementVisible(fleet);
     el.classList.toggle('hidden', !isVisible);
   });
   const showInfluenceCanvas = layers.influence;
@@ -6370,6 +6378,7 @@ function startFleetManagementFleetDrag(fleetId, event) {
     event?.preventDefault?.();
     return;
   }
+  event?.stopPropagation?.();
   draggedFleetManagementFleetId = fleetId;
   getDragSourceElementFromEvent(event)?.classList.add('drag-active');
   if (event?.dataTransfer) {
@@ -6389,6 +6398,11 @@ function startFleetCategoryDrag(categoryId, event) {
     event?.preventDefault?.();
     return;
   }
+  if (!event?.target?.closest?.('.card-drag-handle')) {
+    event?.preventDefault?.();
+    return;
+  }
+  event?.stopPropagation?.();
   draggedFleetCategoryId = categoryId;
   getDragSourceElementFromEvent(event)?.classList.add('drag-active');
   if (event?.dataTransfer) {
