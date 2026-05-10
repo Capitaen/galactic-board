@@ -590,7 +590,7 @@ const SHIP_CLASS_POOL = {
   arquitens: { displayName: 'Arquitens-Klasse-Kreuzer', asset: 'assets/Arquitens-Klasse-Kreuzer.svg', faction: 'GAR', canJump: true, buildLocations: ['Anaxes', 'Kuat', 'Rothana'], buildTimeHours: 24, cost: { quadraniumErz: 55, agrinium: 34, tibannaGas: 28, baradium: 18, kavamSalz: 16 } },
   carrack: { displayName: 'Carrack-Klasse-Kreuzer', asset: 'assets/Carrack-Klasse-Kreuzer.svg', faction: 'GAR', canJump: true, buildLocations: ['Anaxes', 'Kuat', 'Rothana'], buildTimeHours: 18, cost: { quadraniumErz: 44, agrinium: 24, tibannaGas: 22, baradium: 16, kavamSalz: 14 } },
   consular: { displayName: 'Consular-Klasse-Raumkreuzer', asset: 'assets/Consular-Klasse-Raumkreuzer.svg', faction: 'GAR', canJump: true, buildLocations: ['Anaxes', 'Kuat', 'Rothana'], buildTimeHours: 12, cost: { quadraniumErz: 24, agrinium: 14, tibannaGas: 12, baradium: 8, kavamSalz: 8 } },
-  consular_charger_c70: { displayName: 'Consular-Klasse-Raumkreuzer (Charger-C70-Umbau)', asset: 'assets/Consular-Klasse-Raumkreuzer.svg', faction: 'GAR', canJump: true, buildLocations: ['Anaxes', 'Kuat', 'Rothana'], buildTimeHours: 28, cost: { quadraniumErz: 56, agrinium: 34, tibannaGas: 30, baradium: 20, kavamSalz: 20 } },
+  consular_charger_c70: { displayName: 'Charger-C70-Umbau (Consular-Klasse-Raumkreuzer)', asset: 'assets/Consular-Klasse-Raumkreuzer.svg', faction: 'GAR', canJump: true, buildLocations: ['Anaxes', 'Kuat', 'Rothana'], buildTimeHours: 28, cost: { quadraniumErz: 56, agrinium: 34, tibannaGas: 30, baradium: 20, kavamSalz: 20 } },
   cr90: { displayName: 'CR90-Korvette', asset: 'assets/CR90-Korvette.svg', faction: 'GAR', canJump: true, buildLocations: ['Anaxes', 'Kuat', 'Rothana'], buildTimeHours: 10, cost: { quadraniumErz: 20, agrinium: 12, tibannaGas: 10, baradium: 7, kavamSalz: 6 } },
   dp20: { displayName: 'DP20-Kanonenboot', asset: 'assets/DP20-Kanonenboot.svg', faction: 'GAR', canJump: true, buildLocations: ['Anaxes', 'Kuat', 'Rothana'], buildTimeHours: 9, cost: { quadraniumErz: 18, agrinium: 11, tibannaGas: 9, baradium: 6, kavamSalz: 6 } },
   dreadnaught: { displayName: 'Dreadnaught-Klasse-Kreuzer', asset: 'assets/Dreadnaught-Klasse-Kreuzer.svg', faction: 'GAR', canJump: true, buildLocations: ['Anaxes', 'Kuat', 'Rothana'], buildTimeHours: 28, cost: { quadraniumErz: 70, agrinium: 46, tibannaGas: 38, baradium: 26, kavamSalz: 22 } },
@@ -2656,7 +2656,8 @@ function getShipClassOptions() {
   const faction = getActiveShipyardFaction();
   return Object.entries(SHIP_CLASS_POOL)
     .filter(([, meta]) => (meta.faction || 'GAR') === faction)
-    .map(([id, meta]) => ({ id, ...meta }));
+    .map(([id, meta]) => ({ id, ...meta }))
+    .sort((a, b) => String(a.displayName || a.id).localeCompare(String(b.displayName || b.id), 'de'));
 }
 
 function getShipClassMeta(classId) {
