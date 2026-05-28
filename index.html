@@ -460,13 +460,14 @@ a { color:#8bc7ff; }
       <button class="secondary" id="loginBtn">Login</button>
     </div>
     <div id="roleFactionBadge" class="role-faction-badge hidden"></div>
-    <div class="search-wrap">
-      <input id="planetSearch" type="search" placeholder="Planeten / Flotten suchen..." autocomplete="off">
-      <div id="planetSearchResults" class="hidden"></div>
-    </div>
-    <button class="secondary" id="viewModeBtn">Schematic Map</button>
-    <button class="secondary" id="saveBtn">Export JSON</button>
-  </div>
+     <div class="search-wrap">
+       <input id="planetSearch" type="search" placeholder="Planeten / Flotten suchen..." autocomplete="off">
+       <div id="planetSearchResults" class="hidden"></div>
+     </div>
+     <button class="secondary" id="viewModeBtn">Schematic Map</button>
+     <button class="secondary hidden" id="sectorDrawBtn">Sektor zeichnen</button>
+     <button class="secondary" id="saveBtn">Export JSON</button>
+   </div>
 
   <div id="layersPanel" class="panel">
     <h3>Schichten</h3>
@@ -748,6 +749,7 @@ const orientationLockBtn = document.getElementById('orientationLockBtn');
 const orientationDismissBtn = document.getElementById('orientationDismissBtn');
 const buildProjectsTabBtn = document.getElementById('buildProjectsTabBtn');
 const loginManagerTabBtn = document.getElementById('loginManagerTabBtn');
+const sectorDrawBtn = document.getElementById('sectorDrawBtn');
 const planetIndex = new Map();
 const fleetIndex = new Map();
 const planetElements = new Map();
@@ -863,6 +865,28 @@ function ensureFleetCategoriesStore() {
   state.meta = state.meta || {};
   if (!Array.isArray(state.meta.fleetCategories)) state.meta.fleetCategories = [];
   return state.meta.fleetCategories;
+}
+
+function ensureSectorStore() {
+  state.meta = state.meta || {};
+  if (!Array.isArray(state.meta.manualSectors)) state.meta.manualSectors = [];
+  return state.meta.manualSectors;
+}
+
+function createManualSectorRecord(data = {}) {
+  const points = Array.isArray(data.points)
+    ? data.points
+      .map((point) => ({
+        x: clamp(Number(point?.x) || 0, 0, WORLD_SIZE),
+        y: clamp(Number(point?.y) || 0, 0, WORLD_SIZE)
+      }))
+      .filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y))
+    : [];
+  return {
+    id: data.id || `sector_${Math.random().toString(36).slice(2, 10)}`,
+    name: String(data.name || 'Neuer Sektor').trim() || 'Neuer Sektor',
+    points
+  };
 }
 
 function createFleetCategoryRecord(data = {}) {
@@ -1004,6 +1028,9 @@ function normalizeCampaignState() {
     state.meta.resourceResetVersion = RESOURCE_RESET_VERSION;
   }
   state.meta.mapMarkers = ensureMapMarkerStore().map((marker) => createMapMarkerRecord(marker));
+  state.meta.manualSectors = ensureSectorStore()
+    .map((sector) => createManualSectorRecord(sector))
+    .filter((sector) => sector.points.length >= 3);
   state.fleets = Array.isArray(state.fleets) ? state.fleets : [];
   state.fleets.forEach((fleet) => {
     fleet.commander = fleet.commander || fleet.leader || '';
@@ -3447,6 +3474,7 @@ function getRouteDisplayName(route) {
 
 function renderTacticalRouteInteraction() {
   tacticalOverlay.querySelectorAll('.tactical-route-highlight').forEach((el) => el.remove());
+  renderManualSectorOverlay();
   if (!layers.hyperlanes || !tacticalRouteCache.length) {
     renderTacticalHoverLabels();
     return;
@@ -3759,6 +3787,76 @@ function isPlanetInsideHoveredSector(planet) {
   const sectorArea = hoveredZoneInfo?.sectorArea;
   if (!planet || !sectorArea?.rings?.length) return false;
   return pointInAreaRings(getPlanetDisplayPosition(planet), sectorArea.rings);
+}
+
+function updateSectorDrawButton() {
+  if (!sectorDrawBtn) return;
+  sectorDrawBtn.classList.toggle('hidden', !isAdminRole());
+  sectorDrawBtn.textContent = activeSectorDraft ? `Sektor beenden (${activeSectorDraft.points.length})` : 'Sektor zeichnen';
+}
+
+function cancelSectorDraft(silent = false) {
+  if (!activeSectorDraft) return;
+  activeSectorDraft = null;
+  updateSectorDrawButton();
+  render({ layers: true });
+  if (!silent) setStatus('Sektorzeichnen abgebrochen.');
+}
+
+function commitSectorDraft() {
+  if (!activeSectorDraft || activeSectorDraft.points.length < 3) {
+    setStatus('Ein Sektor braucht mindestens 3 Punkte.');
+    return;
+  }
+  const name = window.prompt('Sektorname', `Sektor ${ensureSectorStore().length + 1}`);
+  if (name === null) return;
+  const sector = createManualSectorRecord({
+    name,
+    points: activeSectorDraft.points
+  });
+  ensureSectorStore().push(sector);
+  activeSectorDraft = null;
+  tacticalHoverAreas = buildTacticalHoverAreas(null, viewMode === 'schematic' ? 'schematic' : 'image', viewMode);
+  saveLocal();
+  updateSectorDrawButton();
+  render({ layers: true });
+  setStatus(`Sektor gespeichert: ${sector.name}`);
+}
+
+function addSectorDraftPoint(point) {
+  if (!activeSectorDraft) return;
+  activeSectorDraft.points.push({
+    x: clamp(Number(point?.x) || 0, 0, WORLD_SIZE),
+    y: clamp(Number(point?.y) || 0, 0, WORLD_SIZE)
+  });
+  updateSectorDrawButton();
+  render({ layers: true });
+  setStatus(`Sektorpunkt gesetzt (${activeSectorDraft.points.length}).`);
+}
+
+function handleSectorDraftMapClick(point) {
+  if (!activeSectorDraft) return false;
+  const firstPoint = activeSectorDraft.points[0];
+  if (firstPoint && activeSectorDraft.points.length >= 3) {
+    const distance = Math.hypot(firstPoint.x - point.x, firstPoint.y - point.y);
+    if (distance <= 18) {
+      commitSectorDraft();
+      return true;
+    }
+  }
+  addSectorDraftPoint(point);
+  return true;
+}
+
+function startSectorDraft(initialPoint = null) {
+  if (!isAdminRole()) return;
+  if (!activeSectorDraft) activeSectorDraft = { points: [] };
+  if (initialPoint) addSectorDraftPoint(initialPoint);
+  else {
+    updateSectorDrawButton();
+    render({ layers: true });
+    setStatus('Sektorzeichnen aktiv. Klicke auf die Karte, um Punkte zu setzen. Erster Punkt schließt den Sektor.');
+  }
 }
 
 function setHoveredZone(info) {
@@ -4114,6 +4212,7 @@ function refreshRoleChrome() {
   saveBtn.classList.toggle('hidden', !isAdminRole());
   loginManagerTabBtn.classList.toggle('hidden', !isAdminRole());
   buildProjectsTabBtn.classList.remove('hidden');
+  updateSectorDrawButton();
   document.querySelector('[data-main-tab="fleetManagement"]')?.classList.toggle('hidden', currentRole() === 'Senat');
   document.querySelector('[data-main-tab="shipyard"]')?.classList.toggle('hidden', currentRole() === 'Senat');
   roleSelect.disabled = true;
@@ -4940,6 +5039,12 @@ function createHoverArea(type, name, centroid, rings) {
   return { type, name, centroid, rings, bounds };
 }
 
+function buildManualSectorHoverAreas() {
+  return ensureSectorStore()
+    .map((sector) => createHoverArea('sector', sector.name, averagePoints(sector.points), [sector.points]))
+    .filter(Boolean);
+}
+
 function buildGroupedHoverAreas(mode = viewMode) {
   const getPosition = mode === 'schematic' ? getSchematicPlanetPosition : getImagePlanetPosition;
   const regionGroups = new Map();
@@ -4976,33 +5081,7 @@ function buildGroupedHoverAreas(mode = viewMode) {
 }
 
 function buildTacticalHoverAreas(data, projectionMode, mode = viewMode) {
-  if (mode === 'schematic') return buildGroupedHoverAreas('schematic');
-  const regions = [];
-  const sectors = [];
-  if (data?.regions?.length) {
-    data.regions.forEach((region) => {
-      if (!Array.isArray(region.rings) || !region.rings.length || !region.name) return;
-      const projectedRings = projectArcgisRingsToWorld(region.rings, projectionMode);
-      const centroid = averageArcgisRing(region.rings[0], projectionMode);
-      const area = createHoverArea('region', region.name, centroid, projectedRings);
-      if (area) regions.push(area);
-    });
-  }
-  if (data?.sectors?.length) {
-    data.sectors.forEach((sector) => {
-      if (!Array.isArray(sector.rings) || !sector.rings.length || !sector.name) return;
-      const projectedRings = projectArcgisRingsToWorld(sector.rings, projectionMode);
-      const centroid = averageArcgisRing(sector.rings[0], projectionMode);
-      const area = createHoverArea('sector', sector.name, centroid, projectedRings);
-      if (area) sectors.push(area);
-    });
-  }
-  if (!regions.length || !sectors.length) {
-    const grouped = buildGroupedHoverAreas('image');
-    if (!regions.length) regions.push(...grouped.regions);
-    if (!sectors.length) sectors.push(...grouped.sectors);
-  }
-  return { regions, sectors };
+  return { regions: [], sectors: buildManualSectorHoverAreas() };
 }
 
 function findHoveredArea(areas, x, y) {
@@ -5032,6 +5111,39 @@ function nearestDisplayedZone(x, y) {
     sectorArea: sectorArea || null,
     regionArea: regionArea || null
   };
+}
+
+function renderManualSectorOverlay() {
+  tacticalOverlay.querySelectorAll('.manual-sector-shape, .manual-sector-label, .manual-sector-draft-line, .manual-sector-draft-point').forEach((el) => el.remove());
+  const frag = document.createDocumentFragment();
+  if (layers.sectorLabels) {
+    ensureSectorStore().forEach((sector) => {
+      if (!Array.isArray(sector.points) || sector.points.length < 3) return;
+      const polygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+      polygon.setAttribute('points', sector.points.map((point) => `${point.x},${point.y}`).join(' '));
+      polygon.setAttribute('class', `manual-sector-shape${hoveredZoneInfo?.sector?.name === sector.name ? ' hovered' : ''}`);
+      frag.appendChild(polygon);
+      const centroid = averagePoints(sector.points);
+      addSvgText(frag, { x: centroid.x, y: centroid.y, class: 'manual-sector-label' }, sector.name);
+    });
+  }
+  if (activeSectorDraft?.points?.length) {
+    if (activeSectorDraft.points.length >= 2) {
+      const polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+      polyline.setAttribute('points', activeSectorDraft.points.map((point) => `${point.x},${point.y}`).join(' '));
+      polyline.setAttribute('class', 'manual-sector-draft-line');
+      frag.appendChild(polyline);
+    }
+    activeSectorDraft.points.forEach((point) => {
+      const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      circle.setAttribute('cx', point.x);
+      circle.setAttribute('cy', point.y);
+      circle.setAttribute('r', 5);
+      circle.setAttribute('class', 'manual-sector-draft-point');
+      frag.appendChild(circle);
+    });
+  }
+  tacticalOverlay.appendChild(frag);
 }
 
 function renderTacticalHoverLabels() {
@@ -5239,70 +5351,6 @@ function renderTacticalSectionToContext(ctx, sectionName, data, projectionMode) 
       return;
     }
     if (sectionName === 'sectors') {
-      if (data.regions?.length) {
-        data.regions.forEach((region) => {
-          if (!Array.isArray(region.rings) || !region.rings.length) return;
-          drawCanvasPolygonRings(ctx, region.rings, projectionMode, {
-            fillStyle: 'rgba(247,231,104,.06)',
-            strokeStyle: 'rgba(255,232,92,.72)',
-            lineWidth: 2.8
-          });
-        });
-      }
-      if (data.sectors?.length) {
-        data.sectors.forEach((sector) => {
-          if (!Array.isArray(sector.rings) || !sector.rings.length) return;
-          drawCanvasPolygonRings(ctx, sector.rings, projectionMode, {
-            fillStyle: 'rgba(121,163,212,.05)',
-            strokeStyle: 'rgba(170,214,255,.82)',
-            lineWidth: 2
-          });
-        });
-        return;
-      }
-      const regionGroups = new Map();
-      const sectorGroups = new Map();
-      data.planets.forEach((planet) => {
-        const regionName = String(planet.region || '').trim();
-        if (regionName) {
-          if (!regionGroups.has(regionName)) regionGroups.set(regionName, []);
-          regionGroups.get(regionName).push(projectArcgisToWorld(planet.x, planet.y, projectionMode));
-        }
-        const sectorName = String(planet.sector || '').trim();
-        if (!sectorName) return;
-        if (!sectorGroups.has(sectorName)) sectorGroups.set(sectorName, []);
-        sectorGroups.get(sectorName).push(projectArcgisToWorld(planet.x, planet.y, projectionMode));
-      });
-      regionGroups.forEach((points) => {
-        if (points.length < 3) return;
-        const outline = expandHull(convexHull(points), 1.06, 40);
-        ctx.save();
-        ctx.beginPath();
-        ctx.moveTo(outline[0].x, outline[0].y);
-        for (let i = 1; i < outline.length; i += 1) ctx.lineTo(outline[i].x, outline[i].y);
-        ctx.closePath();
-        ctx.fillStyle = 'rgba(247,231,104,.06)';
-        ctx.strokeStyle = 'rgba(255,232,92,.72)';
-        ctx.lineWidth = 2.8;
-        ctx.fill();
-        ctx.stroke();
-        ctx.restore();
-      });
-      sectorGroups.forEach((points, sectorName) => {
-        if (points.length < 3) return;
-        const outline = expandHull(convexHull(points), 1.04, 18);
-        ctx.save();
-        ctx.beginPath();
-        ctx.moveTo(outline[0].x, outline[0].y);
-        for (let i = 1; i < outline.length; i += 1) ctx.lineTo(outline[i].x, outline[i].y);
-        ctx.closePath();
-        ctx.fillStyle = 'rgba(121,163,212,.05)';
-        ctx.strokeStyle = 'rgba(170,214,255,.82)';
-        ctx.lineWidth = 2;
-        ctx.fill();
-        ctx.stroke();
-        ctx.restore();
-      });
       return;
     }
     if (sectionName === 'hyperlanes') {
@@ -5576,39 +5624,8 @@ function renderTacticalBase() {
     });
   }
 
-  const regionGroups = new Map();
-  const sectorGroups = new Map();
-  state.planets.forEach((planet) => {
-    const regionKey = planet.region || 'Unknown Region';
-    if (!regionGroups.has(regionKey)) regionGroups.set(regionKey, []);
-    regionGroups.get(regionKey).push(planet);
-
-    const sectorName = planet.sector || '';
-    if (sectorName) {
-      const sectorKey = `${regionKey}::${sectorName}`;
-      if (!sectorGroups.has(sectorKey)) sectorGroups.set(sectorKey, { region: regionKey, sector: sectorName, planets: [] });
-      sectorGroups.get(sectorKey).planets.push(planet);
-    }
-  });
-
-  if (layers.sectorLabels) {
-    regionGroups.forEach((planets, region) => {
-      if (planets.length < 6) return;
-      const displayPlanets = planets.map(getSchematicPlanetPosition);
-      const outline = expandHull(convexHull(displayPlanets), 1.06, 40);
-      drawHull(frag, outline, 'region-outline');
-    });
-
-    sectorGroups.forEach(({ sector, planets }) => {
-      if (planets.length < 3) return;
-      const displayPlanets = planets.map(getSchematicPlanetPosition);
-      const outline = expandHull(convexHull(displayPlanets), 1.03, 20);
-      drawHull(frag, outline, 'sector-outline');
-    });
-  }
-
   tacticalOverlay.appendChild(frag);
-  renderTacticalHoverLabels();
+  renderTacticalRouteInteraction();
 }
 
 function applyViewMode() {
@@ -7538,6 +7555,12 @@ viewport.addEventListener('pointerdown', (event) => {
   closeContextMenu();
   if (event.target.closest('.planet, .marker, .fleet, #infoPanel, #layersPanel, #topbar, .toolstack, #homeBtn, #muteBtn, #contextMenu')) return;
   const worldPos = eventToWorld(event);
+  if (isAdminRole() && activeSectorDraft) {
+    event.preventDefault();
+    event.stopPropagation();
+    handleSectorDraftMapClick(worldPos);
+    return;
+  }
   const clickedRoute = nearestDisplayedRoute(worldPos.x, worldPos.y, 22);
   if (clickedRoute) {
     event.preventDefault();
@@ -7626,10 +7649,21 @@ viewport.addEventListener('contextmenu', (event) => {
     ]);
     return;
   }
-  openContextMenu(event.clientX, event.clientY, [
+  const actions = [
     { label: 'Inoffiziellen Planeten erstellen', run: () => createCustomPlanetAt(worldPos.x, worldPos.y) },
     { label: 'Marker erstellen', run: () => createMapMarkerAt(worldPos.x, worldPos.y) }
-  ]);
+  ];
+  if (isAdminRole()) {
+    actions.push({ type: 'divider' });
+    if (activeSectorDraft) {
+      actions.push({ label: 'Sektorpunkt setzen', run: () => handleSectorDraftMapClick(worldPos) });
+      if (activeSectorDraft.points.length >= 3) actions.push({ label: 'Sektor abschließen', run: () => commitSectorDraft() });
+      actions.push({ label: 'Sektor abbrechen', run: () => cancelSectorDraft() });
+    } else {
+      actions.push({ label: 'Sektor zeichnen starten', run: () => startSectorDraft(worldPos) });
+    }
+  }
+  openContextMenu(event.clientX, event.clientY, actions);
 });
 
 viewport.addEventListener('wheel', (event) => {
@@ -7657,6 +7691,17 @@ document.getElementById('zoomOut').onclick = () => {
   updateZoomFromInput(1 / 1.2, rect.left + (rect.width / 2), rect.top + (rect.height / 2));
 };
 document.getElementById('homeBtn').onclick = () => setView(0.56, -590, -520);
+if (sectorDrawBtn) {
+  sectorDrawBtn.onclick = () => {
+    if (!isAdminRole()) return;
+    if (activeSectorDraft) {
+      if (activeSectorDraft.points.length >= 3) commitSectorDraft();
+      else cancelSectorDraft();
+      return;
+    }
+    startSectorDraft();
+  };
+}
 document.getElementById('viewModeBtn').onclick = () => {
   viewMode = viewMode === 'image' ? 'schematic' : 'image';
   tacticalSectionCanvasCache.clear();
@@ -7741,7 +7786,14 @@ document.addEventListener('keydown', (event) => {
     planetSearchInput.focus();
     planetSearchInput.select();
   }
-  if (event.key === 'Escape') closeContextMenu();
+  if (event.key === 'Escape') {
+    closeContextMenu();
+    if (activeSectorDraft) cancelSectorDraft();
+  }
+  if (event.key === 'Enter' && activeSectorDraft?.points?.length >= 3 && !event.target.closest('input, textarea, select')) {
+    event.preventDefault();
+    commitSectorDraft();
+  }
 });
 
 document.addEventListener('pointerdown', (event) => {

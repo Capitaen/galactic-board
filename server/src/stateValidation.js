@@ -198,6 +198,7 @@ function validateAdminOnlyBlocks(role, previousState, nextState) {
   if (role === 'Admin') return;
   ensure(!hasChanged(previousState.authUsers || [], nextState.authUsers || []), 'Only Admin may change login manager users', { entity: 'authUsers' });
   ensure(!hasChanged(previousState.importWarnings || [], nextState.importWarnings || []), 'Only Admin may change import warnings payload', { entity: 'importWarnings' });
+  ensure(!hasChanged(previousState.meta?.manualSectors || [], nextState.meta?.manualSectors || []), 'Only Admin may change manual sectors', { entity: 'manualSectors' });
 }
 
 export function validateNextCampaignState(role, previousState, nextState) {
