@@ -527,6 +527,9 @@ const STARTUP_LAYERS = {
   grid: true,
   sectorLabels: true
 };
+const GALACTIC_CORE_CENTER = { x: WORLD_SIZE / 2, y: WORLD_SIZE / 2 };
+const SECTOR_SNAP_RADII = [0.14, 0.22, 0.31, 0.42, 0.54, 0.67, 0.82].map((factor) => WORLD_SIZE * factor * 0.5);
+const SECTOR_ANGLE_STEP_DEG = 15;
 const AUTO_PLACEMENT_VERSION = 3;
 const POSITION_CALIBRATION_VERSION = 1;
 const ARCGIS_IMPORT_VERSION = 1;
@@ -3789,10 +3792,68 @@ function isPlanetInsideHoveredSector(planet) {
   return pointInAreaRings(getPlanetDisplayPosition(planet), sectorArea.rings);
 }
 
+function normalizeAngle(angle) {
+  let normalized = angle % (Math.PI * 2);
+  if (normalized < 0) normalized += Math.PI * 2;
+  return normalized;
+}
+
+function getSectorSnapPolar(point) {
+  const dx = Number(point?.x || 0) - GALACTIC_CORE_CENTER.x;
+  const dy = Number(point?.y || 0) - GALACTIC_CORE_CENTER.y;
+  const rawRadius = Math.hypot(dx, dy);
+  const rawAngle = normalizeAngle(Math.atan2(dy, dx));
+  const angleStep = (Math.PI / 180) * SECTOR_ANGLE_STEP_DEG;
+  const snappedAngle = normalizeAngle(Math.round(rawAngle / angleStep) * angleStep);
+  const snappedRadius = SECTOR_SNAP_RADII.reduce((best, radius) => {
+    if (Math.abs(radius - rawRadius) < Math.abs(best - rawRadius)) return radius;
+    return best;
+  }, SECTOR_SNAP_RADII[0]);
+  return {
+    angle: snappedAngle,
+    radius: snappedRadius
+  };
+}
+
+function polarToSectorPoint(angle, radius) {
+  return {
+    x: clamp(GALACTIC_CORE_CENTER.x + (Math.cos(angle) * radius), 0, WORLD_SIZE),
+    y: clamp(GALACTIC_CORE_CENTER.y + (Math.sin(angle) * radius), 0, WORLD_SIZE)
+  };
+}
+
+function buildSectorArcPoints(radius, startAngle, endAngle, reverse = false) {
+  const normalizedStart = normalizeAngle(startAngle);
+  let normalizedEnd = normalizeAngle(endAngle);
+  if (!reverse && normalizedEnd <= normalizedStart) normalizedEnd += Math.PI * 2;
+  if (reverse && normalizedEnd >= normalizedStart) normalizedEnd -= Math.PI * 2;
+  const span = normalizedEnd - normalizedStart;
+  const steps = Math.max(2, Math.ceil(Math.abs(span) / ((Math.PI / 180) * 10)));
+  const points = [];
+  for (let index = 0; index <= steps; index += 1) {
+    const t = index / steps;
+    const angle = normalizedStart + (span * t);
+    points.push(polarToSectorPoint(angle, radius));
+  }
+  return points;
+}
+
+function buildSectorPolygonPoints(anchorPolar, targetPolar) {
+  if (!anchorPolar || !targetPolar) return [];
+  const innerRadius = Math.min(anchorPolar.radius, targetPolar.radius);
+  const outerRadius = Math.max(anchorPolar.radius, targetPolar.radius);
+  let startAngle = anchorPolar.angle;
+  let endAngle = targetPolar.angle;
+  if (normalizeAngle(endAngle - startAngle) > Math.PI) [startAngle, endAngle] = [endAngle, startAngle];
+  const outerArc = buildSectorArcPoints(outerRadius, startAngle, endAngle, false);
+  const innerArc = buildSectorArcPoints(innerRadius, endAngle, startAngle, false);
+  return [...outerArc, ...innerArc];
+}
+
 function updateSectorDrawButton() {
   if (!sectorDrawBtn) return;
   sectorDrawBtn.classList.toggle('hidden', !isAdminRole());
-  sectorDrawBtn.textContent = activeSectorDraft ? `Sektor beenden (${activeSectorDraft.points.length})` : 'Sektor zeichnen';
+  sectorDrawBtn.textContent = activeSectorDraft ? 'Sektor abbrechen' : 'Sektor zeichnen';
 }
 
 function cancelSectorDraft(silent = false) {
@@ -3804,15 +3865,16 @@ function cancelSectorDraft(silent = false) {
 }
 
 function commitSectorDraft() {
-  if (!activeSectorDraft || activeSectorDraft.points.length < 3) {
-    setStatus('Ein Sektor braucht mindestens 3 Punkte.');
+  if (!activeSectorDraft?.anchor || !activeSectorDraft?.target) {
+    setStatus('Bitte zuerst innere und äußere Sektorgrenzen setzen.');
     return;
   }
   const name = window.prompt('Sektorname', `Sektor ${ensureSectorStore().length + 1}`);
   if (name === null) return;
+  const points = buildSectorPolygonPoints(activeSectorDraft.anchor, activeSectorDraft.target);
   const sector = createManualSectorRecord({
     name,
-    points: activeSectorDraft.points
+    points
   });
   ensureSectorStore().push(sector);
   activeSectorDraft = null;
@@ -3823,39 +3885,55 @@ function commitSectorDraft() {
   setStatus(`Sektor gespeichert: ${sector.name}`);
 }
 
-function addSectorDraftPoint(point) {
-  if (!activeSectorDraft) return;
-  activeSectorDraft.points.push({
-    x: clamp(Number(point?.x) || 0, 0, WORLD_SIZE),
-    y: clamp(Number(point?.y) || 0, 0, WORLD_SIZE)
-  });
+function deleteManualSector(name) {
+  const normalizedName = String(name || '').trim();
+  if (!normalizedName || !isAdminRole()) return;
+  const nextSectors = ensureSectorStore().filter((sector) => sector.name !== normalizedName);
+  if (nextSectors.length === ensureSectorStore().length) return;
+  state.meta.manualSectors = nextSectors;
+  tacticalHoverAreas = buildTacticalHoverAreas(null, viewMode === 'schematic' ? 'schematic' : 'image', viewMode);
+  if (hoveredZoneInfo?.sector?.name === normalizedName) hoveredZoneInfo = null;
+  saveLocal();
+  render({ layers: true });
+  setStatus(`Sektor gelöscht: ${normalizedName}`);
+}
+
+function updateSectorDraftPreview(point) {
+  if (!activeSectorDraft?.anchor) return;
+  activeSectorDraft.preview = getSectorSnapPolar(point);
   updateSectorDrawButton();
   render({ layers: true });
-  setStatus(`Sektorpunkt gesetzt (${activeSectorDraft.points.length}).`);
 }
 
 function handleSectorDraftMapClick(point) {
   if (!activeSectorDraft) return false;
-  const firstPoint = activeSectorDraft.points[0];
-  if (firstPoint && activeSectorDraft.points.length >= 3) {
-    const distance = Math.hypot(firstPoint.x - point.x, firstPoint.y - point.y);
-    if (distance <= 18) {
-      commitSectorDraft();
-      return true;
-    }
+  const snapped = getSectorSnapPolar(point);
+  if (!activeSectorDraft.anchor) {
+    activeSectorDraft.anchor = snapped;
+    activeSectorDraft.preview = snapped;
+    updateSectorDrawButton();
+    render({ layers: true });
+    setStatus('Erster Eckpunkt gesetzt. Wähle jetzt Radius und Winkel der gegenüberliegenden Sektorkante.');
+    return true;
   }
-  addSectorDraftPoint(point);
+  if (snapped.radius === activeSectorDraft.anchor.radius || snapped.angle === activeSectorDraft.anchor.angle) {
+    setStatus('Bitte einen Punkt auf einem anderen Ring und einer anderen Speiche wählen.');
+    return true;
+  }
+  activeSectorDraft.target = snapped;
+  activeSectorDraft.preview = snapped;
+  commitSectorDraft();
   return true;
 }
 
 function startSectorDraft(initialPoint = null) {
   if (!isAdminRole()) return;
-  if (!activeSectorDraft) activeSectorDraft = { points: [] };
-  if (initialPoint) addSectorDraftPoint(initialPoint);
+  if (!activeSectorDraft) activeSectorDraft = { anchor: null, preview: null, target: null };
+  if (initialPoint) handleSectorDraftMapClick(initialPoint);
   else {
     updateSectorDrawButton();
     render({ layers: true });
-    setStatus('Sektorzeichnen aktiv. Klicke auf die Karte, um Punkte zu setzen. Erster Punkt schließt den Sektor.');
+    setStatus('Sektorzeichnen aktiv. Erster Klick setzt die erste Ecke, zweiter Klick schließt den radialen Sektor.');
   }
 }
 
@@ -5127,21 +5205,29 @@ function renderManualSectorOverlay() {
       addSvgText(frag, { x: centroid.x, y: centroid.y, class: 'manual-sector-label' }, sector.name);
     });
   }
-  if (activeSectorDraft?.points?.length) {
-    if (activeSectorDraft.points.length >= 2) {
-      const polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
-      polyline.setAttribute('points', activeSectorDraft.points.map((point) => `${point.x},${point.y}`).join(' '));
+  if (activeSectorDraft?.anchor) {
+    const previewPolar = activeSectorDraft.target || activeSectorDraft.preview;
+    const anchorPoint = polarToSectorPoint(activeSectorDraft.anchor.angle, activeSectorDraft.anchor.radius);
+    const anchorCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    anchorCircle.setAttribute('cx', anchorPoint.x);
+    anchorCircle.setAttribute('cy', anchorPoint.y);
+    anchorCircle.setAttribute('r', 5);
+    anchorCircle.setAttribute('class', 'manual-sector-draft-point');
+    frag.appendChild(anchorCircle);
+    if (previewPolar && (previewPolar.radius !== activeSectorDraft.anchor.radius || previewPolar.angle !== activeSectorDraft.anchor.angle)) {
+      const previewPoints = buildSectorPolygonPoints(activeSectorDraft.anchor, previewPolar);
+      const polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+      polyline.setAttribute('points', previewPoints.map((point) => `${point.x},${point.y}`).join(' '));
       polyline.setAttribute('class', 'manual-sector-draft-line');
       frag.appendChild(polyline);
+      const previewPoint = polarToSectorPoint(previewPolar.angle, previewPolar.radius);
+      const previewCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      previewCircle.setAttribute('cx', previewPoint.x);
+      previewCircle.setAttribute('cy', previewPoint.y);
+      previewCircle.setAttribute('r', 5);
+      previewCircle.setAttribute('class', 'manual-sector-draft-point');
+      frag.appendChild(previewCircle);
     }
-    activeSectorDraft.points.forEach((point) => {
-      const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-      circle.setAttribute('cx', point.x);
-      circle.setAttribute('cy', point.y);
-      circle.setAttribute('r', 5);
-      circle.setAttribute('class', 'manual-sector-draft-point');
-      frag.appendChild(circle);
-    });
   }
   tacticalOverlay.appendChild(frag);
 }
@@ -7541,6 +7627,11 @@ window.addEventListener('pointermove', (event) => {
   }
 });
 
+window.addEventListener('mousemove', (event) => {
+  if (!activeSectorDraft?.anchor || activeInteraction) return;
+  updateSectorDraftPreview(eventToWorld(event));
+});
+
 window.addEventListener('pointerup', finishInteraction);
 window.addEventListener('pointercancel', finishInteraction);
 viewport.addEventListener('pointerleave', () => {
@@ -7631,6 +7722,7 @@ viewport.addEventListener('contextmenu', (event) => {
   const worldPos = eventToWorld(event);
   const marker = nearestDisplayedMarker(worldPos.x, worldPos.y, 20);
   const planet = marker ? null : nearestDisplayedPlanet(worldPos.x, worldPos.y, 18);
+  const hoveredSector = (!marker && !planet) ? nearestDisplayedZone(worldPos.x, worldPos.y)?.sectorArea : null;
   if (marker) {
     openContextMenu(event.clientX, event.clientY, [
       { label: 'Marker bearbeiten', run: () => openMarker(marker.id) },
@@ -7649,6 +7741,13 @@ viewport.addEventListener('contextmenu', (event) => {
     ]);
     return;
   }
+  if (hoveredSector && isAdminRole() && !activeSectorDraft) {
+    openContextMenu(event.clientX, event.clientY, [
+      { label: `Sektor löschen: ${hoveredSector.name}`, run: () => deleteManualSector(hoveredSector.name) },
+      { label: 'Sektor zeichnen starten', run: () => startSectorDraft(worldPos) }
+    ]);
+    return;
+  }
   const actions = [
     { label: 'Inoffiziellen Planeten erstellen', run: () => createCustomPlanetAt(worldPos.x, worldPos.y) },
     { label: 'Marker erstellen', run: () => createMapMarkerAt(worldPos.x, worldPos.y) }
@@ -7657,7 +7756,7 @@ viewport.addEventListener('contextmenu', (event) => {
     actions.push({ type: 'divider' });
     if (activeSectorDraft) {
       actions.push({ label: 'Sektorpunkt setzen', run: () => handleSectorDraftMapClick(worldPos) });
-      if (activeSectorDraft.points.length >= 3) actions.push({ label: 'Sektor abschließen', run: () => commitSectorDraft() });
+      if (activeSectorDraft.anchor && activeSectorDraft.preview) actions.push({ label: 'Sektor abschließen', run: () => { activeSectorDraft.target = activeSectorDraft.preview; commitSectorDraft(); } });
       actions.push({ label: 'Sektor abbrechen', run: () => cancelSectorDraft() });
     } else {
       actions.push({ label: 'Sektor zeichnen starten', run: () => startSectorDraft(worldPos) });
@@ -7695,8 +7794,7 @@ if (sectorDrawBtn) {
   sectorDrawBtn.onclick = () => {
     if (!isAdminRole()) return;
     if (activeSectorDraft) {
-      if (activeSectorDraft.points.length >= 3) commitSectorDraft();
-      else cancelSectorDraft();
+      cancelSectorDraft();
       return;
     }
     startSectorDraft();
@@ -7790,8 +7888,9 @@ document.addEventListener('keydown', (event) => {
     closeContextMenu();
     if (activeSectorDraft) cancelSectorDraft();
   }
-  if (event.key === 'Enter' && activeSectorDraft?.points?.length >= 3 && !event.target.closest('input, textarea, select')) {
+  if (event.key === 'Enter' && activeSectorDraft?.anchor && activeSectorDraft?.preview && !activeSectorDraft?.target && !event.target.closest('input, textarea, select')) {
     event.preventDefault();
+    activeSectorDraft.target = activeSectorDraft.preview;
     commitSectorDraft();
   }
 });
