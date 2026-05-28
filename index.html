@@ -49,12 +49,15 @@ body { margin:0; background:#05070b; color:var(--text); font-family: Inter, Sego
 .planet-label.is-hidden-by-zoom { display:none !important; }
 .planet { position:absolute; width:13px; height:13px; border:1px solid white; border-radius:50%; transform:translate(-50%,-50%); cursor:pointer; pointer-events:auto; box-shadow:0 0 8px rgba(255,255,255,.5); }
 .planet.priority-world { width:18px; height:18px; background:#2cd66b !important; border-width:2px; box-shadow:0 0 12px rgba(44,214,107,.85); z-index:8; }
+.planet.core-world { transform:translate(-50%,-50%) scale(1.1); }
 .planet.GAR { background:var(--gar); }
 .planet.KUS { background:var(--kus); }
 .planet.HUTT { background:var(--hutt); }
 .planet.NEUTRAL { background:var(--neutral); }
 .planet:hover { width:18px; height:18px; z-index:7; }
+.planet.core-world:hover { transform:translate(-50%,-50%) scale(1.18); }
 .planet.priority-world:hover { width:22px; height:22px; z-index:9; }
+.planet.priority-world.core-world:hover { transform:translate(-50%,-50%) scale(1.12); }
 .planet.search-highlight { width:24px; height:24px; border-width:3px; border-color:rgba(255,243,159,.98); box-shadow:0 0 0 8px rgba(255,226,92,.18), 0 0 22px rgba(255,232,92,.72); z-index:10; animation:planetSearchPulse 1.05s ease-in-out infinite; }
 .planet.active-battle::after { content:""; position:absolute; left:50%; top:50%; width:28px; height:28px; border-radius:50%; border:2px solid rgba(255,255,255,.95); transform:translate(-50%,-50%); box-shadow:0 0 12px rgba(255,255,255,.3); }
 .planet.active-battle.battle-ring-gar::after { border-color:rgba(31,124,255,.95); box-shadow:0 0 14px rgba(31,124,255,.4); }
@@ -964,7 +967,8 @@ function createCustomPlanetRecord(data = {}) {
     description: String(data.description || '').trim(),
     referenceListed: false,
     isUnofficial: true,
-    activeBattle: Boolean(data.activeBattle)
+    activeBattle: Boolean(data.activeBattle),
+    isCoreWorld: Boolean(data.isCoreWorld)
   };
 }
 
@@ -1026,7 +1030,8 @@ function normalizeCampaignState() {
     description: String(planet.description || '').trim(),
     referenceListed: Boolean(planet.referenceListed),
     isUnofficial: Boolean(planet.isUnofficial),
-    activeBattle: Boolean(planet.activeBattle)
+    activeBattle: Boolean(planet.activeBattle),
+    isCoreWorld: Boolean(planet.isCoreWorld)
   }));
   state.authUsers = state.authUsers
     .map((user) => ({
@@ -1211,16 +1216,13 @@ function shouldRevealPlanetTemporarily(planet) {
   if (!planet) return false;
   return activePlanetSearchHighlightId === planet.id
     || hoveredPlanetId === planet.id
-    || (selected?.type === 'planet' && selected.id === planet.id);
+    || (selected?.type === 'planet' && selected.id === planet.id)
+    || (hoveredZoneInfo?.sector?.name && String(planet.sector || '').trim() === String(hoveredZoneInfo.sector.name || '').trim());
 }
 
 function shouldDisplayPlanetByDefault(planet) {
   if (!planet) return false;
-  return isPriorityWorld(planet)
-    || planetIsListedInReference(planet)
-    || planet.isUnofficial
-    || planetHasPersistentMapNote(planet)
-    || planetHasAnchoredGameplayContent(planet.id);
+  return isPriorityWorld(planet) || Boolean(planet.isCoreWorld);
 }
 
 function shouldRenderPlanetOnMap(planet) {
@@ -1775,7 +1777,8 @@ function createPlanetFromArcgisRecord(record, overrides = {}) {
     y: projected.y,
     owner: overrides.owner || 'NEUTRAL',
     wiki: overrides.wiki || '',
-    description: overrides.description || ''
+    description: overrides.description || '',
+    isCoreWorld: Boolean(overrides.isCoreWorld)
   };
 }
 
@@ -3750,6 +3753,9 @@ function setHoveredZone(info) {
   const nextInfo = info || null;
   if (hoveredZoneKey(hoveredZoneInfo) === hoveredZoneKey(nextInfo)) return;
   hoveredZoneInfo = nextInfo;
+  state.planets.forEach((planet) => {
+    if (planetElements.has(planet.id)) updatePlanetElement(planet);
+  });
   renderTacticalHoverLabels();
 }
 
@@ -4095,7 +4101,7 @@ function getRoleFaction(role = currentRole()) {
 function refreshRoleChrome() {
   saveBtn.classList.toggle('hidden', !isAdminRole());
   loginManagerTabBtn.classList.toggle('hidden', !isAdminRole());
-  buildProjectsTabBtn.classList.toggle('hidden', currentRole() === 'Viewer');
+  buildProjectsTabBtn.classList.remove('hidden');
   document.querySelector('[data-main-tab="fleetManagement"]')?.classList.toggle('hidden', currentRole() === 'Senat');
   document.querySelector('[data-main-tab="shipyard"]')?.classList.toggle('hidden', currentRole() === 'Senat');
   roleSelect.disabled = true;
@@ -4199,6 +4205,7 @@ function nearestDisplayedPlanet(x, y, maxDistance = 16) {
   let best = null;
   let bestDistanceSq = maxDistance * maxDistance;
   state.planets.forEach((planet) => {
+    if (!shouldRenderPlanetOnMap(planet)) return;
     if (!isPlanetVisibleInClusterZoom(planet)) return;
     const display = getPlanetDisplayPosition(planet);
     const dx = display.x - x;
@@ -4333,10 +4340,15 @@ function updatePlanetElement(planet) {
   const display = getPlanetDisplayPosition(planet);
   const isVisible = shouldRenderPlanetOnMap(planet) && isPlanetVisibleInClusterZoom(planet);
   const isSearchHighlighted = activePlanetSearchHighlightId === planet.id;
-  entry.point.className = 'planet ' + ownerClass(planet.owner) + (isPriorityWorld(planet) ? ' priority-world' : '') + (isSearchHighlighted ? ' search-highlight' : '') + (planet.activeBattle ? ` active-battle${getPlanetBattleRingClass(planet)}` : '');
+  entry.point.className = 'planet '
+    + ownerClass(planet.owner)
+    + (isPriorityWorld(planet) ? ' priority-world' : '')
+    + (planet.isCoreWorld ? ' core-world' : '')
+    + (isSearchHighlighted ? ' search-highlight' : '')
+    + (planet.activeBattle ? ` active-battle${getPlanetBattleRingClass(planet)}` : '');
   entry.point.style.left = display.x + 'px';
   entry.point.style.top = display.y + 'px';
-  entry.point.title = `${planet.name} [${planet.owner}]${planet.isUnofficial ? ' • Inoffizieller Planet' : ''}${planet.activeBattle ? ' • Aktives Gefecht' : ''}`;
+  entry.point.title = `${planet.name} [${planet.owner}]${planet.isCoreWorld ? ' • Kernwelt' : ''}${planet.isUnofficial ? ' • Inoffizieller Planet' : ''}${planet.activeBattle ? ' • Aktives Gefecht' : ''}`;
   entry.label.style.left = display.x + 'px';
   entry.label.style.top = display.y + 'px';
   entry.label.textContent = planet.name;
@@ -4993,7 +5005,10 @@ function findHoveredArea(areas, x, y) {
 }
 
 function nearestDisplayedZone(x, y) {
-  if (!layers.sectorLabels) return null;
+  if (!tacticalHoverAreas.sectors.length && !tacticalHoverAreas.regions.length) {
+    const projectionMode = viewMode === 'schematic' ? 'schematic' : 'image';
+    tacticalHoverAreas = buildTacticalHoverAreas(needsArcgisTacticalData() ? prepareArcgisData() : null, projectionMode, viewMode);
+  }
   const sector = findHoveredArea(tacticalHoverAreas.sectors, x, y);
   const region = findHoveredArea(tacticalHoverAreas.regions, x, y);
   if (!sector && !region) return null;
@@ -5939,11 +5954,12 @@ function openPlanet(id) {
   infoPanel.style.display = 'block';
   infoPanel.innerHTML = `
     ${getInfoPanelHeader(p.name)}
-    <p><span class="badge ${ownerClass(p.owner)}">${p.owner}</span><span class="badge">${p.grid || '—'}</span><span class="badge">${p.region || 'Unknown Region'}</span>${p.isUnofficial ? '<span class="badge">Inoffizieller Planet</span>' : ''}${p.activeBattle ? '<span class="badge">Aktives Gefecht</span>' : ''}</p>
+    <p><span class="badge ${ownerClass(p.owner)}">${p.owner}</span><span class="badge">${p.grid || '—'}</span><span class="badge">${p.region || 'Unknown Region'}</span>${p.isCoreWorld ? '<span class="badge">Kernwelt</span>' : ''}${p.isUnofficial ? '<span class="badge">Inoffizieller Planet</span>' : ''}${p.activeBattle ? '<span class="badge">Aktives Gefecht</span>' : ''}</p>
     <p class="muted">Sector: ${p.sector || '—'} • World: ${Math.round(p.x)}, ${Math.round(p.y)} • Norm: ${p.xNorm.toFixed(4)}, ${p.yNorm.toFixed(4)}</p>
     <div class="form-row"><label>Name</label><input id="planetName" value="${p.name}" ${canEditPlanetCore ? '' : 'disabled'}></div>
     <div class="form-row"><label>Owner</label><select id="planetOwner" ${canEditPlanetCore ? '' : 'disabled'}>${ownerOptions}</select></div>
     <div class="form-row"><label><input id="planetBattle" type="checkbox" ${p.activeBattle ? 'checked' : ''} ${canEditPlanetCore ? '' : 'disabled'}> Aktives Gefecht</label></div>
+    <div class="form-row"><label><input id="planetCoreWorld" type="checkbox" ${p.isCoreWorld ? 'checked' : ''} ${canEditPlanetCore ? '' : 'disabled'}> Kernwelt</label></div>
     <div class="form-row"><label>Wiki-Link</label><input id="planetWiki" value="${p.wiki || ''}" ${canEditPlanetCore ? '' : 'disabled'}></div>
     <div class="form-row"><label>Infocard / RP-Notiz</label><textarea id="planetDesc" ${canEditDescription ? '' : 'disabled'}>${p.description || ''}</textarea></div>
     <div class="form-row">
@@ -5984,6 +6000,7 @@ function savePlanet(id) {
     p.owner = document.getElementById('planetOwner').value;
     p.wiki = document.getElementById('planetWiki').value;
     p.activeBattle = Boolean(document.getElementById('planetBattle')?.checked);
+    p.isCoreWorld = Boolean(document.getElementById('planetCoreWorld')?.checked);
   }
   if (canEditPlanetDescription(p)) {
     p.description = document.getElementById('planetDesc').value;
