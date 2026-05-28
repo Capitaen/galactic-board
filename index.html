@@ -41,6 +41,11 @@ body { margin:0; background:#05070b; color:var(--text); font-family: Inter, Sego
 .schematic-ring { fill:none; stroke:rgba(123,143,165,.3); stroke-width:2.5; }
 .region-outline { fill:rgba(247,231,104,.06); stroke:rgba(255,232,92,.72); stroke-width:2.8; }
 .sector-outline { fill:rgba(121,163,212,.06); stroke:rgba(170,214,255,.78); stroke-width:2; }
+.manual-sector-shape { fill:rgba(121,163,212,.06); stroke:rgba(170,214,255,.84); stroke-width:2; }
+.manual-sector-shape.hovered { fill:rgba(143,187,255,.12); stroke:rgba(214,232,255,.96); stroke-width:2.4; }
+.manual-sector-label { fill:rgba(196,223,255,.92); font-size:15px; font-weight:700; text-anchor:middle; stroke:rgba(0,0,0,.55); stroke-width:3px; paint-order:stroke fill; pointer-events:none; }
+.manual-sector-draft-line { fill:none; stroke:rgba(255,182,61,.95); stroke-width:2.2; stroke-dasharray:8 6; }
+.manual-sector-draft-point { fill:rgba(255,182,61,.98); stroke:rgba(255,244,214,.95); stroke-width:1.4; }
 .tactical-hyperlane { stroke:rgba(255,145,32,.98); stroke-width:4; stroke-linecap:round; stroke-dasharray:10 8; fill:none; }
 .tactical-route-highlight { fill:none; stroke-linecap:round; stroke-linejoin:round; pointer-events:none; }
 .tactical-route-highlight.hover { stroke:rgba(120,220,255,.92); stroke-width:8; stroke-dasharray:10 8; }
@@ -473,7 +478,7 @@ a { color:#8bc7ff; }
     <label class="layer-row"><span class="handle">⋮⋮</span><input type="checkbox" data-layer="garFleets" checked> GAR-Flotten</label>
     <label class="layer-row"><span class="handle">⋮⋮</span><input type="checkbox" data-layer="kusFleets" checked> KUS-Flotten</label>
     <label class="layer-row"><span class="handle">⋮⋮</span><input type="checkbox" data-layer="grid" checked> Raster</label>
-    <label class="layer-row"><span class="handle">⋮⋮</span><input type="checkbox" data-layer="sectorLabels" checked> Sektoren / Regionen</label>
+    <label class="layer-row"><span class="handle">⋮⋮</span><input type="checkbox" data-layer="sectorLabels" checked> Sektoren</label>
   </div>
 
   <div id="contextMenu" class="context-menu"></div>
@@ -519,7 +524,7 @@ const STARTUP_LAYERS = {
   garFleets: true,
   kusFleets: true,
   grid: true,
-  sectorLabels: false
+  sectorLabels: true
 };
 const AUTO_PLACEMENT_VERSION = 3;
 const POSITION_CALIBRATION_VERSION = 1;
@@ -786,6 +791,7 @@ let currentAuthenticatedUsername = '';
 let mobileOrientationDismissed = false;
 let audioMuted = false;
 let contextMenuState = null;
+let activeSectorDraft = null;
 const CLIENT_UI_PREFS_KEY = 'gcb_ui_v1';
 let fleetCategoryCollapsedIds = new Set();
 const serverSync = {
@@ -1217,7 +1223,7 @@ function shouldRevealPlanetTemporarily(planet) {
   return activePlanetSearchHighlightId === planet.id
     || hoveredPlanetId === planet.id
     || (selected?.type === 'planet' && selected.id === planet.id)
-    || (hoveredZoneInfo?.sector?.name && String(planet.sector || '').trim() === String(hoveredZoneInfo.sector.name || '').trim());
+    || isPlanetInsideHoveredSector(planet);
 }
 
 function shouldDisplayPlanetByDefault(planet) {
@@ -3749,6 +3755,12 @@ function hoveredZoneKey(info) {
   return `${info.region?.name || ''}::${info.sector?.name || ''}`;
 }
 
+function isPlanetInsideHoveredSector(planet) {
+  const sectorArea = hoveredZoneInfo?.sectorArea;
+  if (!planet || !sectorArea?.rings?.length) return false;
+  return pointInAreaRings(getPlanetDisplayPosition(planet), sectorArea.rings);
+}
+
 function setHoveredZone(info) {
   const nextInfo = info || null;
   if (hoveredZoneKey(hoveredZoneInfo) === hoveredZoneKey(nextInfo)) return;
@@ -5009,12 +5021,16 @@ function nearestDisplayedZone(x, y) {
     const projectionMode = viewMode === 'schematic' ? 'schematic' : 'image';
     tacticalHoverAreas = buildTacticalHoverAreas(needsArcgisTacticalData() ? prepareArcgisData() : null, projectionMode, viewMode);
   }
-  const sector = findHoveredArea(tacticalHoverAreas.sectors, x, y);
-  const region = findHoveredArea(tacticalHoverAreas.regions, x, y);
+  const sectorArea = findHoveredArea(tacticalHoverAreas.sectors, x, y);
+  const regionArea = findHoveredArea(tacticalHoverAreas.regions, x, y);
+  const sector = sectorArea;
+  const region = regionArea;
   if (!sector && !region) return null;
   return {
     sector: sector ? { name: sector.name, centroid: sector.centroid } : null,
-    region: region ? { name: region.name, centroid: region.centroid } : null
+    region: region ? { name: region.name, centroid: region.centroid } : null,
+    sectorArea: sectorArea || null,
+    regionArea: regionArea || null
   };
 }
 
