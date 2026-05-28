@@ -157,6 +157,14 @@ textarea { min-height:82px; resize:vertical; }
 .stat-card { background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.08); border-radius:14px; padding:14px; }
 .stat-card strong { display:block; font-size:12px; color:var(--muted); margin-bottom:6px; text-transform:uppercase; letter-spacing:.06em; }
 .stat-card span { font-size:24px; font-weight:800; }
+.project-card { background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.08); border-radius:14px; padding:14px; margin-bottom:12px; }
+.project-card h4 { margin:0 0 8px; font-size:16px; }
+.project-card p { margin:0 0 8px; }
+.project-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:14px; }
+.project-progress { width:100%; height:10px; border-radius:999px; background:rgba(255,255,255,.08); overflow:hidden; margin:10px 0 6px; }
+.project-progress-fill { height:100%; border-radius:999px; background:linear-gradient(90deg, #4f86ff 0%, #73e0ff 100%); }
+.project-progress-fill.mine { background:linear-gradient(90deg, #f0d44b 0%, #f39a2d 100%); }
+.project-meta { color:var(--muted); font-size:13px; }
 .workspace-section { margin-bottom:20px; }
 .workspace-section h3 { margin:0 0 10px; }
 .workspace-columns { display:grid; grid-template-columns:1.05fr .95fr; gap:18px; }
@@ -435,6 +443,7 @@ a { color:#8bc7ff; }
       <option>Admin</option>
       <option>Eventleiter / KUS</option>
       <option>Republic Navy / GAR</option>
+      <option>Senat</option>
       <option selected>Viewer</option>
     </select>
     <div class="topbar-auth">
@@ -474,6 +483,7 @@ a { color:#8bc7ff; }
     <button class="main-tab-btn active" data-main-tab="map">Map</button>
     <button class="main-tab-btn" data-main-tab="fleetManagement">Flottenmanagement</button>
     <button class="main-tab-btn" data-main-tab="shipyard">Schiffbau</button>
+    <button class="main-tab-btn" id="buildProjectsTabBtn" data-main-tab="buildProjects">Bauprojekte</button>
     <button class="main-tab-btn hidden" id="loginManagerTabBtn" data-main-tab="loginManager">Login Manager</button>
   </div>
 
@@ -562,6 +572,7 @@ const RESOURCE_LABELS = Object.fromEntries(RESOURCE_DEFS.map((entry) => [entry.k
 const RESOURCE_PRODUCTION_TICK_MS = 60 * 60 * 1000;
 const RESOURCE_RESET_VERSION = 'resource_reset_2026_05_01';
 const CAPTURE_REWARD_PER_SLOT = 20;
+const MINE_BUILD_DURATION_HOURS = 30;
 const DEFAULT_SHIPYARD_PLANET_KEYS = ['anaxes', 'kuat', 'rothana'];
 const KUS_SHIPYARD_PLANET_KEYS = ['geonosis', 'muunilinst', 'serenno', 'raxus'];
 const RESOURCE_FACTIONS = ['GAR', 'KUS'];
@@ -569,6 +580,28 @@ const MARKER_COLORS = ['#ffd54d', '#4ecdc4', '#ff6b6b', '#6ea8ff', '#c084fc', '#
 const STATION_CLASS_IDS = new Set(['golan_1', 'haven_medistation', 'cardan_station', 'galactic_orbital_station', 'nis_black_site']);
 const GAR_SHIP_COST_MULTIPLIER = 70;
 const DEBUG_DISABLE_GAR_BUILD_LIMITS = false;
+const MINE_PROJECT_DEFS = {
+  quadraniumErz: {
+    label: 'Metallmine',
+    cost: { quadraniumErz: 980, agrinium: 280, tibannaGas: 140, baradium: 210, kavamSalz: 280 }
+  },
+  agrinium: {
+    label: 'Technologie-Komplex',
+    cost: { quadraniumErz: 420, agrinium: 980, tibannaGas: 280, baradium: 140, kavamSalz: 280 }
+  },
+  tibannaGas: {
+    label: 'Tibanna-Gas-Raffinerie',
+    cost: { quadraniumErz: 350, agrinium: 280, tibannaGas: 980, baradium: 210, kavamSalz: 210 }
+  },
+  baradium: {
+    label: 'Chemiewerk / Baradium-Foerderung',
+    cost: { quadraniumErz: 420, agrinium: 210, tibannaGas: 210, baradium: 980, kavamSalz: 210 }
+  },
+  kavamSalz: {
+    label: 'Versorgungsgueter-Depot',
+    cost: { quadraniumErz: 350, agrinium: 210, tibannaGas: 210, baradium: 140, kavamSalz: 980 }
+  }
+};
 const TRELLO_EXCLUDED_LISTS = new Set([
   'informationen',
   'vorlage',
@@ -705,6 +738,7 @@ const loginBtn = document.getElementById('loginBtn');
 const orientationGuardEl = document.getElementById('orientationGuard');
 const orientationLockBtn = document.getElementById('orientationLockBtn');
 const orientationDismissBtn = document.getElementById('orientationDismissBtn');
+const buildProjectsTabBtn = document.getElementById('buildProjectsTabBtn');
 const loginManagerTabBtn = document.getElementById('loginManagerTabBtn');
 const planetIndex = new Map();
 const fleetIndex = new Map();
@@ -946,7 +980,7 @@ function normalizeCampaignState() {
     ])
   );
   state.ships = Array.isArray(state.ships) ? state.ships : [];
-  state.buildJobs = Array.isArray(state.buildJobs) ? state.buildJobs : [];
+  state.buildJobs = Array.isArray(state.buildJobs) ? state.buildJobs.map((job) => createBuildJobRecord(job)) : [];
   state.fleetMotions = Array.isArray(state.fleetMotions) ? state.fleetMotions : [];
   state.importWarnings = Array.isArray(state.importWarnings) ? state.importWarnings : [];
   state.authUsers = Array.isArray(state.authUsers) ? state.authUsers : [];
@@ -999,7 +1033,7 @@ function normalizeCampaignState() {
       id: user.id || `auth_${Math.random().toString(36).slice(2, 10)}`,
       username: String(user.username || '').trim(),
       password: String(user.password || ''),
-      role: ['Admin', 'Eventleiter / KUS', 'Republic Navy / GAR', 'Viewer'].includes(user.role) ? user.role : 'Viewer'
+      role: ['Admin', 'Eventleiter / KUS', 'Republic Navy / GAR', 'Senat', 'Viewer'].includes(user.role) ? user.role : 'Viewer'
     }))
     .filter((user) => user.username);
   state.fleetMotions = state.fleetMotions
@@ -2269,7 +2303,7 @@ function syncAuthUsersFromCampaign(campaign) {
       id: user.id || `auth_${Math.random().toString(36).slice(2, 10)}`,
       username: String(user.username || '').trim(),
       password: String(user.password || ''),
-      role: ['Admin', 'Eventleiter / KUS', 'Republic Navy / GAR', 'Viewer'].includes(user.role) ? user.role : 'Viewer'
+      role: ['Admin', 'Eventleiter / KUS', 'Republic Navy / GAR', 'Senat', 'Viewer'].includes(user.role) ? user.role : 'Viewer'
     }))
     .filter((user) => user.username);
   if (activeMainTab === 'loginManager' && isAdminRole()) renderLoginManagerView();
@@ -2554,6 +2588,7 @@ function canEditPlanetResourceSlot(planet, index) {
   const role = currentRole();
   if (role === 'Admin') return true;
   if (role === 'Eventleiter / KUS') return planet.owner !== 'GAR' && index < 3;
+  if (role === 'Senat') return planet.owner === 'GAR';
   return false;
 }
 
@@ -2562,6 +2597,7 @@ function isResourceAssignmentEditable(planet) {
   const role = currentRole();
   if (role === 'Admin') return true;
   if (role === 'Eventleiter / KUS') return planet.owner !== 'GAR';
+  if (role === 'Senat') return planet.owner === 'GAR';
   return false;
 }
 
@@ -2569,8 +2605,38 @@ function getActiveShipyardFaction() {
   const role = currentRole();
   if (role === 'Eventleiter / KUS') return 'KUS';
   if (role === 'Republic Navy / GAR') return 'GAR';
+  if (role === 'Senat') return 'GAR';
   if (role === 'Admin') return activeShipyardFactionOverride === 'KUS' ? 'KUS' : 'GAR';
   return 'GAR';
+}
+
+function canEditPlanetDescription(planet) {
+  if (!planet) return false;
+  if (isAdminRole()) return true;
+  if (currentRole() === 'Eventleiter / KUS') return planet.owner !== 'GAR';
+  if (currentRole() === 'Senat') return planet.owner === 'GAR';
+  return false;
+}
+
+function canBuildMineProjects() {
+  const role = currentRole();
+  return role === 'Admin' || role === 'Senat';
+}
+
+function getMineProjectMeta(resourceKey) {
+  return MINE_PROJECT_DEFS[resourceKey] || null;
+}
+
+function getMineProjectPlanetChoices() {
+  return state.planets
+    .filter((planet) => planet.owner === 'GAR')
+    .sort((a, b) => a.name.localeCompare(b.name, 'de'));
+}
+
+function getAvailableMineSlots(planetId) {
+  return getPlanetResourceSlots(planetId)
+    .map((slot, index) => ({ index, slot }))
+    .filter((entry) => !entry.slot);
 }
 
 function closeInfoPanel() {
@@ -2771,9 +2837,13 @@ function createShipRecord(data = {}) {
 function createBuildJobRecord(data = {}) {
   return {
     id: data.id || `build_${Math.random().toString(36).slice(2, 10)}`,
+    jobType: data.jobType || 'ship',
     classId: data.classId,
     shipName: data.shipName || '',
+    projectName: data.projectName || '',
     buildLocationPlanetId: data.buildLocationPlanetId || '',
+    targetSlotIndex: Number.isInteger(data.targetSlotIndex) ? data.targetSlotIndex : -1,
+    resourceKey: data.resourceKey || '',
     startedAt: data.startedAt || Date.now(),
     finishesAt: data.finishesAt || Date.now(),
     faction: data.faction || 'GAR',
@@ -2804,6 +2874,25 @@ function processBuildJobs(now = Date.now()) {
   let changed = false;
   state.buildJobs.forEach((job) => {
     if (job.status !== 'building' || now < job.finishesAt) return;
+    if (job.jobType === 'mine') {
+      const planet = planetIndex.get(job.buildLocationPlanetId);
+      const slots = getPlanetResourceSlots(job.buildLocationPlanetId);
+      if (!planet || planet.owner !== 'GAR' || !RESOURCE_KEYS.includes(job.resourceKey) || !Number.isInteger(job.targetSlotIndex) || job.targetSlotIndex < 0 || job.targetSlotIndex >= slots.length) {
+        job.status = 'cancelled';
+        changed = true;
+        return;
+      }
+      if (slots[job.targetSlotIndex]) {
+        job.status = 'cancelled';
+        changed = true;
+        return;
+      }
+      slots[job.targetSlotIndex] = job.resourceKey;
+      setPlanetResourceSlots(job.buildLocationPlanetId, slots);
+      job.status = 'completed';
+      changed = true;
+      return;
+    }
     const meta = getShipClassMeta(job.classId);
     if (!meta) {
       job.status = 'cancelled';
@@ -2863,6 +2952,87 @@ function renderResourcePills(slots) {
   const visibleSlots = (slots || []).filter((slot) => RESOURCE_LABELS[slot]);
   if (!visibleSlots.length) return '<span class="muted">Keine Rohstoffe zugewiesen.</span>';
   return visibleSlots.map((slot) => `<span class="resource-pill">${RESOURCE_LABELS[slot]}</span>`).join('');
+}
+
+function getBuildJobProgress(job, now = Date.now()) {
+  const startedAt = Number(job?.startedAt) || now;
+  const finishesAt = Number(job?.finishesAt) || now;
+  if (finishesAt <= startedAt) return job?.status === 'building' ? 0 : 1;
+  return clamp((now - startedAt) / (finishesAt - startedAt), 0, 1);
+}
+
+function getBuildJobDisplayName(job) {
+  if (job?.jobType === 'mine') return job.projectName || (getMineProjectMeta(job.resourceKey)?.label || 'Minenprojekt');
+  return job?.shipName || getShipClassMeta(job?.classId)?.displayName || 'Bauprojekt';
+}
+
+function getBuildJobLocationName(job) {
+  return planetIndex.get(job?.buildLocationPlanetId)?.name || '—';
+}
+
+function getBuildJobTypeLabel(job) {
+  return job?.jobType === 'mine' ? 'Minenbau' : 'Schiffbau';
+}
+
+function getBuildJobProgressBar(job) {
+  const progress = Math.round(getBuildJobProgress(job) * 100);
+  const fillClass = job?.jobType === 'mine' ? 'project-progress-fill mine' : 'project-progress-fill';
+  return `
+    <div class="project-progress">
+      <div class="${fillClass}" style="width:${progress}%"></div>
+    </div>
+    <div class="project-meta">${progress}% • ${job.status === 'building' ? formatDuration((job.finishesAt || 0) - Date.now()) : (job.status === 'completed' ? 'Abgeschlossen' : job.status === 'ready' ? 'Abholbereit' : 'Abgebrochen')}</div>
+  `;
+}
+
+function startMineBuildProject() {
+  if (!canBuildMineProjects()) {
+    setStatus('Nur Senat oder Admin können Minenbau starten.');
+    return;
+  }
+  const planetId = document.getElementById('mineBuildPlanet')?.value || '';
+  const resourceKey = document.getElementById('mineBuildResource')?.value || '';
+  const slotIndex = Number(document.getElementById('mineBuildSlot')?.value ?? -1);
+  const planet = planetIndex.get(planetId);
+  const project = getMineProjectMeta(resourceKey);
+  if (!planet || planet.owner !== 'GAR') {
+    setStatus('Minenbau ist nur auf republikanischen Planeten möglich.');
+    return;
+  }
+  if (!project || !RESOURCE_KEYS.includes(resourceKey)) {
+    setStatus('Bitte einen gültigen Minentyp wählen.');
+    return;
+  }
+  const slots = getPlanetResourceSlots(planetId);
+  if (!Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex >= slots.length) {
+    setStatus('Bitte einen freien Minen-Slot wählen.');
+    return;
+  }
+  if (slots[slotIndex]) {
+    setStatus('Der gewählte Minen-Slot ist bereits belegt.');
+    return;
+  }
+  if (!spendResources(project.cost, 'GAR')) {
+    setStatus('Nicht genug GAR-Ressourcen für dieses Minenprojekt.');
+    renderBuildProjectsView();
+    return;
+  }
+  state.buildJobs.push(createBuildJobRecord({
+    jobType: 'mine',
+    projectName: `${project.label} (${planet.name})`,
+    buildLocationPlanetId: planetId,
+    targetSlotIndex: slotIndex,
+    resourceKey,
+    startedAt: Date.now(),
+    finishesAt: Date.now() + (MINE_BUILD_DURATION_HOURS * RESOURCE_PRODUCTION_TICK_MS),
+    faction: 'GAR',
+    status: 'building'
+  }));
+  saveLocal();
+  playAudioCue(datapadAcceptAudio);
+  renderBuildProjectsView();
+  if (activeMainTab === 'shipyard') renderShipyardView();
+  setStatus(`Minenprojekt gestartet: ${project.label} auf ${planet.name} (Slot ${slotIndex + 1})`);
 }
 
 function focusPlanetOnMap(planetId) {
@@ -3055,6 +3225,8 @@ function setMainTab(tabId) {
     renderFleetManagementView();
   } else if (tabId === 'shipyard') {
     renderShipyardView();
+  } else if (tabId === 'buildProjects') {
+    renderBuildProjectsView();
   } else if (tabId === 'loginManager') {
     renderLoginManagerView();
   }
@@ -3892,6 +4064,7 @@ async function attemptLogin() {
     if (selected?.type === 'route') openRoute(selected.id);
     if (activeMainTab === 'fleetManagement') renderFleetManagementView();
     if (activeMainTab === 'shipyard') renderShipyardView();
+    if (activeMainTab === 'buildProjects') renderBuildProjectsView();
     if (activeMainTab === 'loginManager') renderLoginManagerView();
     setStatus(`Login erfolgreich: ${payload.user.username} (${payload.user.role})`);
   } catch (error) {
@@ -3915,15 +4088,19 @@ function applyDefaultAnonymousRole() {
 
 function getRoleFaction(role = currentRole()) {
   if (role === 'Eventleiter / KUS') return 'KUS';
-  if (role === 'Republic Navy / GAR') return 'GAR';
+  if (role === 'Republic Navy / GAR' || role === 'Senat') return 'GAR';
   return '';
 }
 
 function refreshRoleChrome() {
   saveBtn.classList.toggle('hidden', !isAdminRole());
   loginManagerTabBtn.classList.toggle('hidden', !isAdminRole());
+  buildProjectsTabBtn.classList.toggle('hidden', currentRole() === 'Viewer');
+  document.querySelector('[data-main-tab="fleetManagement"]')?.classList.toggle('hidden', currentRole() === 'Senat');
+  document.querySelector('[data-main-tab="shipyard"]')?.classList.toggle('hidden', currentRole() === 'Senat');
   roleSelect.disabled = true;
   if (!isAdminRole() && activeMainTab === 'loginManager') setMainTab('map');
+  if (currentRole() === 'Senat' && (activeMainTab === 'fleetManagement' || activeMainTab === 'shipyard')) setMainTab('buildProjects');
   const faction = getRoleFaction();
   if (!faction) {
     roleFactionBadge.classList.add('hidden');
@@ -3943,6 +4120,7 @@ function canEditFaction(faction) {
 function getFleetManagementVisibleFactions() {
   const role = currentRole();
   if (role === 'Republic Navy / GAR') return new Set(['GAR']);
+  if (role === 'Senat') return new Set(['GAR']);
   if (role === 'Eventleiter / KUS') return new Set(['KUS']);
   if (fleetManagementFactionFilter === 'GAR') return new Set(['GAR']);
   if (fleetManagementFactionFilter === 'KUS') return new Set(['KUS']);
@@ -3951,7 +4129,7 @@ function getFleetManagementVisibleFactions() {
 
 function canEditPlanet() {
   const r = currentRole();
-  return r === 'Admin' || r === 'Eventleiter / KUS';
+  return r === 'Admin' || r === 'Eventleiter / KUS' || r === 'Senat';
 }
 
 function canEditPlanetRecord(planet) {
@@ -5736,7 +5914,8 @@ function openPlanet(id) {
   refreshFleetSelectionState();
   refreshRouteSelectionState();
   ensureMarkerElements();
-  const disabled = canEditPlanetRecord(p) ? '' : 'disabled';
+  const canEditPlanetCore = canEditPlanetRecord(p);
+  const canEditDescription = canEditPlanetDescription(p);
   const resourceSlots = getPlanetResourceSlots(p.id);
   const resourceOptions = ['<option value="">Leer</option>']
     .concat(RESOURCE_DEFS.map((entry) => `<option value="${entry.key}">${entry.label}</option>`))
@@ -5746,7 +5925,7 @@ function openPlanet(id) {
     return `
       <div class="resource-slot-cell">
         <select id="planetResource${index}" ${slotEditable ? '' : 'disabled'}>${resourceOptions.replace(`value="${slot || ''}"`, `value="${slot || ''}" selected`)}</select>
-        <small>${index < 3 ? 'Event' : 'Admin'}</small>
+        <small>${currentRole() === 'Senat' ? 'Senat' : (index < 3 ? 'Event' : 'Admin')}</small>
       </div>
     `;
   }).join('');
@@ -5762,11 +5941,11 @@ function openPlanet(id) {
     ${getInfoPanelHeader(p.name)}
     <p><span class="badge ${ownerClass(p.owner)}">${p.owner}</span><span class="badge">${p.grid || '—'}</span><span class="badge">${p.region || 'Unknown Region'}</span>${p.isUnofficial ? '<span class="badge">Inoffizieller Planet</span>' : ''}${p.activeBattle ? '<span class="badge">Aktives Gefecht</span>' : ''}</p>
     <p class="muted">Sector: ${p.sector || '—'} • World: ${Math.round(p.x)}, ${Math.round(p.y)} • Norm: ${p.xNorm.toFixed(4)}, ${p.yNorm.toFixed(4)}</p>
-    <div class="form-row"><label>Name</label><input id="planetName" value="${p.name}" ${disabled}></div>
-    <div class="form-row"><label>Owner</label><select id="planetOwner" ${disabled}>${ownerOptions}</select></div>
-    <div class="form-row"><label><input id="planetBattle" type="checkbox" ${p.activeBattle ? 'checked' : ''} ${disabled}> Aktives Gefecht</label></div>
-    <div class="form-row"><label>Wiki-Link</label><input id="planetWiki" value="${p.wiki || ''}" ${disabled}></div>
-    <div class="form-row"><label>Infocard / RP-Notiz</label><textarea id="planetDesc" ${disabled}>${p.description || ''}</textarea></div>
+    <div class="form-row"><label>Name</label><input id="planetName" value="${p.name}" ${canEditPlanetCore ? '' : 'disabled'}></div>
+    <div class="form-row"><label>Owner</label><select id="planetOwner" ${canEditPlanetCore ? '' : 'disabled'}>${ownerOptions}</select></div>
+    <div class="form-row"><label><input id="planetBattle" type="checkbox" ${p.activeBattle ? 'checked' : ''} ${canEditPlanetCore ? '' : 'disabled'}> Aktives Gefecht</label></div>
+    <div class="form-row"><label>Wiki-Link</label><input id="planetWiki" value="${p.wiki || ''}" ${canEditPlanetCore ? '' : 'disabled'}></div>
+    <div class="form-row"><label>Infocard / RP-Notiz</label><textarea id="planetDesc" ${canEditDescription ? '' : 'disabled'}>${p.description || ''}</textarea></div>
     <div class="form-row">
       <label>Orbitale Raumstationen</label>
       <div class="workspace-card compact">
@@ -5781,26 +5960,34 @@ function openPlanet(id) {
       <div class="resource-slot-row">
         ${resourceSlotControls}
       </div>
-      <small>${currentRole() === 'Admin' ? 'Admin kann alle 10 Minen-Slots pflegen. Eventleitung darf nur die ersten 3 Slots auf KUS- und Neutral-Planeten ändern.' : (isResourceAssignmentEditable(p) ? 'Eventleitung darf nur die ersten 3 Minen-Slots auf KUS- und Neutral-Planeten ändern.' : 'Minen-Slots sind für deine Rolle auf diesem Planeten nicht editierbar.')}</small>
+      <small>${currentRole() === 'Admin'
+        ? 'Admin kann alle 10 Minen-Slots pflegen.'
+        : (currentRole() === 'Senat'
+          ? (isResourceAssignmentEditable(p) ? 'Senat kann alle 10 Minen-Slots auf republikanischen Planeten verwalten.' : 'Senat kann nur republikanische Planeten verwalten.')
+          : (isResourceAssignmentEditable(p) ? 'Eventleitung darf nur die ersten 3 Minen-Slots auf KUS- und Neutral-Planeten ändern.' : 'Minen-Slots sind für deine Rolle auf diesem Planeten nicht editierbar.'))}</small>
     </div>
     <p>${p.wiki ? `<a href="${p.wiki}" target="_blank">Wiki öffnen</a>` : '<span class="muted">Kein Wiki-Link gesetzt.</span>'}</p>
     <div class="toolbar-row">
-      <button class="primary" onclick="savePlanet('${p.id}')" ${disabled}>Planet speichern</button>
-      <button class="secondary" onclick="beginPlanetMove('${p.id}')" ${disabled}>Planet verschieben</button>
-      ${p.isUnofficial ? `<button class="secondary danger" onclick="deletePlanet('${p.id}')" ${disabled}>Planet löschen</button>` : ''}
+      <button class="primary" onclick="savePlanet('${p.id}')" ${(canEditPlanetCore || canEditDescription || isResourceAssignmentEditable(p)) ? '' : 'disabled'}>Planet speichern</button>
+      <button class="secondary" onclick="beginPlanetMove('${p.id}')" ${canEditPlanetCore ? '' : 'disabled'}>Planet verschieben</button>
+      ${p.isUnofficial ? `<button class="secondary danger" onclick="deletePlanet('${p.id}')" ${canEditPlanetCore ? '' : 'disabled'}>Planet löschen</button>` : ''}
     </div>
   `;
 }
 
 function savePlanet(id) {
   const p = planetIndex.get(id);
-  if (!p || !canEditPlanetRecord(p)) return;
+  if (!p || !(canEditPlanetRecord(p) || canEditPlanetDescription(p) || isResourceAssignmentEditable(p))) return;
   const previousOwner = p.owner;
-  p.name = document.getElementById('planetName').value.trim() || p.name;
-  p.owner = document.getElementById('planetOwner').value;
-  p.wiki = document.getElementById('planetWiki').value;
-  p.description = document.getElementById('planetDesc').value;
-  p.activeBattle = Boolean(document.getElementById('planetBattle')?.checked);
+  if (canEditPlanetRecord(p)) {
+    p.name = document.getElementById('planetName').value.trim() || p.name;
+    p.owner = document.getElementById('planetOwner').value;
+    p.wiki = document.getElementById('planetWiki').value;
+    p.activeBattle = Boolean(document.getElementById('planetBattle')?.checked);
+  }
+  if (canEditPlanetDescription(p)) {
+    p.description = document.getElementById('planetDesc').value;
+  }
   if (isResourceAssignmentEditable(p)) {
     const nextSlots = getPlanetResourceSlots(p.id);
     for (let index = 0; index < 10; index += 1) {
@@ -5826,6 +6013,7 @@ function savePlanet(id) {
   }
   if (activeMainTab === 'shipyard') renderShipyardView();
   if (activeMainTab === 'fleetManagement') renderFleetManagementView();
+  if (activeMainTab === 'buildProjects') renderBuildProjectsView();
   setStatus(rewardText ? `Planet gespeichert: ${p.name} • Capture Reward: ${rewardText}` : 'Planet gespeichert: ' + p.name);
 }
 
@@ -5993,6 +6181,7 @@ function saveFleetManagementFleet(id) {
 
 function createFleetManagementFleet() {
   const role = currentRole();
+  if (role === 'Viewer' || role === 'Senat') return;
   const faction = role === 'Eventleiter / KUS'
     ? 'KUS'
     : (fleetManagementFactionFilter === 'KUS' ? 'KUS' : 'GAR');
@@ -6088,6 +6277,10 @@ function startBuildOrder() {
   const planet = planetIndex.get(locationPlanetId);
   const faction = getActiveShipyardFaction();
   const role = currentRole();
+  if (role === 'Senat') {
+    setStatus('Senat hat keinen Zugriff auf den Schiffbau.');
+    return;
+  }
   if (role === 'Viewer') {
     setStatus('Viewer können keine Schiffe bauen.');
     return;
@@ -6324,7 +6517,7 @@ function clearFleetManifestFilter() {
 
 function createFleetManagementCategory() {
   const role = currentRole();
-  if (role === 'Viewer') return;
+  if (role === 'Viewer' || role === 'Senat') return;
   const faction = role === 'Eventleiter / KUS'
     ? 'KUS'
     : (fleetManagementFactionFilter === 'KUS' ? 'KUS' : 'GAR');
@@ -6614,6 +6807,20 @@ function animateShipTransferBetweenFleets(ship, sourceFleet, targetFleet) {
 function renderFleetManagementView() {
   runCampaignMaintenance();
   const role = currentRole();
+  if (role === 'Senat') {
+    workspacePanel.innerHTML = `
+      <div class="workspace-head">
+        <div>
+          <h2>Flottenmanagement</h2>
+          <p>Diese Ansicht ist für den Senat gesperrt. Senatoren verwalten nur republikanische Minen-Slots, GAR-Planetbeschreibungen und Infrastrukturprojekte.</p>
+        </div>
+      </div>
+      <div class="workspace-section">
+        <div class="muted-box">Bitte den Tab "Bauprojekte" oder die Planetenansicht nutzen.</div>
+      </div>
+    `;
+    return;
+  }
   const visibleFactions = getFleetManagementVisibleFactions();
   const visibleFleets = state.fleets.filter((fleet) => visibleFactions.has(fleet.faction));
   const visibleCategories = ensureFleetCategoriesStore()
@@ -6852,7 +7059,7 @@ async function saveLoginManagerUser(id) {
       body: JSON.stringify({
         username,
         password,
-        role: ['Admin', 'Eventleiter / KUS', 'Republic Navy / GAR', 'Viewer'].includes(role) ? role : 'Viewer'
+        role: ['Admin', 'Eventleiter / KUS', 'Republic Navy / GAR', 'Senat', 'Viewer'].includes(role) ? role : 'Viewer'
       })
     });
     const payload = await response.json();
@@ -6922,7 +7129,7 @@ function renderLoginManagerView() {
                 <td><input id="authPass_${user.id}" type="text" value="${user.password || ''}" placeholder="Passwort"></td>
                 <td>
                   <select id="authRole_${user.id}">
-                    ${['Admin', 'Eventleiter / KUS', 'Republic Navy / GAR', 'Viewer'].map((role) => `<option value="${role}" ${user.role === role ? 'selected' : ''}>${role}</option>`).join('')}
+                    ${['Admin', 'Eventleiter / KUS', 'Republic Navy / GAR', 'Senat', 'Viewer'].map((role) => `<option value="${role}" ${user.role === role ? 'selected' : ''}>${role}</option>`).join('')}
                   </select>
                 </td>
                 <td class="actions">
@@ -6945,6 +7152,20 @@ function renderLoginManagerView() {
 function renderShipyardView() {
   runCampaignMaintenance();
   const role = currentRole();
+  if (role === 'Senat') {
+    workspacePanel.innerHTML = `
+      <div class="workspace-head">
+        <div>
+          <h2>Schiffbau</h2>
+          <p>Diese Ansicht ist für den Senat gesperrt. Senat und Navy teilen sich zwar den GAR-Ressourcenpool, aber Senatoren starten keine Schiffsbauten.</p>
+        </div>
+      </div>
+      <div class="workspace-section">
+        <div class="muted-box">Bitte den Tab "Bauprojekte" nutzen, um Infrastrukturprojekte zu verwalten.</div>
+      </div>
+    `;
+    return;
+  }
   const shipClassOptions = getShipClassOptions();
   const selectedClassId = document.getElementById('shipyardClass')?.value || shipClassOptions[0]?.id || 'venator';
   const selectedMeta = getShipClassMeta(selectedClassId);
@@ -6956,7 +7177,7 @@ function renderShipyardView() {
   const pool = getFactionResourcePool(faction);
   const canBuildAnything = role !== 'Viewer' && ((role === 'Admin') || (role === 'Republic Navy / GAR' && faction === 'GAR') || (role === 'Eventleiter / KUS' && faction === 'KUS'));
   const resourceSummary = RESOURCE_KEYS.map((key) => `<div class="stat-card"><strong>${RESOURCE_LABELS[key]}</strong><span>${pool[key] || 0}</span></div>`).join('');
-  const buildJobs = state.buildJobs.filter((job) => job.faction === faction && job.status === 'building');
+  const buildJobs = state.buildJobs.filter((job) => job.faction === faction && job.jobType !== 'mine' && job.status === 'building');
   const readyShips = state.ships.filter((ship) => ship.faction === faction && ship.status === 'ready');
   workspacePanel.innerHTML = `
     <div class="workspace-head">
@@ -7026,21 +7247,13 @@ function renderShipyardView() {
     <div class="workspace-section">
       <h3>Aktive Bauaufträge</h3>
       <div class="workspace-card">
-        ${buildJobs.length ? `
-          <table class="data-table">
-            <thead><tr><th>Schiff</th><th>Klasse</th><th>Bauort</th><th>Fertig in</th></tr></thead>
-            <tbody>
-              ${buildJobs.map((job) => `
-                <tr>
-                  <td>${job.shipName}</td>
-                  <td>${getShipClassMeta(job.classId)?.displayName || job.classId}</td>
-                  <td>${planetIndex.get(job.buildLocationPlanetId)?.name || '—'}</td>
-                  <td>${formatDuration(job.finishesAt - Date.now())}</td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-        ` : '<div class="muted-box">Keine aktiven Bauaufträge.</div>'}
+        ${buildJobs.length ? buildJobs.map((job) => `
+          <div class="project-card">
+            <h4>${job.shipName}</h4>
+            <p class="project-meta">${getShipClassMeta(job.classId)?.displayName || job.classId} • ${getBuildJobLocationName(job)}</p>
+            ${getBuildJobProgressBar(job)}
+          </div>
+        `).join('') : '<div class="muted-box">Keine aktiven Bauaufträge.</div>'}
       </div>
     </div>
     <div class="workspace-section">
@@ -7061,6 +7274,84 @@ function renderShipyardView() {
             </tbody>
           </table>
         ` : '<div class="muted-box">Noch keine abholbereiten Schiffe.</div>'}
+      </div>
+    </div>
+  `;
+}
+
+function renderBuildProjectsView() {
+  runCampaignMaintenance();
+  const role = currentRole();
+  const faction = role === 'Eventleiter / KUS' ? 'KUS' : 'GAR';
+  const pool = getFactionResourcePool(faction);
+  const buildJobs = state.buildJobs
+    .filter((job) => (role === 'Admin' ? true : job.faction === faction))
+    .sort((a, b) => Number(a.finishesAt || 0) - Number(b.finishesAt || 0));
+  const minePlanetChoices = getMineProjectPlanetChoices();
+  const selectedPlanetId = document.getElementById('mineBuildPlanet')?.value || minePlanetChoices[0]?.id || '';
+  const selectedResourceKey = document.getElementById('mineBuildResource')?.value || RESOURCE_KEYS[0];
+  const availableSlots = getAvailableMineSlots(selectedPlanetId);
+  const selectedSlotIndex = document.getElementById('mineBuildSlot')?.value || String(availableSlots[0]?.index ?? '');
+  const selectedMineMeta = getMineProjectMeta(selectedResourceKey);
+  const canStartMineProject = canBuildMineProjects();
+  workspacePanel.innerHTML = `
+    <div class="workspace-head">
+      <div>
+        <h2>Bauprojekte</h2>
+        <p>Schiffs- und Infrastrukturprojekte mit gemeinsamem Ressourcenpool. Senat baut GAR-Infrastruktur, Navy und Eventleitung sehen die laufenden Projekte zur Abstimmung.</p>
+      </div>
+      <div class="toolbar-row">
+        <button class="mini-btn" onclick="renderBuildProjectsView()">Aktualisieren</button>
+      </div>
+    </div>
+    <div class="workspace-grid">
+      ${RESOURCE_KEYS.map((key) => `<div class="stat-card"><strong>${RESOURCE_LABELS[key]}</strong><span>${pool[key] || 0}</span></div>`).join('')}
+    </div>
+    <div class="workspace-section workspace-columns">
+      <div class="workspace-card">
+        <h3>Minenbau</h3>
+        <p>${canStartMineProject ? 'Wähle republikanischen Planeten, Minentyp und freien Slot. Bauzeit: 30 Stunden.' : 'Nur Senat und Admin können GAR-Minenprojekte starten.'}</p>
+        <div class="form-row">
+          <label>Planet</label>
+          <select id="mineBuildPlanet" ${canStartMineProject ? '' : 'disabled'} onchange="renderBuildProjectsView()">
+            ${minePlanetChoices.map((planet) => `<option value="${planet.id}" ${planet.id === selectedPlanetId ? 'selected' : ''}>${planet.name}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-row">
+          <label>Minenart</label>
+          <select id="mineBuildResource" ${canStartMineProject ? '' : 'disabled'} onchange="renderBuildProjectsView()">
+            ${RESOURCE_KEYS.map((resourceKey) => `<option value="${resourceKey}" ${resourceKey === selectedResourceKey ? 'selected' : ''}>${getMineProjectMeta(resourceKey)?.label || RESOURCE_LABELS[resourceKey]}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-row">
+          <label>Freier Slot</label>
+          <select id="mineBuildSlot" ${canStartMineProject ? '' : 'disabled'}>
+            ${availableSlots.length
+              ? availableSlots.map((entry) => `<option value="${entry.index}" ${String(entry.index) === String(selectedSlotIndex) ? 'selected' : ''}>Slot ${entry.index + 1}</option>`).join('')
+              : '<option value="">Keine freien Slots</option>'}
+          </select>
+        </div>
+        <div class="workspace-card compact">
+          <strong>Kosten</strong>
+          <p>${RESOURCE_KEYS.map((key) => `${RESOURCE_LABELS[key]}: ${selectedMineMeta?.cost?.[key] || 0}`).join(' • ')}</p>
+          <p><strong>Bauzeit:</strong> ${MINE_BUILD_DURATION_HOURS}h</p>
+        </div>
+        <button class="primary" onclick="startMineBuildProject()" ${(canStartMineProject && availableSlots.length && canAffordCost(selectedMineMeta?.cost || {}, 'GAR')) ? '' : 'disabled'}>Minenprojekt starten</button>
+      </div>
+      <div class="workspace-card">
+        <h3>Projektübersicht</h3>
+        ${buildJobs.length ? `
+          <div class="project-grid">
+            ${buildJobs.map((job) => `
+              <div class="project-card">
+                <h4>${getBuildJobDisplayName(job)}</h4>
+                <p class="project-meta">${getBuildJobTypeLabel(job)} • ${getBuildJobLocationName(job)} • ${job.faction || 'GAR'}</p>
+                ${job.jobType === 'mine' ? `<p class="project-meta">Slot ${Number(job.targetSlotIndex) + 1} • ${RESOURCE_LABELS[job.resourceKey] || job.resourceKey}</p>` : ''}
+                ${getBuildJobProgressBar(job)}
+              </div>
+            `).join('')}
+          </div>
+        ` : '<div class="muted-box">Keine Bauprojekte vorhanden.</div>'}
       </div>
     </div>
   `;
@@ -7373,6 +7664,7 @@ roleSelect.onchange = () => {
   if (selected?.type === 'route') openRoute(selected.id);
   if (activeMainTab === 'fleetManagement') renderFleetManagementView();
   if (activeMainTab === 'shipyard') renderShipyardView();
+  if (activeMainTab === 'buildProjects') renderBuildProjectsView();
   if (activeMainTab === 'loginManager') renderLoginManagerView();
 };
 

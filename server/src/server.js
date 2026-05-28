@@ -410,7 +410,7 @@ function requireAdmin(req, res, next) {
 
 function sanitizeAdminRole(rawRole) {
   const role = String(rawRole || '').trim();
-  return ['Admin', 'Eventleiter / KUS', 'Republic Navy / GAR', 'Viewer'].includes(role) ? role : 'Viewer';
+  return ['Admin', 'Eventleiter / KUS', 'Republic Navy / GAR', 'Senat', 'Viewer'].includes(role) ? role : 'Viewer';
 }
 
 function validateAdminUserInput(body) {
