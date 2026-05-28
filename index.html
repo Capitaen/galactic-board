@@ -3838,16 +3838,44 @@ function buildSectorArcPoints(radius, startAngle, endAngle, reverse = false) {
   return points;
 }
 
-function buildSectorPolygonPoints(anchorPolar, targetPolar) {
-  if (!anchorPolar || !targetPolar) return [];
-  const innerRadius = Math.min(anchorPolar.radius, targetPolar.radius);
-  const outerRadius = Math.max(anchorPolar.radius, targetPolar.radius);
-  let startAngle = anchorPolar.angle;
-  let endAngle = targetPolar.angle;
-  if (normalizeAngle(endAngle - startAngle) > Math.PI) [startAngle, endAngle] = [endAngle, startAngle];
-  const outerArc = buildSectorArcPoints(outerRadius, startAngle, endAngle, false);
-  const innerArc = buildSectorArcPoints(innerRadius, endAngle, startAngle, false);
-  return [...outerArc, ...innerArc];
+function buildSectorSegmentPoints(fromPolar, toPolar) {
+  if (!fromPolar || !toPolar) return [];
+  const sameRadius = Math.abs((fromPolar.radius || 0) - (toPolar.radius || 0)) < 1;
+  const sameAngle = Math.abs(normalizeAngle((fromPolar.angle || 0) - (toPolar.angle || 0))) < 0.0001;
+  if (sameRadius) {
+    return buildSectorArcPoints(fromPolar.radius, fromPolar.angle, toPolar.angle, false);
+  }
+  if (sameAngle) {
+    return [
+      polarToSectorPoint(fromPolar.angle, fromPolar.radius),
+      polarToSectorPoint(toPolar.angle, toPolar.radius)
+    ];
+  }
+  const radialCorner = { angle: fromPolar.angle, radius: toPolar.radius };
+  const radialPoints = [
+    polarToSectorPoint(fromPolar.angle, fromPolar.radius),
+    polarToSectorPoint(radialCorner.angle, radialCorner.radius)
+  ];
+  const arcPoints = buildSectorArcPoints(toPolar.radius, radialCorner.angle, toPolar.angle, false).slice(1);
+  return [...radialPoints, ...arcPoints];
+}
+
+function buildSectorPolygonPoints(polarPoints = [], previewPolar = null, closeShape = true) {
+  const sequence = [...(Array.isArray(polarPoints) ? polarPoints : [])];
+  if (previewPolar) sequence.push(previewPolar);
+  if (sequence.length < 2) return sequence.length === 1 ? [polarToSectorPoint(sequence[0].angle, sequence[0].radius)] : [];
+  const polygonPoints = [];
+  for (let index = 0; index < sequence.length - 1; index += 1) {
+    const segment = buildSectorSegmentPoints(sequence[index], sequence[index + 1]);
+    if (!segment.length) continue;
+    if (!polygonPoints.length) polygonPoints.push(...segment);
+    else polygonPoints.push(...segment.slice(1));
+  }
+  if (closeShape && sequence.length >= 3) {
+    const closingSegment = buildSectorSegmentPoints(sequence[sequence.length - 1], sequence[0]);
+    if (closingSegment.length) polygonPoints.push(...closingSegment.slice(1));
+  }
+  return polygonPoints;
 }
 
 function updateSectorDrawButton() {
@@ -3865,13 +3893,13 @@ function cancelSectorDraft(silent = false) {
 }
 
 function commitSectorDraft() {
-  if (!activeSectorDraft?.anchor || !activeSectorDraft?.target) {
-    setStatus('Bitte zuerst innere und äußere Sektorgrenzen setzen.');
+  if (!activeSectorDraft?.points || activeSectorDraft.points.length < 3) {
+    setStatus('Bitte mindestens 3 Sektorpunkte setzen.');
     return;
   }
   const name = window.prompt('Sektorname', `Sektor ${ensureSectorStore().length + 1}`);
   if (name === null) return;
-  const points = buildSectorPolygonPoints(activeSectorDraft.anchor, activeSectorDraft.target);
+  const points = buildSectorPolygonPoints(activeSectorDraft.points, null, true);
   const sector = createManualSectorRecord({
     name,
     points
@@ -3899,7 +3927,7 @@ function deleteManualSector(name) {
 }
 
 function updateSectorDraftPreview(point) {
-  if (!activeSectorDraft?.anchor) return;
+  if (!activeSectorDraft?.points?.length) return;
   activeSectorDraft.preview = getSectorSnapPolar(point);
   updateSectorDrawButton();
   render({ layers: true });
@@ -3908,32 +3936,41 @@ function updateSectorDraftPreview(point) {
 function handleSectorDraftMapClick(point) {
   if (!activeSectorDraft) return false;
   const snapped = getSectorSnapPolar(point);
-  if (!activeSectorDraft.anchor) {
-    activeSectorDraft.anchor = snapped;
-    activeSectorDraft.preview = snapped;
-    updateSectorDrawButton();
-    render({ layers: true });
-    setStatus('Erster Eckpunkt gesetzt. Wähle jetzt Radius und Winkel der gegenüberliegenden Sektorkante.');
+  const firstPoint = activeSectorDraft.points[0];
+  if (firstPoint && activeSectorDraft.points.length >= 3) {
+    const firstScreenPoint = polarToSectorPoint(firstPoint.angle, firstPoint.radius);
+    const snappedScreenPoint = polarToSectorPoint(snapped.angle, snapped.radius);
+    const distance = Math.hypot(firstScreenPoint.x - snappedScreenPoint.x, firstScreenPoint.y - snappedScreenPoint.y);
+    if (distance <= 22) {
+      commitSectorDraft();
+      return true;
+    }
+  }
+  const previousPoint = activeSectorDraft.points[activeSectorDraft.points.length - 1];
+  if (previousPoint && previousPoint.radius === snapped.radius && previousPoint.angle === snapped.angle) {
+    setStatus('Dieser Sektorpunkt ist bereits gesetzt.');
     return true;
   }
-  if (snapped.radius === activeSectorDraft.anchor.radius || snapped.angle === activeSectorDraft.anchor.angle) {
-    setStatus('Bitte einen Punkt auf einem anderen Ring und einer anderen Speiche wählen.');
-    return true;
-  }
-  activeSectorDraft.target = snapped;
+  activeSectorDraft.points.push(snapped);
   activeSectorDraft.preview = snapped;
-  commitSectorDraft();
+  updateSectorDrawButton();
+  render({ layers: true });
+  if (activeSectorDraft.points.length === 1) {
+    setStatus('Erster Sektorpunkt gesetzt. Bewege die Maus für die Ghostline und klicke für den nächsten Abschnitt.');
+  } else {
+    setStatus(`Sektorpunkt gesetzt (${activeSectorDraft.points.length}). Klick nahe auf den ersten Punkt zum Schließen.`);
+  }
   return true;
 }
 
 function startSectorDraft(initialPoint = null) {
   if (!isAdminRole()) return;
-  if (!activeSectorDraft) activeSectorDraft = { anchor: null, preview: null, target: null };
+  if (!activeSectorDraft) activeSectorDraft = { points: [], preview: null };
   if (initialPoint) handleSectorDraftMapClick(initialPoint);
   else {
     updateSectorDrawButton();
     render({ layers: true });
-    setStatus('Sektorzeichnen aktiv. Erster Klick setzt die erste Ecke, zweiter Klick schließt den radialen Sektor.');
+    setStatus('Sektorzeichnen aktiv. Erster Klick setzt den Startpunkt, weitere Klicks erweitern den Sektorabschnitt.');
   }
 }
 
@@ -5205,27 +5242,37 @@ function renderManualSectorOverlay() {
       addSvgText(frag, { x: centroid.x, y: centroid.y, class: 'manual-sector-label' }, sector.name);
     });
   }
-  if (activeSectorDraft?.anchor) {
-    const previewPolar = activeSectorDraft.target || activeSectorDraft.preview;
-    const anchorPoint = polarToSectorPoint(activeSectorDraft.anchor.angle, activeSectorDraft.anchor.radius);
-    const anchorCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-    anchorCircle.setAttribute('cx', anchorPoint.x);
-    anchorCircle.setAttribute('cy', anchorPoint.y);
-    anchorCircle.setAttribute('r', 5);
-    anchorCircle.setAttribute('class', 'manual-sector-draft-point');
-    frag.appendChild(anchorCircle);
-    if (previewPolar && (previewPolar.radius !== activeSectorDraft.anchor.radius || previewPolar.angle !== activeSectorDraft.anchor.angle)) {
-      const previewPoints = buildSectorPolygonPoints(activeSectorDraft.anchor, previewPolar);
-      const polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+  if (activeSectorDraft?.points?.length) {
+    const previewPolar = activeSectorDraft.preview;
+    const lastPoint = activeSectorDraft.points[activeSectorDraft.points.length - 1];
+    const hasDistinctPreview = Boolean(previewPolar && (
+      previewPolar.radius !== lastPoint?.radius
+      || previewPolar.angle !== lastPoint?.angle
+    ));
+    const previewPoints = buildSectorPolygonPoints(activeSectorDraft.points, hasDistinctPreview ? previewPolar : null, false);
+    if (previewPoints.length >= 2) {
+      const polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
       polyline.setAttribute('points', previewPoints.map((point) => `${point.x},${point.y}`).join(' '));
       polyline.setAttribute('class', 'manual-sector-draft-line');
       frag.appendChild(polyline);
+    }
+    activeSectorDraft.points.forEach((polarPoint, index) => {
+      const point = polarToSectorPoint(polarPoint.angle, polarPoint.radius);
+      const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      circle.setAttribute('cx', point.x);
+      circle.setAttribute('cy', point.y);
+      circle.setAttribute('r', index === 0 ? 6 : 5);
+      circle.setAttribute('class', 'manual-sector-draft-point');
+      frag.appendChild(circle);
+    });
+    if (hasDistinctPreview) {
       const previewPoint = polarToSectorPoint(previewPolar.angle, previewPolar.radius);
       const previewCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
       previewCircle.setAttribute('cx', previewPoint.x);
       previewCircle.setAttribute('cy', previewPoint.y);
       previewCircle.setAttribute('r', 5);
       previewCircle.setAttribute('class', 'manual-sector-draft-point');
+      previewCircle.setAttribute('opacity', '0.55');
       frag.appendChild(previewCircle);
     }
   }
@@ -7628,7 +7675,7 @@ window.addEventListener('pointermove', (event) => {
 });
 
 window.addEventListener('mousemove', (event) => {
-  if (!activeSectorDraft?.anchor || activeInteraction) return;
+  if (!activeSectorDraft?.points?.length || activeInteraction) return;
   updateSectorDraftPreview(eventToWorld(event));
 });
 
@@ -7756,7 +7803,7 @@ viewport.addEventListener('contextmenu', (event) => {
     actions.push({ type: 'divider' });
     if (activeSectorDraft) {
       actions.push({ label: 'Sektorpunkt setzen', run: () => handleSectorDraftMapClick(worldPos) });
-      if (activeSectorDraft.anchor && activeSectorDraft.preview) actions.push({ label: 'Sektor abschließen', run: () => { activeSectorDraft.target = activeSectorDraft.preview; commitSectorDraft(); } });
+      if (activeSectorDraft.points.length >= 3) actions.push({ label: 'Sektor abschließen', run: () => commitSectorDraft() });
       actions.push({ label: 'Sektor abbrechen', run: () => cancelSectorDraft() });
     } else {
       actions.push({ label: 'Sektor zeichnen starten', run: () => startSectorDraft(worldPos) });
@@ -7888,9 +7935,8 @@ document.addEventListener('keydown', (event) => {
     closeContextMenu();
     if (activeSectorDraft) cancelSectorDraft();
   }
-  if (event.key === 'Enter' && activeSectorDraft?.anchor && activeSectorDraft?.preview && !activeSectorDraft?.target && !event.target.closest('input, textarea, select')) {
+  if (event.key === 'Enter' && activeSectorDraft?.points?.length >= 3 && !event.target.closest('input, textarea, select')) {
     event.preventDefault();
-    activeSectorDraft.target = activeSectorDraft.preview;
     commitSectorDraft();
   }
 });
