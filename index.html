@@ -45,6 +45,7 @@ body { margin:0; background:#05070b; color:var(--text); font-family: Inter, Sego
 .manual-sector-shape.hovered { fill:rgba(143,187,255,.12); stroke:rgba(214,232,255,.96); stroke-width:2.4; }
 .manual-sector-label { fill:rgba(196,223,255,.92); font-size:15px; font-weight:700; text-anchor:middle; stroke:rgba(0,0,0,.55); stroke-width:3px; paint-order:stroke fill; pointer-events:none; }
 .manual-sector-draft-line { fill:none; stroke:rgba(255,182,61,.95); stroke-width:2.2; stroke-dasharray:8 6; }
+.manual-sector-ghost-line { fill:none; stroke:rgba(255,213,135,.9); stroke-width:1.8; stroke-dasharray:5 5; pointer-events:none; }
 .manual-sector-draft-point { fill:rgba(255,182,61,.98); stroke:rgba(255,244,214,.95); stroke-width:1.4; }
 .tactical-hyperlane { stroke:rgba(255,145,32,.98); stroke-width:4; stroke-linecap:round; stroke-dasharray:10 8; fill:none; }
 .tactical-route-highlight { fill:none; stroke-linecap:round; stroke-linejoin:round; pointer-events:none; }
@@ -3996,10 +3997,15 @@ function buildSectorPolygonPoints(polarPoints = [], previewPolar = null, closeSh
     else polygonPoints.push(...segment.slice(1));
   }
   if (closeShape && sequence.length >= 3) {
-    const closingSegment = buildSectorSegmentPoints(sequence[sequence.length - 1], sequence[0]);
-    if (closingSegment.length) polygonPoints.push(...closingSegment.slice(1));
+    // Closing is intentionally direct. An inferred polar arc here can wrap around
+    // the Core even though the user never drew that boundary.
+    polygonPoints.push(polarToSectorPoint(sequence[0].angle, sequence[0].radius));
   }
   return polygonPoints;
+}
+
+function refreshSectorOverlayNow() {
+  renderManualSectorOverlay();
 }
 
 function updateSectorDrawButton() {
@@ -4012,6 +4018,7 @@ function cancelSectorDraft(silent = false) {
   if (!activeSectorDraft) return;
   activeSectorDraft = null;
   updateSectorDrawButton();
+  refreshSectorOverlayNow();
   render({ layers: true, routeOverlay: true });
   if (!silent) setStatus('Sektorzeichnen abgebrochen.');
 }
@@ -4033,6 +4040,7 @@ function commitSectorDraft() {
   tacticalHoverAreas = buildTacticalHoverAreas(null, viewMode === 'schematic' ? 'schematic' : 'image', viewMode);
   saveLocal();
   updateSectorDrawButton();
+  refreshSectorOverlayNow();
   render({ layers: true, routeOverlay: true });
   setStatus(`Sektor gespeichert: ${sector.name}`);
 }
@@ -4046,6 +4054,7 @@ function deleteManualSector(name) {
   tacticalHoverAreas = buildTacticalHoverAreas(null, viewMode === 'schematic' ? 'schematic' : 'image', viewMode);
   if (hoveredZoneInfo?.sector?.name === normalizedName) setHoveredZone(null);
   saveLocal();
+  refreshSectorOverlayNow();
   renderAll({ layers: true, routeOverlay: true });
   setStatus(`Sektor gelöscht: ${normalizedName}`);
 }
@@ -4058,6 +4067,7 @@ function updateSectorDraftPreview(point) {
   };
   activeSectorDraft.preview = getSectorSnapPolar(point);
   updateSectorDrawButton();
+  refreshSectorOverlayNow();
   render({ layers: true, routeOverlay: true });
 }
 
@@ -4083,6 +4093,7 @@ function handleSectorDraftMapClick(point) {
   activeSectorDraft.preview = snapped;
   activeSectorDraft.previewRaw = polarToSectorPoint(snapped.angle, snapped.radius);
   updateSectorDrawButton();
+  refreshSectorOverlayNow();
   render({ layers: true, routeOverlay: true });
   if (activeSectorDraft.points.length === 1) {
     setStatus('Erster Sektorpunkt gesetzt. Bewege die Maus für die Ghostline und klicke für den nächsten Abschnitt.');
@@ -4098,6 +4109,7 @@ function startSectorDraft(initialPoint = null) {
   if (initialPoint) handleSectorDraftMapClick(initialPoint);
   else {
     updateSectorDrawButton();
+    refreshSectorOverlayNow();
     render({ layers: true, routeOverlay: true });
     setStatus('Sektorzeichnen aktiv. Erster Klick setzt den Startpunkt, weitere Klicks erweitern den Sektorabschnitt.');
   }
@@ -5397,7 +5409,7 @@ function nearestDisplayedZone(x, y) {
 }
 
 function renderManualSectorOverlay() {
-  tacticalOverlay.querySelectorAll('.manual-sector-shape, .manual-sector-label, .manual-sector-draft-line, .manual-sector-draft-point').forEach((el) => el.remove());
+  tacticalOverlay.querySelectorAll('.manual-sector-shape, .manual-sector-label, .manual-sector-draft-line, .manual-sector-ghost-line, .manual-sector-draft-point').forEach((el) => el.remove());
   const frag = document.createDocumentFragment();
   if (layers.sectorLabels) {
     ensureSectorStore().forEach((sector) => {
@@ -5434,15 +5446,16 @@ function renderManualSectorOverlay() {
       circle.setAttribute('class', 'manual-sector-draft-point');
       frag.appendChild(circle);
     });
-    if (!hasDistinctPreview && previewRaw && lastPoint) {
-      const lastScreenPoint = polarToSectorPoint(lastPoint.angle, lastPoint.radius);
+    if (previewRaw && lastPoint) {
+      const ghostStart = hasDistinctPreview
+        ? polarToSectorPoint(previewPolar.angle, previewPolar.radius)
+        : polarToSectorPoint(lastPoint.angle, lastPoint.radius);
       const rawPreviewLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-      rawPreviewLine.setAttribute('x1', lastScreenPoint.x);
-      rawPreviewLine.setAttribute('y1', lastScreenPoint.y);
+      rawPreviewLine.setAttribute('x1', ghostStart.x);
+      rawPreviewLine.setAttribute('y1', ghostStart.y);
       rawPreviewLine.setAttribute('x2', previewRaw.x);
       rawPreviewLine.setAttribute('y2', previewRaw.y);
-      rawPreviewLine.setAttribute('class', 'manual-sector-draft-line');
-      rawPreviewLine.setAttribute('opacity', '0.45');
+      rawPreviewLine.setAttribute('class', 'manual-sector-ghost-line');
       frag.appendChild(rawPreviewLine);
     }
     if (hasDistinctPreview) {
