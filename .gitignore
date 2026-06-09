@@ -2,3 +2,8 @@
 server/.env
 *.sqlite-shm
 *.sqlite-wal
+server/data.sqlite
+server/data.sqlite-shm
+server/data.sqlite-wal
+node_modules/
+.env
