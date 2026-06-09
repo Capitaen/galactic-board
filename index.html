@@ -3798,6 +3798,17 @@ function normalizeAngle(angle) {
   return normalized;
 }
 
+function getShortestAngleDelta(startAngle, endAngle) {
+  let delta = normalizeAngle(endAngle) - normalizeAngle(startAngle);
+  if (delta > Math.PI) delta -= Math.PI * 2;
+  if (delta < -Math.PI) delta += Math.PI * 2;
+  return delta;
+}
+
+function getAngleDistance(a, b) {
+  return Math.abs(getShortestAngleDelta(a, b));
+}
+
 function getSectorSnapPolar(point) {
   const dx = Number(point?.x || 0) - GALACTIC_CORE_CENTER.x;
   const dy = Number(point?.y || 0) - GALACTIC_CORE_CENTER.y;
@@ -3824,10 +3835,8 @@ function polarToSectorPoint(angle, radius) {
 
 function buildSectorArcPoints(radius, startAngle, endAngle, reverse = false) {
   const normalizedStart = normalizeAngle(startAngle);
-  let normalizedEnd = normalizeAngle(endAngle);
-  if (!reverse && normalizedEnd <= normalizedStart) normalizedEnd += Math.PI * 2;
-  if (reverse && normalizedEnd >= normalizedStart) normalizedEnd -= Math.PI * 2;
-  const span = normalizedEnd - normalizedStart;
+  let span = getShortestAngleDelta(normalizedStart, endAngle);
+  if (reverse) span += span >= 0 ? -Math.PI * 2 : Math.PI * 2;
   const steps = Math.max(2, Math.ceil(Math.abs(span) / ((Math.PI / 180) * 10)));
   const points = [];
   for (let index = 0; index <= steps; index += 1) {
@@ -3841,7 +3850,7 @@ function buildSectorArcPoints(radius, startAngle, endAngle, reverse = false) {
 function buildSectorSegmentPoints(fromPolar, toPolar) {
   if (!fromPolar || !toPolar) return [];
   const sameRadius = Math.abs((fromPolar.radius || 0) - (toPolar.radius || 0)) < 1;
-  const sameAngle = Math.abs(normalizeAngle((fromPolar.angle || 0) - (toPolar.angle || 0))) < 0.0001;
+  const sameAngle = getAngleDistance((fromPolar.angle || 0), (toPolar.angle || 0)) < 0.0001;
   if (sameRadius) {
     return buildSectorArcPoints(fromPolar.radius, fromPolar.angle, toPolar.angle, false);
   }
@@ -3927,6 +3936,10 @@ function deleteManualSector(name) {
 
 function updateSectorDraftPreview(point) {
   if (!activeSectorDraft?.points?.length) return;
+  activeSectorDraft.previewRaw = {
+    x: clamp(Number(point?.x || 0), 0, WORLD_SIZE),
+    y: clamp(Number(point?.y || 0), 0, WORLD_SIZE)
+  };
   activeSectorDraft.preview = getSectorSnapPolar(point);
   updateSectorDrawButton();
   render({ layers: true, routeOverlay: true });
@@ -3952,6 +3965,7 @@ function handleSectorDraftMapClick(point) {
   }
   activeSectorDraft.points.push(snapped);
   activeSectorDraft.preview = snapped;
+  activeSectorDraft.previewRaw = polarToSectorPoint(snapped.angle, snapped.radius);
   updateSectorDrawButton();
   render({ layers: true, routeOverlay: true });
   if (activeSectorDraft.points.length === 1) {
@@ -3964,7 +3978,7 @@ function handleSectorDraftMapClick(point) {
 
 function startSectorDraft(initialPoint = null) {
   if (!isAdminRole()) return;
-  if (!activeSectorDraft) activeSectorDraft = { points: [], preview: null };
+  if (!activeSectorDraft) activeSectorDraft = { points: [], preview: null, previewRaw: null };
   if (initialPoint) handleSectorDraftMapClick(initialPoint);
   else {
     updateSectorDrawButton();
@@ -5243,6 +5257,7 @@ function renderManualSectorOverlay() {
   }
   if (activeSectorDraft?.points?.length) {
     const previewPolar = activeSectorDraft.preview;
+    const previewRaw = activeSectorDraft.previewRaw;
     const lastPoint = activeSectorDraft.points[activeSectorDraft.points.length - 1];
     const hasDistinctPreview = Boolean(previewPolar && (
       previewPolar.radius !== lastPoint?.radius
@@ -5264,6 +5279,17 @@ function renderManualSectorOverlay() {
       circle.setAttribute('class', 'manual-sector-draft-point');
       frag.appendChild(circle);
     });
+    if (!hasDistinctPreview && previewRaw && lastPoint) {
+      const lastScreenPoint = polarToSectorPoint(lastPoint.angle, lastPoint.radius);
+      const rawPreviewLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      rawPreviewLine.setAttribute('x1', lastScreenPoint.x);
+      rawPreviewLine.setAttribute('y1', lastScreenPoint.y);
+      rawPreviewLine.setAttribute('x2', previewRaw.x);
+      rawPreviewLine.setAttribute('y2', previewRaw.y);
+      rawPreviewLine.setAttribute('class', 'manual-sector-draft-line');
+      rawPreviewLine.setAttribute('opacity', '0.45');
+      frag.appendChild(rawPreviewLine);
+    }
     if (hasDistinctPreview) {
       const previewPoint = polarToSectorPoint(previewPolar.angle, previewPolar.radius);
       const previewCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
