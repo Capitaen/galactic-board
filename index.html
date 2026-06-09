@@ -817,6 +817,7 @@ let fleetManagementFactionFilter = 'all';
 let searchResultsState = [];
 let activeSearchResultIndex = -1;
 let fleetJumpSearchState = { fleetId: null, results: [], activeIndex: -1, selectedPlanetId: null };
+let mineBuildPlanetSearchState = { results: [], activeIndex: -1 };
 const fleetTravelState = new Map();
 let fleetTravelFrame = 0;
 let gridModel = null;
@@ -3072,6 +3073,72 @@ function startMineBuildProject() {
   renderBuildProjectsView();
   if (activeMainTab === 'shipyard') renderShipyardView();
   setStatus(`Minenprojekt gestartet: ${project.label} auf ${planet.name} (Slot ${slotIndex + 1})`);
+}
+
+function closeMineBuildPlanetResults() {
+  const resultsEl = document.getElementById('mineBuildPlanetResults');
+  if (resultsEl) {
+    resultsEl.innerHTML = '';
+    resultsEl.classList.add('hidden');
+  }
+  mineBuildPlanetSearchState.results = [];
+  mineBuildPlanetSearchState.activeIndex = -1;
+}
+
+function renderMineBuildPlanetResults() {
+  const resultsEl = document.getElementById('mineBuildPlanetResults');
+  if (!resultsEl) return;
+  resultsEl.innerHTML = '';
+  const frag = document.createDocumentFragment();
+  mineBuildPlanetSearchState.results.forEach((planet, index) => {
+    const row = document.createElement('div');
+    row.className = 'search-result' + (index === mineBuildPlanetSearchState.activeIndex ? ' active' : '');
+    row.innerHTML = `<strong>${planet.name}</strong><small>${planet.grid || '—'} • ${planet.sector || '—'} • ${planet.region || 'Unknown Region'}</small>`;
+    row.addEventListener('mousedown', (event) => {
+      event.preventDefault();
+      chooseMineBuildPlanet(planet.id);
+    });
+    frag.appendChild(row);
+  });
+  resultsEl.appendChild(frag);
+  resultsEl.classList.toggle('hidden', !mineBuildPlanetSearchState.results.length);
+}
+
+function updateMineBuildPlanetSearch(query) {
+  const normalizedQuery = normalizeSearchText(query).trim();
+  if (!normalizedQuery) {
+    closeMineBuildPlanetResults();
+    return;
+  }
+  mineBuildPlanetSearchState.results = getMineProjectPlanetChoices()
+    .map((planet) => ({ planet, haystack: getPlanetSearchHaystack(planet) }))
+    .filter((entry) => entry.haystack.includes(normalizedQuery))
+    .sort((a, b) => a.planet.name.localeCompare(b.planet.name, 'de'))
+    .slice(0, 10)
+    .map((entry) => entry.planet);
+  mineBuildPlanetSearchState.activeIndex = mineBuildPlanetSearchState.results.length ? 0 : -1;
+  renderMineBuildPlanetResults();
+}
+
+function chooseMineBuildPlanet(planetId) {
+  const planet = getMineProjectPlanetChoices().find((entry) => entry.id === planetId);
+  const input = document.getElementById('mineBuildPlanetSearch');
+  const hidden = document.getElementById('mineBuildPlanet');
+  if (!planet || !input || !hidden) return;
+  input.value = planet.name;
+  hidden.value = planet.id;
+  closeMineBuildPlanetResults();
+  renderBuildProjectsView();
+}
+
+function moveMineBuildPlanetSelection(direction) {
+  if (!mineBuildPlanetSearchState.results.length) return;
+  mineBuildPlanetSearchState.activeIndex = (
+    mineBuildPlanetSearchState.activeIndex
+    + direction
+    + mineBuildPlanetSearchState.results.length
+  ) % mineBuildPlanetSearchState.results.length;
+  renderMineBuildPlanetResults();
 }
 
 function focusPlanetOnMap(planetId) {
@@ -7497,8 +7564,9 @@ function renderBuildProjectsView() {
     .sort((a, b) => Number(a.finishesAt || 0) - Number(b.finishesAt || 0));
   const minePlanetChoices = getMineProjectPlanetChoices();
   const selectedPlanetId = document.getElementById('mineBuildPlanet')?.value || minePlanetChoices[0]?.id || '';
+  const selectedPlanet = minePlanetChoices.find((planet) => planet.id === selectedPlanetId) || minePlanetChoices[0] || null;
   const selectedResourceKey = document.getElementById('mineBuildResource')?.value || RESOURCE_KEYS[0];
-  const availableSlots = getAvailableMineSlots(selectedPlanetId);
+  const availableSlots = getAvailableMineSlots(selectedPlanet?.id || '');
   const selectedSlotIndex = document.getElementById('mineBuildSlot')?.value || String(availableSlots[0]?.index ?? '');
   const selectedMineMeta = getMineProjectMeta(selectedResourceKey);
   const canStartMineProject = canBuildMineProjects();
@@ -7521,9 +7589,11 @@ function renderBuildProjectsView() {
         <p>${canStartMineProject ? 'Wähle republikanischen Planeten, Minentyp und freien Slot. Bauzeit: 30 Stunden.' : 'Nur Senat und Admin können GAR-Minenprojekte starten.'}</p>
         <div class="form-row">
           <label>Planet</label>
-          <select id="mineBuildPlanet" ${canStartMineProject ? '' : 'disabled'} onchange="renderBuildProjectsView()">
-            ${minePlanetChoices.map((planet) => `<option value="${planet.id}" ${planet.id === selectedPlanetId ? 'selected' : ''}>${planet.name}</option>`).join('')}
-          </select>
+          <div class="inline-search-wrap">
+            <input id="mineBuildPlanetSearch" type="search" value="${selectedPlanet?.name || ''}" placeholder="Planet suchen..." autocomplete="off" ${canStartMineProject ? '' : 'disabled'}>
+            <input id="mineBuildPlanet" type="hidden" value="${selectedPlanet?.id || ''}">
+            <div id="mineBuildPlanetResults" class="inline-search-results hidden"></div>
+          </div>
         </div>
         <div class="form-row">
           <label>Minenart</label>
@@ -7563,6 +7633,43 @@ function renderBuildProjectsView() {
       </div>
     </div>
   `;
+  const minePlanetInput = document.getElementById('mineBuildPlanetSearch');
+  if (minePlanetInput && canStartMineProject) {
+    minePlanetInput.addEventListener('input', () => {
+      const hidden = document.getElementById('mineBuildPlanet');
+      const startButton = minePlanetInput.closest('.workspace-card')?.querySelector('button.primary');
+      if (hidden) hidden.value = '';
+      if (startButton) startButton.disabled = true;
+      updateMineBuildPlanetSearch(minePlanetInput.value);
+    });
+    minePlanetInput.addEventListener('focus', () => {
+      updateMineBuildPlanetSearch(minePlanetInput.value);
+    });
+    minePlanetInput.addEventListener('blur', () => {
+      window.setTimeout(closeMineBuildPlanetResults, 120);
+    });
+    minePlanetInput.addEventListener('keydown', (event) => {
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        moveMineBuildPlanetSelection(1);
+        return;
+      }
+      if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        moveMineBuildPlanetSelection(-1);
+        return;
+      }
+      if (event.key === 'Enter') {
+        const planet = mineBuildPlanetSearchState.results[Math.max(0, mineBuildPlanetSearchState.activeIndex)];
+        if (planet) {
+          event.preventDefault();
+          chooseMineBuildPlanet(planet.id);
+        }
+        return;
+      }
+      if (event.key === 'Escape') closeMineBuildPlanetResults();
+    });
+  }
 }
 
 function clearSnapTarget() {
