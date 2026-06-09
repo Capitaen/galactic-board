@@ -1,2 +1,4 @@
 .env
 server/.env
+*.sqlite-shm
+*.sqlite-wal
