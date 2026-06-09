@@ -3851,13 +3851,12 @@ function buildSectorSegmentPoints(fromPolar, toPolar) {
       polarToSectorPoint(toPolar.angle, toPolar.radius)
     ];
   }
-  const radialCorner = { angle: fromPolar.angle, radius: toPolar.radius };
+  const arcPoints = buildSectorArcPoints(fromPolar.radius, fromPolar.angle, toPolar.angle, false);
   const radialPoints = [
-    polarToSectorPoint(fromPolar.angle, fromPolar.radius),
-    polarToSectorPoint(radialCorner.angle, radialCorner.radius)
+    polarToSectorPoint(toPolar.angle, fromPolar.radius),
+    polarToSectorPoint(toPolar.angle, toPolar.radius)
   ];
-  const arcPoints = buildSectorArcPoints(toPolar.radius, radialCorner.angle, toPolar.angle, false).slice(1);
-  return [...radialPoints, ...arcPoints];
+  return [...arcPoints, ...radialPoints.slice(1)];
 }
 
 function buildSectorPolygonPoints(polarPoints = [], previewPolar = null, closeShape = true) {
@@ -3888,7 +3887,7 @@ function cancelSectorDraft(silent = false) {
   if (!activeSectorDraft) return;
   activeSectorDraft = null;
   updateSectorDrawButton();
-  render({ layers: true });
+  render({ layers: true, routeOverlay: true });
   if (!silent) setStatus('Sektorzeichnen abgebrochen.');
 }
 
@@ -3909,7 +3908,7 @@ function commitSectorDraft() {
   tacticalHoverAreas = buildTacticalHoverAreas(null, viewMode === 'schematic' ? 'schematic' : 'image', viewMode);
   saveLocal();
   updateSectorDrawButton();
-  render({ layers: true });
+  render({ layers: true, routeOverlay: true });
   setStatus(`Sektor gespeichert: ${sector.name}`);
 }
 
@@ -3920,9 +3919,9 @@ function deleteManualSector(name) {
   if (nextSectors.length === ensureSectorStore().length) return;
   state.meta.manualSectors = nextSectors;
   tacticalHoverAreas = buildTacticalHoverAreas(null, viewMode === 'schematic' ? 'schematic' : 'image', viewMode);
-  if (hoveredZoneInfo?.sector?.name === normalizedName) hoveredZoneInfo = null;
+  if (hoveredZoneInfo?.sector?.name === normalizedName) setHoveredZone(null);
   saveLocal();
-  render({ layers: true });
+  renderAll({ layers: true, routeOverlay: true });
   setStatus(`Sektor gelöscht: ${normalizedName}`);
 }
 
@@ -3930,7 +3929,7 @@ function updateSectorDraftPreview(point) {
   if (!activeSectorDraft?.points?.length) return;
   activeSectorDraft.preview = getSectorSnapPolar(point);
   updateSectorDrawButton();
-  render({ layers: true });
+  render({ layers: true, routeOverlay: true });
 }
 
 function handleSectorDraftMapClick(point) {
@@ -3954,7 +3953,7 @@ function handleSectorDraftMapClick(point) {
   activeSectorDraft.points.push(snapped);
   activeSectorDraft.preview = snapped;
   updateSectorDrawButton();
-  render({ layers: true });
+  render({ layers: true, routeOverlay: true });
   if (activeSectorDraft.points.length === 1) {
     setStatus('Erster Sektorpunkt gesetzt. Bewege die Maus für die Ghostline und klicke für den nächsten Abschnitt.');
   } else {
@@ -3969,7 +3968,7 @@ function startSectorDraft(initialPoint = null) {
   if (initialPoint) handleSectorDraftMapClick(initialPoint);
   else {
     updateSectorDrawButton();
-    render({ layers: true });
+    render({ layers: true, routeOverlay: true });
     setStatus('Sektorzeichnen aktiv. Erster Klick setzt den Startpunkt, weitere Klicks erweitern den Sektorabschnitt.');
   }
 }
