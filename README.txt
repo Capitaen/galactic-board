@@ -33,3 +33,5 @@ Important behavior:
 Run target:
 - Start the app through the Node server so Socket.IO and SQLite are active.
 - Opening the HTML file directly still works as a fallback UI mode, but it will not have live server sync.
+
+g
