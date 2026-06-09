@@ -191,6 +191,11 @@ textarea { min-height:82px; resize:vertical; }
 .resource-slot-row { display:grid; grid-template-columns:repeat(5,1fr); gap:8px; }
 .resource-slot-cell small { display:block; margin-top:4px; color:var(--muted); font-size:11px; text-align:center; }
 .resource-pill { display:inline-flex; align-items:center; gap:6px; padding:5px 9px; border-radius:999px; background:rgba(69,123,255,.12); color:#cfe0ff; border:1px solid rgba(69,123,255,.24); font-size:12px; margin:0 6px 6px 0; }
+.route-connection-list { max-height:260px; overflow:auto; display:flex; flex-direction:column; gap:6px; margin:8px 0; }
+.route-connection-row { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:8px 10px; border:1px solid rgba(255,255,255,.1); border-radius:8px; background:rgba(255,255,255,.035); }
+.route-connection-row span { min-width:0; overflow-wrap:anywhere; }
+.route-connection-add { display:grid; grid-template-columns:1fr 1fr auto; gap:7px; align-items:end; }
+.route-connection-add .mini-btn { white-space:nowrap; }
 .fleet-card-list { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:12px; }
 .fleet-card { position:relative; background:rgba(255,255,255,.035); border:1px solid rgba(255,255,255,.08); border-radius:14px; padding:14px; }
 .fleet-card[draggable="true"] { cursor:grab; }
@@ -3443,9 +3448,53 @@ function getRouteMeta(route) {
   return store[route.id] || null;
 }
 
+function isUnnamedRoute(route) {
+  return /^unnamed route(?:\s*\(\d+\))?$/i.test(String(route?.name || '').trim());
+}
+
+function normalizeRouteConnection(connection) {
+  const startPlanetId = String(connection?.startPlanetId || '').trim();
+  const endPlanetId = String(connection?.endPlanetId || '').trim();
+  if (!startPlanetId || !endPlanetId || startPlanetId === endPlanetId) return null;
+  return {
+    startPlanetId,
+    endPlanetId,
+    ...(Array.isArray(connection?.path) ? { path: connection.path } : {})
+  };
+}
+
+function getRouteConnections(route) {
+  const meta = getRouteMeta(route);
+  const source = Array.isArray(meta?.connections) ? meta.connections : (route.autoConnections || []);
+  const seen = new Set();
+  return source.map(normalizeRouteConnection).filter((connection) => {
+    if (!connection || !planetIndex.has(connection.startPlanetId) || !planetIndex.has(connection.endPlanetId)) return false;
+    const key = [connection.startPlanetId, connection.endPlanetId].sort().join('__');
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function getRoutePlanets(route) {
+  const meta = getRouteMeta(route);
+  const planets = new Map();
+  getRouteConnections(route).forEach((connection) => {
+    const startPlanet = planetIndex.get(connection.startPlanetId);
+    const endPlanet = planetIndex.get(connection.endPlanetId);
+    if (startPlanet) planets.set(startPlanet.id, startPlanet);
+    if (endPlanet) planets.set(endPlanet.id, endPlanet);
+  });
+  if (!planets.size && !Array.isArray(meta?.connections)) {
+    (route.planets || []).forEach((planet) => planets.set(planet.id, planet));
+  }
+  return [...planets.values()];
+}
+
 function getDefaultRouteDominance(route) {
-  const endpoints = Array.isArray(route.planets) && route.planets.length
-    ? route.planets
+  const routePlanets = getRoutePlanets(route);
+  const endpoints = routePlanets.length
+    ? routePlanets
     : [route.a, route.b].filter(Boolean);
   const total = endpoints.length || 1;
   const garCount = endpoints.filter((planet) => planet?.owner === 'GAR').length;
@@ -4943,16 +4992,6 @@ function rebuildTacticalRouteCache(data, projectionMode) {
         startPlanet,
         endPlanet
       });
-      if (startPlanet && endPlanet && startPlanet.id !== endPlanet.id) {
-        tacticalTravelEdges.push({
-          id: `travel_edge__${laneIndex}__${route.pathEntries.length - 1}`,
-          name: routeName,
-          startPlanetId: startPlanet.id,
-          endPlanetId: endPlanet.id,
-          path: projectedPath,
-          length: polylineLength(projectedPath)
-        });
-      }
     });
   });
   const connectivityThresholdSq = 80 * 80;
@@ -4986,16 +5025,65 @@ function rebuildTacticalRouteCache(data, projectionMode) {
         if (entry.endPlanet) connectedPlanets.set(entry.endPlanet.id, entry.endPlanet);
       });
       const paths = componentEntries.map((entry) => entry.projectedPath);
+      const autoConnections = componentEntries
+        .filter((entry) => entry.startPlanet && entry.endPlanet && entry.startPlanet.id !== entry.endPlanet.id)
+        .map((entry) => ({
+          startPlanetId: entry.startPlanet.id,
+          endPlanetId: entry.endPlanet.id,
+          path: entry.projectedPath
+        }));
       tacticalRouteCache.push({
         id: routeId,
         name: componentName,
         paths,
         svgPaths: componentEntries.map((entry) => entry.svgPath),
         planets: [...connectedPlanets.values()],
+        autoConnections,
         bounds: buildBoundsForPaths(paths)
       });
       componentIndex += 1;
     }
+  });
+  tacticalRouteCache.forEach((route) => {
+    const meta = getRouteMeta(route);
+    if (!Array.isArray(meta?.connections)) return;
+    const manualPaths = getRouteConnections(route).map((connection) => {
+      const automaticMatch = (route.autoConnections || []).find((candidate) => {
+        const candidateKey = [candidate.startPlanetId, candidate.endPlanetId].sort().join('__');
+        const connectionKey = [connection.startPlanetId, connection.endPlanetId].sort().join('__');
+        return candidateKey === connectionKey;
+      });
+      if (automaticMatch?.path?.length >= 2) return automaticMatch.path;
+      const startPlanet = planetIndex.get(connection.startPlanetId);
+      const endPlanet = planetIndex.get(connection.endPlanetId);
+      return startPlanet && endPlanet
+        ? [getPlanetDisplayPosition(startPlanet), getPlanetDisplayPosition(endPlanet)]
+        : null;
+    }).filter(Boolean);
+    route.paths = manualPaths;
+    route.svgPaths = manualPaths.map((path) => path
+      .map((point, index) => `${index ? 'L' : 'M'}${point.x.toFixed(2)},${point.y.toFixed(2)}`)
+      .join(' '));
+    route.bounds = manualPaths.length ? buildBoundsForPaths(manualPaths) : null;
+  });
+  tacticalRouteCache.forEach((route) => {
+    getRouteConnections(route).forEach((connection, connectionIndex) => {
+      const startPlanet = planetIndex.get(connection.startPlanetId);
+      const endPlanet = planetIndex.get(connection.endPlanetId);
+      if (!startPlanet || !endPlanet) return;
+      const path = Array.isArray(connection.path) && connection.path.length >= 2
+        ? connection.path
+        : [getPlanetDisplayPosition(startPlanet), getPlanetDisplayPosition(endPlanet)];
+      tacticalTravelEdges.push({
+        id: `travel_edge__${route.id}__${connectionIndex}`,
+        routeId: route.id,
+        name: getRouteDisplayName(route),
+        startPlanetId: startPlanet.id,
+        endPlanetId: endPlanet.id,
+        path,
+        length: polylineLength(path)
+      });
+    });
   });
 }
 
@@ -5924,7 +6012,9 @@ function openRoute(id) {
   const dominance = getRouteDominance(route);
   const meta = getRouteMeta(route);
   const disabled = canEditPlanet() ? '' : 'disabled';
-  const routePlanets = (route.planets || []).map((planet) => planet.name).join(', ') || (route.a && route.b ? `${route.a.name}, ${route.b.name}` : '—');
+  const routePlanets = getRoutePlanets(route).map((planet) => planet.name).join(', ') || (route.a && route.b ? `${route.a.name}, ${route.b.name}` : '—');
+  const routeConnections = getRouteConnections(route);
+  const canEditConnections = canEditPlanet() && isUnnamedRoute(route);
   infoPanel.style.display = 'block';
   infoPanel.innerHTML = `
     ${getInfoPanelHeader(getRouteDisplayName(route))}
@@ -5933,6 +6023,34 @@ function openRoute(id) {
     <div class="form-row"><label>Routenname</label><input id="routeName" value="${meta?.name || getRouteDisplayName(route)}" ${disabled}></div>
     <p class="muted">Dominanz automatisch aus den verbundenen Planeten berechnet.</p>
     <p class="muted">GAR ${dominance.gar.toFixed(0)}% • KUS ${dominance.kus.toFixed(0)}% • HUTT ${dominance.hutt.toFixed(0)}% • Neutral / umkämpft ${dominance.neutral.toFixed(0)}%</p>
+    ${isUnnamedRoute(route) ? `
+      <div class="form-row">
+        <label>Manuelle Routenverbindungen</label>
+        <div class="route-connection-list">
+          ${routeConnections.length ? routeConnections.map((connection, index) => {
+            const startPlanet = planetIndex.get(connection.startPlanetId);
+            const endPlanet = planetIndex.get(connection.endPlanetId);
+            return `<div class="route-connection-row">
+              <span>${startPlanet?.name || connection.startPlanetId} ↔ ${endPlanet?.name || connection.endPlanetId}</span>
+              ${canEditConnections ? `<button class="mini-btn danger" onclick="removeRouteConnection('${route.id}', ${index})">Lösen</button>` : ''}
+            </div>`;
+          }).join('') : '<div class="muted-box">Keine Planetenverbindungen hinterlegt.</div>'}
+        </div>
+        ${canEditConnections ? `
+          <div class="route-connection-add">
+            <input id="routeConnectionStart" list="routePlanetChoices" placeholder="Planet A">
+            <input id="routeConnectionEnd" list="routePlanetChoices" placeholder="Planet B">
+            <button class="mini-btn primary" onclick="addRouteConnection('${route.id}')">Verbinden</button>
+          </div>
+          <datalist id="routePlanetChoices">
+            ${state.planets.slice().sort((a, b) => a.name.localeCompare(b.name, 'de')).map((planet) => `<option value="${planet.name}"></option>`).join('')}
+          </datalist>
+          <div class="toolbar-row" style="margin-top:8px">
+            <button class="mini-btn" onclick="resetRouteConnections('${route.id}')">Automatisch zurücksetzen</button>
+          </div>
+        ` : ''}
+      </div>
+    ` : ''}
     <button class="primary" onclick="saveRoute('${route.id}')" ${disabled}>Route speichern</button>
   `;
 }
@@ -5942,6 +6060,7 @@ function saveRoute(id) {
   if (!route || !canEditPlanet()) return;
   const store = ensureRouteMetaStore();
   store[id] = {
+    ...(store[id] || {}),
     name: document.getElementById('routeName').value.trim() || getRouteDisplayName(route)
   };
   saveLocal();
@@ -5949,6 +6068,91 @@ function saveRoute(id) {
   render({ frontline: true, influence: true, layers: true });
   openRoute(id);
   setStatus('Hyperraumroute gespeichert: ' + store[id].name);
+}
+
+function resolveRoutePlanetInput(inputId) {
+  const value = document.getElementById(inputId)?.value?.trim() || '';
+  return value ? resolvePlanetBySearchValue(value) : null;
+}
+
+function refreshManualRouteNetwork() {
+  tacticalSectionCanvasCache.clear();
+  rebuildTacticalRouteCache(prepareArcgisData(), viewMode === 'schematic' ? 'schematic' : 'image');
+  render({ frontline: true, influence: true, layers: true });
+}
+
+function addRouteConnection(id) {
+  const route = tacticalRouteCache.find((entry) => entry.id === id);
+  if (!route || !canEditPlanet() || !isUnnamedRoute(route)) return;
+  const startPlanet = resolveRoutePlanetInput('routeConnectionStart');
+  const endPlanet = resolveRoutePlanetInput('routeConnectionEnd');
+  if (!startPlanet || !endPlanet) {
+    setStatus('Bitte zwei gültige Planetennamen auswählen.');
+    return;
+  }
+  if (startPlanet.id === endPlanet.id) {
+    setStatus('Eine Route benötigt zwei unterschiedliche Planeten.');
+    return;
+  }
+  const connections = getRouteConnections(route);
+  const key = [startPlanet.id, endPlanet.id].sort().join('__');
+  if (connections.some((connection) => [connection.startPlanetId, connection.endPlanetId].sort().join('__') === key)) {
+    setStatus('Diese Planeten sind auf der Route bereits verbunden.');
+    return;
+  }
+  const store = ensureRouteMetaStore();
+  store[id] = {
+    ...(store[id] || {}),
+    connections: [
+      ...connections.map((connection) => ({
+        startPlanetId: connection.startPlanetId,
+        endPlanetId: connection.endPlanetId
+      })),
+      { startPlanetId: startPlanet.id, endPlanetId: endPlanet.id }
+    ]
+  };
+  saveLocal();
+  refreshManualRouteNetwork();
+  openRoute(id);
+  setStatus(`Routenverbindung hinzugefügt: ${startPlanet.name} ↔ ${endPlanet.name}`);
+}
+
+function removeRouteConnection(id, index) {
+  const route = tacticalRouteCache.find((entry) => entry.id === id);
+  if (!route || !canEditPlanet() || !isUnnamedRoute(route)) return;
+  const connections = getRouteConnections(route);
+  if (index < 0 || index >= connections.length) return;
+  const removed = connections[index];
+  const store = ensureRouteMetaStore();
+  store[id] = {
+    ...(store[id] || {}),
+    connections: connections
+      .filter((_, connectionIndex) => connectionIndex !== index)
+      .map((connection) => ({
+        startPlanetId: connection.startPlanetId,
+        endPlanetId: connection.endPlanetId
+      }))
+  };
+  saveLocal();
+  refreshManualRouteNetwork();
+  openRoute(id);
+  const startPlanet = planetIndex.get(removed.startPlanetId);
+  const endPlanet = planetIndex.get(removed.endPlanetId);
+  setStatus(`Routenverbindung gelöst: ${startPlanet?.name || removed.startPlanetId} ↔ ${endPlanet?.name || removed.endPlanetId}`);
+}
+
+function resetRouteConnections(id) {
+  const route = tacticalRouteCache.find((entry) => entry.id === id);
+  if (!route || !canEditPlanet() || !isUnnamedRoute(route)) return;
+  const store = ensureRouteMetaStore();
+  if (store[id]) {
+    delete store[id].connections;
+    if (!Object.keys(store[id]).length) delete store[id];
+  }
+  saveLocal();
+  refreshManualRouteNetwork();
+  openRoute(id);
+  setStatus('Routenverbindungen auf Kartenerkennung zurückgesetzt.');
 }
 
 function closeContextMenu() {
@@ -8013,6 +8217,9 @@ window.saveFleet = saveFleet;
 window.deleteFleet = deleteFleet;
 window.closeInfoPanel = closeInfoPanel;
 window.saveRoute = saveRoute;
+window.addRouteConnection = addRouteConnection;
+window.removeRouteConnection = removeRouteConnection;
+window.resetRouteConnections = resetRouteConnections;
 window.startFleetJump = startFleetJump;
 window.createFleetManagementFleet = createFleetManagementFleet;
 window.saveFleetManagementFleet = saveFleetManagementFleet;
