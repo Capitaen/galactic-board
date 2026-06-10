@@ -37,13 +37,10 @@ const RESOURCE_RESET_VERSION = 'resource_reset_2026_05_01';
 const OWNER_FRONTLINE_PASS_VERSION = 'excel_owner_visibility_v2';
 const LOGIN_ROLE_DEFINITIONS = {
   Admin: { faction: 'system', level: 'global' },
-  'Republic Navy Main-Admin': { faction: 'navy', level: 'main' },
   'Republic Navy Admin': { faction: 'navy', level: 'admin' },
   'Republic Navy / GAR': { faction: 'navy', level: 'member' },
-  'Galaktischer Senat Main-Admin': { faction: 'senate', level: 'main' },
   'Galaktischer Senats Admin': { faction: 'senate', level: 'admin' },
   Senat: { faction: 'senate', level: 'member' },
-  'Eventleiter / KUS Main-Admin': { faction: 'event', level: 'main' },
   'Eventleiter / KUS Admin': { faction: 'event', level: 'admin' },
   'Eventleiter / KUS': { faction: 'event', level: 'member' },
   Viewer: { faction: 'system', level: 'viewer' }
@@ -233,7 +230,7 @@ function getSession(req) {
 }
 
 function canManageLogins(role) {
-  return ['global', 'main', 'admin'].includes(LOGIN_ROLE_DEFINITIONS[role]?.level);
+  return ['global', 'admin'].includes(LOGIN_ROLE_DEFINITIONS[role]?.level);
 }
 
 function listUsersForActor(actor) {
@@ -445,21 +442,11 @@ function canActorAssignRole(actor, role) {
   if (!actorDefinition || !roleDefinition) return false;
   if (actorDefinition.level === 'global') return true;
   if (actorDefinition.faction !== roleDefinition.faction) return false;
-  if (actorDefinition.level === 'main') return ['admin', 'member'].includes(roleDefinition.level);
-  return actorDefinition.level === 'admin' && roleDefinition.level === 'member';
+  return actorDefinition.level === 'admin' && ['admin', 'member'].includes(roleDefinition.level);
 }
 
 function canActorManageUser(actor, targetUser) {
   return Boolean(targetUser && canActorAssignRole(actor, targetUser.role));
-}
-
-function ensureSingleMainAdmin(role, ignoredUserId = '') {
-  if (LOGIN_ROLE_DEFINITIONS[role]?.level !== 'main') return;
-  const existing = listUsers(db).find((user) => user.id !== ignoredUserId && user.role === role);
-  if (!existing) return;
-  const error = new Error(`Für diese Fraktion ist bereits ein Main-Admin vergeben: ${existing.username}.`);
-  error.status = 409;
-  throw error;
 }
 
 function validateAdminUserInput(body) {
@@ -689,7 +676,6 @@ app.post('/api/admin/users', requireAuth, requireLoginManager, async (req, res) 
     if (!canActorAssignRole(req.user, role)) {
       return res.status(403).json({ error: 'Diese Rolle darfst du nicht vergeben.', users: listUsersForActor(req.user) });
     }
-    ensureSingleMainAdmin(role);
     const existing = findUserByNormalizedUsername(db, username);
     if (existing) {
       return res.status(409).json({ error: 'Dieser Benutzername existiert bereits.', users: listUsersForActor(req.user) });
@@ -717,7 +703,6 @@ app.patch('/api/admin/users/:id', requireAuth, requireLoginManager, async (req, 
     if (!canActorManageUser(req.user, targetUser) || !canActorAssignRole(req.user, role)) {
       return res.status(403).json({ error: 'Diesen Login darfst du nicht bearbeiten.', users: listUsersForActor(req.user) });
     }
-    ensureSingleMainAdmin(role, userId);
     const existing = findUserByNormalizedUsername(db, username);
     if (existing && existing.id !== userId) {
       return res.status(409).json({ error: 'Dieser Benutzername existiert bereits.', users: listUsersForActor(req.user) });

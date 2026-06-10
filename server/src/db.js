@@ -42,6 +42,17 @@ export function createDb(projectRoot) {
     );
   `);
 
+  const legacyFactionAdminRoles = [
+    ['Republic Navy Main-Admin', 'Republic Navy Admin'],
+    ['Galaktischer Senat Main-Admin', 'Galaktischer Senats Admin'],
+    ['Eventleiter / KUS Main-Admin', 'Eventleiter / KUS Admin']
+  ];
+  const migrateFactionAdminRole = db.prepare('UPDATE users SET role = ?, updated_at = ? WHERE role = ?');
+  const migrationTime = new Date().toISOString();
+  legacyFactionAdminRoles.forEach(([legacyRole, nextRole]) => {
+    migrateFactionAdminRole.run(nextRole, migrationTime, legacyRole);
+  });
+
   const stateRow = db.prepare('SELECT id FROM app_state WHERE id = ?').get('main');
 
   if (!stateRow) {

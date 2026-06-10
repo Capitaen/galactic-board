@@ -461,13 +461,10 @@ a { color:#8bc7ff; }
     <span class="muted">Rolle:</span>
     <select id="roleSelect">
       <option>Admin</option>
-      <option>Republic Navy Main-Admin</option>
       <option>Republic Navy Admin</option>
       <option>Eventleiter / KUS</option>
-      <option>Eventleiter / KUS Main-Admin</option>
       <option>Eventleiter / KUS Admin</option>
       <option>Republic Navy / GAR</option>
-      <option>Galaktischer Senat Main-Admin</option>
       <option>Galaktischer Senats Admin</option>
       <option>Senat</option>
       <option selected>Viewer</option>
@@ -772,22 +769,19 @@ const buildProjectsTabBtn = document.getElementById('buildProjectsTabBtn');
 const loginManagerTabBtn = document.getElementById('loginManagerTabBtn');
 const LOGIN_ROLE_DEFINITIONS = {
   Admin: { label: 'Globaler Admin', baseRole: 'Admin', faction: 'system', level: 'global' },
-  'Republic Navy Main-Admin': { label: 'Republic Navy Main-Admin', baseRole: 'Republic Navy / GAR', faction: 'navy', level: 'main' },
   'Republic Navy Admin': { label: 'Republic Navy Admin', baseRole: 'Republic Navy / GAR', faction: 'navy', level: 'admin' },
   'Republic Navy / GAR': { label: 'Republic Navy', baseRole: 'Republic Navy / GAR', faction: 'navy', level: 'member' },
-  'Galaktischer Senat Main-Admin': { label: 'Galaktischer Senat Main-Admin', baseRole: 'Senat', faction: 'senate', level: 'main' },
   'Galaktischer Senats Admin': { label: 'Galaktischer Senats Admin', baseRole: 'Senat', faction: 'senate', level: 'admin' },
   Senat: { label: 'Galaktischer Senat', baseRole: 'Senat', faction: 'senate', level: 'member' },
-  'Eventleiter / KUS Main-Admin': { label: 'Eventleiter / KUS Main-Admin', baseRole: 'Eventleiter / KUS', faction: 'event', level: 'main' },
   'Eventleiter / KUS Admin': { label: 'Eventleiter / KUS Admin', baseRole: 'Eventleiter / KUS', faction: 'event', level: 'admin' },
   'Eventleiter / KUS': { label: 'Eventleiter / KUS', baseRole: 'Eventleiter / KUS', faction: 'event', level: 'member' },
   Viewer: { label: 'Viewer', baseRole: 'Viewer', faction: 'system', level: 'viewer' }
 };
 const LOGIN_ROLES = Object.keys(LOGIN_ROLE_DEFINITIONS);
 const LOGIN_FACTIONS = [
-  { id: 'navy', label: 'Republic Navy', memberRole: 'Republic Navy / GAR', adminRole: 'Republic Navy Admin', mainRole: 'Republic Navy Main-Admin' },
-  { id: 'senate', label: 'Galaktischer Senat', memberRole: 'Senat', adminRole: 'Galaktischer Senats Admin', mainRole: 'Galaktischer Senat Main-Admin' },
-  { id: 'event', label: 'Eventleiter / KUS', memberRole: 'Eventleiter / KUS', adminRole: 'Eventleiter / KUS Admin', mainRole: 'Eventleiter / KUS Main-Admin' }
+  { id: 'navy', label: 'Republic Navy', memberRole: 'Republic Navy / GAR', adminRole: 'Republic Navy Admin' },
+  { id: 'senate', label: 'Galaktischer Senat', memberRole: 'Senat', adminRole: 'Galaktischer Senats Admin' },
+  { id: 'event', label: 'Eventleiter / KUS', memberRole: 'Eventleiter / KUS', adminRole: 'Eventleiter / KUS Admin' }
 ];
 const sectorDrawBtn = document.getElementById('sectorDrawBtn');
 const planetIndex = new Map();
@@ -4458,7 +4452,7 @@ function isAdminRole() {
 }
 
 function canManageLogins() {
-  return ['global', 'main', 'admin'].includes(LOGIN_ROLE_DEFINITIONS[currentAssignedRole()]?.level);
+  return ['global', 'admin'].includes(LOGIN_ROLE_DEFINITIONS[currentAssignedRole()]?.level);
 }
 
 function getManageableLoginRoles() {
@@ -4466,8 +4460,7 @@ function getManageableLoginRoles() {
   if (actor?.level === 'global') return LOGIN_ROLES;
   const faction = LOGIN_FACTIONS.find((entry) => entry.id === actor?.faction);
   if (!faction) return [];
-  if (actor.level === 'main') return [faction.adminRole, faction.memberRole];
-  if (actor.level === 'admin') return [faction.memberRole];
+  if (actor.level === 'admin') return [faction.adminRole, faction.memberRole];
   return [];
 }
 
@@ -7687,7 +7680,7 @@ function renderLoginManagerView() {
     const userDefinition = LOGIN_ROLE_DEFINITIONS[user.role];
     const userFaction = LOGIN_FACTIONS.find((faction) => faction.id === userDefinition?.faction);
     const categoryRoles = userFaction
-      ? [userFaction.mainRole, userFaction.adminRole, userFaction.memberRole]
+      ? [userFaction.adminRole, userFaction.memberRole]
       : ['Admin', 'Viewer'];
     const roleOptions = actorDefinition.level === 'global'
       ? categoryRoles
@@ -7713,14 +7706,14 @@ function renderLoginManagerView() {
   }).join('') : '<tr><td colspan="4"><div class="muted-box">Noch keine Logins in dieser Kategorie.</div></td></tr>';
   const renderFactionSection = (faction) => {
     const users = state.authUsers.filter((user) => LOGIN_ROLE_DEFINITIONS[user.role]?.faction === faction.id);
-    const mainAdmin = users.find((user) => user.role === faction.mainRole && !user.isDraft);
+    const factionAdmins = users.filter((user) => user.role === faction.adminRole && !user.isDraft);
     const createRole = manageableRoles.includes(faction.memberRole) ? faction.memberRole : manageableRoles[0];
     return `
       <div class="workspace-card">
         <div class="login-faction-head">
           <div>
             <h3>${faction.label}</h3>
-            <p class="login-main-admin">Main-Admin: ${escapeLoginManagerText(mainAdmin?.username || 'Noch nicht vergeben')}</p>
+            <p class="login-main-admin">Fraktions-Admins: ${factionAdmins.length ? factionAdmins.map((user) => escapeLoginManagerText(user.username)).join(', ') : 'Noch nicht vergeben'}</p>
           </div>
           ${createRole ? `<button class="mini-btn primary" onclick="createLoginManagerUser('${createRole}')">Login anlegen</button>` : ''}
         </div>
@@ -7736,7 +7729,7 @@ function renderLoginManagerView() {
     <div class="workspace-head">
       <div>
         <h2>Login Manager</h2>
-        <p>Logins sind nach Fraktionen geordnet. Main-Admins verwalten ihre Fraktions-Admins und Mitglieder; Fraktions-Admins verwalten Mitglieder.</p>
+        <p>Logins sind nach Fraktionen geordnet. Fraktions-Admins verwalten die Admins und Mitglieder ihrer eigenen Fraktion.</p>
       </div>
     </div>
     <div class="workspace-section login-faction-grid">

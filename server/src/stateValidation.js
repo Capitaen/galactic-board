@@ -24,17 +24,14 @@ function cloneWithoutKeys(item, keys = []) {
 }
 
 const ROLE_BASE_ROLES = {
-  'Republic Navy Main-Admin': 'Republic Navy / GAR',
   'Republic Navy Admin': 'Republic Navy / GAR',
-  'Galaktischer Senat Main-Admin': 'Senat',
   'Galaktischer Senats Admin': 'Senat',
-  'Eventleiter / KUS Main-Admin': 'Eventleiter / KUS',
   'Eventleiter / KUS Admin': 'Eventleiter / KUS'
 };
 
 function canManageLogins(role) {
   const normalizedRole = String(role || '');
-  return normalizedRole === 'Admin' || normalizedRole.endsWith(' Main-Admin') || normalizedRole.endsWith(' Admin');
+  return normalizedRole === 'Admin' || normalizedRole.endsWith(' Admin');
 }
 
 function validatePlanetChanges(role, previousState, nextState) {
