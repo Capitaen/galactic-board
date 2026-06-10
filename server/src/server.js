@@ -257,6 +257,75 @@ function findIndexHtml() {
   throw new Error('index.html not found in public/index.html or project root');
 }
 
+const planetCardCache = new Map();
+
+function decodeHtmlText(text) {
+  return String(text || '')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function extractMetaContent(html, key, attr = 'property') {
+  const pattern = new RegExp(`<meta[^>]+${attr}=["']${key}["'][^>]+content=["']([^"']+)["']`, 'i');
+  const reversePattern = new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+${attr}=["']${key}["']`, 'i');
+  const match = html.match(pattern) || html.match(reversePattern);
+  return decodeHtmlText(match?.[1] || '');
+}
+
+function extractInfoboxValue(html, labels = []) {
+  for (const label of labels) {
+    const pattern = new RegExp(`${label}[\\s\\S]{0,420}?pi-data-value[^>]*>([\\s\\S]{1,260}?)<\\/div>`, 'i');
+    const match = html.match(pattern);
+    if (!match?.[1]) continue;
+    const value = decodeHtmlText(match[1].replace(/<[^>]+>/g, ' '));
+    if (value) return value;
+  }
+  return '';
+}
+
+async function resolvePlanetCardData(planet) {
+  const cacheKey = String(planet?.id || '').trim();
+  if (!cacheKey) return {};
+  const cached = planetCardCache.get(cacheKey);
+  if (cached && (Date.now() - cached.cachedAt) < (12 * 60 * 60 * 1000)) return cached.payload;
+  const wikiUrl = String(planet?.wiki || '').trim();
+  if (!wikiUrl) {
+    const payload = {};
+    planetCardCache.set(cacheKey, { cachedAt: Date.now(), payload });
+    return payload;
+  }
+  try {
+    const response = await fetch(wikiUrl, {
+      headers: {
+        'user-agent': 'GalacticCampaignBoard/1.0 (+planet-card-fetch)',
+        'accept-language': 'de-DE,de;q=0.9,en;q=0.8'
+      }
+    });
+    if (!response.ok) throw new Error(`Planet wiki request failed: ${response.status}`);
+    const html = await response.text();
+    const payload = {
+      description: extractMetaContent(html, 'og:description') || extractMetaContent(html, 'description', 'name'),
+      image: extractMetaContent(html, 'og:image') || extractMetaContent(html, 'twitter:image', 'name'),
+      climate: extractInfoboxValue(html, ['Climate', 'Klima']),
+      population: extractInfoboxValue(html, ['Population', 'Bevölkerung']),
+      strategic: extractInfoboxValue(html, ['Affiliation', 'Zugehörigkeit', 'Government', 'Regierung'])
+    };
+    planetCardCache.set(cacheKey, { cachedAt: Date.now(), payload });
+    return payload;
+  } catch (error) {
+    console.warn('Planet card fetch failed', { planetId: cacheKey, error: String(error) });
+    const payload = {};
+    planetCardCache.set(cacheKey, { cachedAt: Date.now(), payload });
+    return payload;
+  }
+}
+
 app.use(express.json({ limit: '50mb' }));
 app.use(cookieParser());
 app.use((req, res, next) => {
@@ -911,6 +980,24 @@ app.get('/api/auth/me', (req, res) => {
   res.json({
     user: session || { id: null, username: '', role: 'Viewer', canCoordinate4thFleet: false, senatePosition: '' }
   });
+});
+
+app.get('/api/planet-card/:planetId', async (req, res) => {
+  try {
+    const { state } = readCampaignState(db);
+    const planetId = String(req.params.planetId || '').trim();
+    const planet = Array.isArray(state?.planets)
+      ? state.planets.find((entry) => String(entry?.id || '').trim() === planetId)
+      : null;
+    if (!planet) {
+      return res.status(404).json({ error: 'planet_not_found' });
+    }
+    const payload = await resolvePlanetCardData(planet);
+    return res.json(payload);
+  } catch (error) {
+    console.error('Planet card endpoint failed', error);
+    return res.status(500).json({ error: 'planet_card_failed' });
+  }
 });
 
 app.get('/api/economy/market', (req, res) => {
