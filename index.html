@@ -1070,6 +1070,7 @@ function normalizeCampaignState() {
     .map((route, index) => ({
       id: String(route?.id || `custom_route_${index + 1}`),
       name: String(route?.name || '').trim() || `Neue Route ${index + 1}`,
+      ...(route?.canonicalName ? { canonicalName: String(route.canonicalName) } : {}),
       connections: (Array.isArray(route?.connections) ? route.connections : [])
         .map(normalizeRouteConnection)
         .filter(Boolean)
@@ -3566,6 +3567,16 @@ function getTacticalRouteId(route, index) {
   return `hyperlane__${normalizePlanetKey(route.name || `route_${index}`)}`;
 }
 
+function canonicalizeLoreRouteName(name) {
+  const value = String(name || '').trim();
+  const corrections = {
+    'Perlimian Trade Route': 'Perlemian Trade Route',
+    'Duantless Run': 'Dauntless Run',
+    'Tertiery Etti Route': 'Tertiary Etti Route'
+  };
+  return corrections[value] || value;
+}
+
 function getRouteMeta(route) {
   const store = ensureRouteMetaStore();
   return store[route.id] || null;
@@ -3617,7 +3628,11 @@ function createCustomRoute(connection, name = '') {
 
 function getRouteConnections(route) {
   const meta = getRouteMeta(route);
-  const source = Array.isArray(meta?.connections) ? meta.connections : (route.autoConnections || []);
+  const source = Array.isArray(route?.runtimeConnections)
+    ? route.runtimeConnections
+    : Array.isArray(meta?.connections)
+      ? meta.connections
+      : (route.autoConnections || []);
   const seen = new Set();
   return source.map(normalizeRouteConnection).filter((connection) => {
     if (!connection || !planetIndex.has(connection.startPlanetId) || !planetIndex.has(connection.endPlanetId)) return false;
@@ -5200,12 +5215,45 @@ function buildBoundsForPaths(paths) {
   return bounds;
 }
 
+function getRoutePathDistanceScore(sourcePaths, targetPaths) {
+  if (!sourcePaths?.length || !targetPaths?.length) return Infinity;
+  const samplePoints = sourcePaths.flatMap((path) => {
+    if (!path.length) return [];
+    return [path[0], path[Math.floor(path.length / 2)], path[path.length - 1]];
+  });
+  if (!samplePoints.length) return Infinity;
+  let totalDistance = 0;
+  samplePoints.forEach((point) => {
+    let nearestDistanceSq = Infinity;
+    targetPaths.forEach((path) => {
+      for (let index = 1; index < path.length; index += 1) {
+        nearestDistanceSq = Math.min(
+          nearestDistanceSq,
+          pointToSegmentDistanceSq(point.x, point.y, path[index - 1].x, path[index - 1].y, path[index].x, path[index].y)
+        );
+      }
+    });
+    totalDistance += Math.sqrt(nearestDistanceSq);
+  });
+  return totalDistance / samplePoints.length;
+}
+
+function mergeRouteGeometry(targetRoute, sourceRoute) {
+  targetRoute.paths.push(...sourceRoute.paths);
+  targetRoute.svgPaths.push(...sourceRoute.svgPaths);
+  targetRoute.autoConnections.push(...sourceRoute.autoConnections);
+  const planets = new Map((targetRoute.planets || []).map((planet) => [planet.id, planet]));
+  (sourceRoute.planets || []).forEach((planet) => planets.set(planet.id, planet));
+  targetRoute.planets = [...planets.values()];
+  targetRoute.bounds = buildBoundsForPaths(targetRoute.paths);
+}
+
 function rebuildTacticalRouteCache(data, projectionMode) {
   const groupedRoutes = new Map();
   tacticalTravelEdges = [];
   const routeProjectionMode = getHyperlaneProjectionMode(projectionMode);
   (data?.hyperlanes || []).forEach((lane, laneIndex) => {
-    const routeName = String(lane.name || `Hyperroute ${laneIndex + 1}`);
+    const routeName = canonicalizeLoreRouteName(lane.name || `Hyperroute ${laneIndex + 1}`);
     if (!groupedRoutes.has(routeName)) {
       groupedRoutes.set(routeName, {
         name: routeName,
@@ -5276,6 +5324,9 @@ function rebuildTacticalRouteCache(data, projectionMode) {
       componentIndex += 1;
     }
   });
+  const canonicalRouteCandidates = tacticalRouteCache
+    .filter((route) => !route.isCustom && !isUnnamedRoute(route))
+    .map((route) => ({ route, referencePaths: route.paths.map((path) => path.slice()) }));
   ensureCustomRouteStore().forEach((customRoute) => {
     const connections = (customRoute.connections || []).map(normalizeRouteConnection).filter(Boolean);
     const paths = connections.map((connection) => {
@@ -5294,7 +5345,7 @@ function rebuildTacticalRouteCache(data, projectionMode) {
       if (startPlanet) planets.set(startPlanet.id, startPlanet);
       if (endPlanet) planets.set(endPlanet.id, endPlanet);
     });
-    tacticalRouteCache.push({
+    const routeRecord = {
       id: customRoute.id,
       name: customRoute.name,
       isCustom: true,
@@ -5305,7 +5356,24 @@ function rebuildTacticalRouteCache(data, projectionMode) {
       planets: [...planets.values()],
       autoConnections: connections.map(serializeRouteConnection),
       bounds: buildBoundsForPaths(paths)
-    });
+    };
+    const hasGenericName = /^(?:gelöste|neue) route(?:\s+\d+)?$/i.test(String(customRoute.name || '').trim());
+    if (hasGenericName) {
+      const canonicalMatch = canonicalRouteCandidates
+        .map((candidate) => ({
+          route: candidate.route,
+          distance: getRoutePathDistanceScore(routeRecord.paths, candidate.referencePaths)
+        }))
+        .filter((candidate) => candidate.distance <= 35)
+        .sort((a, b) => a.distance - b.distance)[0];
+      if (canonicalMatch) {
+        customRoute.canonicalName = canonicalMatch.route.name;
+        mergeRouteGeometry(canonicalMatch.route, routeRecord);
+        return;
+      }
+      delete customRoute.canonicalName;
+    }
+    tacticalRouteCache.push(routeRecord);
   });
   tacticalRouteCache.forEach((route) => {
     const meta = getRouteMeta(route);
@@ -5329,6 +5397,52 @@ function rebuildTacticalRouteCache(data, projectionMode) {
       .join(' '));
     route.bounds = manualPaths.length ? buildBoundsForPaths(manualPaths) : null;
   });
+  tacticalRouteCache.filter(isUnnamedRoute).forEach((route) => {
+    const remainingConnections = [];
+    const remainingPaths = [];
+    getRouteConnections(route).forEach((connection) => {
+      const connectionKey = [connection.startPlanetId, connection.endPlanetId].sort().join('__');
+      const automaticMatch = (route.autoConnections || []).find((candidate) => {
+        return [candidate.startPlanetId, candidate.endPlanetId].sort().join('__') === connectionKey;
+      });
+      const startPlanet = planetIndex.get(connection.startPlanetId);
+      const endPlanet = planetIndex.get(connection.endPlanetId);
+      const path = Array.isArray(connection.path) && connection.path.length >= 2
+        ? connection.path
+        : automaticMatch?.path?.length >= 2
+          ? automaticMatch.path
+          : startPlanet && endPlanet
+            ? [getPlanetDisplayPosition(startPlanet), getPlanetDisplayPosition(endPlanet)]
+            : null;
+      if (!path) return;
+      const canonicalMatch = canonicalRouteCandidates
+        .map((candidate) => ({
+          route: candidate.route,
+          distance: getRoutePathDistanceScore([path], candidate.referencePaths)
+        }))
+        .filter((candidate) => candidate.distance <= 35)
+        .sort((a, b) => a.distance - b.distance)[0];
+      if (!canonicalMatch) {
+        remainingConnections.push(serializeRouteConnection(connection));
+        remainingPaths.push(path);
+        return;
+      }
+      mergeRouteGeometry(canonicalMatch.route, {
+        paths: [path],
+        svgPaths: [path.map((point, index) => `${index ? 'L' : 'M'}${point.x.toFixed(2)},${point.y.toFixed(2)}`).join(' ')],
+        autoConnections: [serializeRouteConnection(connection)],
+        planets: [startPlanet, endPlanet].filter(Boolean)
+      });
+    });
+    route.runtimeConnections = remainingConnections;
+    route.paths = remainingPaths;
+    route.svgPaths = remainingPaths.map((path) => path
+      .map((point, index) => `${index ? 'L' : 'M'}${point.x.toFixed(2)},${point.y.toFixed(2)}`)
+      .join(' '));
+    route.planets = getRoutePlanets(route);
+    route.bounds = remainingPaths.length ? buildBoundsForPaths(remainingPaths) : null;
+  });
+  tacticalRouteCache = tacticalRouteCache.filter((route) => !isUnnamedRoute(route) || getRouteConnections(route).length);
   tacticalRouteCache.forEach((route) => {
     getRouteConnections(route).forEach((connection, connectionIndex) => {
       const startPlanet = planetIndex.get(connection.startPlanetId);
