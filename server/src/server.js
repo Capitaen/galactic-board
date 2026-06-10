@@ -23,11 +23,7 @@ import {
 } from './db.js';
 import { getFleetMotionArrivalIso, getFleetMotionByFleetId, getFleetMotionStartedAtIso, getFleetPlanetId, getPlanetNameById, writeAuditLog } from './audit.js';
 import { applyEnvFiles } from './env.js';
-<<<<<<< Updated upstream
 import { createDiscordRadioListener, getDiscordRadioConfig } from './services/discordRadioListener.js';
-=======
-import { createDiscordRadioListener } from './services/discordRadioListener.js';
->>>>>>> Stashed changes
 import { validateNextCampaignState } from './stateValidation.js';
 
 const projectRoot = process.cwd();
@@ -331,10 +327,7 @@ function listRadioAuditForActor(actor, limit = 200) {
 
 function buildRadioCommandAdminPayload(actor) {
   const { state } = readCampaignState(db);
-<<<<<<< Updated upstream
   const radioConfig = getDiscordRadioConfig();
-=======
->>>>>>> Stashed changes
   const users = listUsersForActor(actor);
   const fleets = (Array.isArray(state?.fleets) ? state.fleets : [])
     .filter((fleet) => String(fleet?.faction || '').trim().toUpperCase() === 'GAR')
@@ -344,29 +337,19 @@ function buildRadioCommandAdminPayload(actor) {
       faction: fleet.faction || ''
     }))
     .sort((a, b) => a.name.localeCompare(b.name, 'de'));
-<<<<<<< Updated upstream
-    return {
-      permissions: listRadioPermissionsForActor(actor),
-      audit: listRadioAuditForActor(actor),
-      users,
-      fleets,
-      radioConfig: {
-        enabled: radioConfig.enabled,
-        channelId: radioConfig.channelId,
-        pollMs: radioConfig.pollMs,
-        tokenLoaded: Boolean(radioConfig.botToken)
-      }
-    };
-  }
-=======
   return {
     permissions: listRadioPermissionsForActor(actor),
     audit: listRadioAuditForActor(actor),
     users,
-    fleets
+    fleets,
+    radioConfig: {
+      enabled: radioConfig.enabled,
+      channelId: radioConfig.channelId,
+      pollMs: radioConfig.pollMs,
+      tokenLoaded: Boolean(radioConfig.botToken)
+    }
   };
 }
->>>>>>> Stashed changes
 
 function sanitizeStateForRole(state, actor) {
   return {

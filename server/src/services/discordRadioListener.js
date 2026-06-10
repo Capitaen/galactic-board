@@ -56,11 +56,7 @@ export function createDiscordRadioListener({
   return { start, stop, pollOnce };
 }
 
-<<<<<<< Updated upstream
 export function getDiscordRadioConfig() {
-=======
-function getDiscordRadioConfig() {
->>>>>>> Stashed changes
   const botToken = String(process.env.DISCORD_BOT_TOKEN || '').trim();
   const channelId = String(process.env.DISCORD_RADIO_CHANNEL_ID || '').trim();
   const pollMs = Math.max(5000, Number(process.env.DISCORD_RADIO_POLL_MS || 15000) || 15000);
@@ -83,7 +79,6 @@ async function processDiscordMessages({ db, getIo, actor, onCampaignChanged }) {
   let processed = 0;
   let accepted = 0;
   let rejected = 0;
-<<<<<<< Updated upstream
   let relevant = 0;
   const debug = [];
 
@@ -92,18 +87,11 @@ async function processDiscordMessages({ db, getIo, actor, onCampaignChanged }) {
     if (result.debug) debug.push(result.debug);
     if (!result.processed) continue;
     relevant += 1;
-=======
-
-  for (const message of chronological) {
-    const result = await processSingleDiscordMessage({ db, message, actor, getIo, onCampaignChanged });
-    if (!result.processed) continue;
->>>>>>> Stashed changes
     processed += 1;
     accepted += result.acceptedCount;
     rejected += result.rejectedCount;
   }
 
-<<<<<<< Updated upstream
   return {
     ok: true,
     fetched: messages.length,
@@ -145,45 +133,21 @@ async function processSingleDiscordMessage({ db, message, actor, getIo, onCampai
   const authorFallbackNames = buildAuthorFallbackNames(message);
   const actorPermission = resolveActorPermission(db, parsed.actorName, authorFallbackNames);
   const actorDisplayName = parsed.actorName || authorFallbackNames[0] || '';
-=======
-  return { ok: true, processed, accepted, rejected };
-}
-
-async function processSingleDiscordMessage({ db, message, actor, getIo, onCampaignChanged }) {
-  const content = String(message?.content || '').trim();
-  const { state: currentState, revision } = readCampaignState(db);
-  const parsed = parseRadioCommandMessage(content, {
-    planets: currentState.planets || [],
-    fleets: currentState.fleets || []
-  });
-
-  if (!parsed.isRelevant) return { processed: false, acceptedCount: 0, rejectedCount: 0 };
-
-  const actorPermission = parsed.actorName ? findRadioCommandPermissionByNormalizedName(db, parsed.actorName) : null;
->>>>>>> Stashed changes
   const linkedUserMatches = actorPermission?.linkedUserId
     ? listUsers(db).find((user) => user.id === actorPermission.linkedUserId)
     : null;
 
   const commonPayload = {
     discordMessageId: String(message.id || ''),
-<<<<<<< Updated upstream
     actorName: actorDisplayName,
     actorFallbackNames: authorFallbackNames,
-=======
-    actorName: parsed.actorName,
->>>>>>> Stashed changes
     commandType: parsed.commandType,
     originalMessage: parsed.originalMessage,
     fleets: parsed.fleets.map((fleet) => ({ id: fleet.id, name: fleet.name })),
     planet: parsed.planet ? { id: parsed.planet.id, name: parsed.planet.name } : null
   };
 
-<<<<<<< Updated upstream
   if (!actorDisplayName) {
-=======
-  if (!parsed.actorName) {
->>>>>>> Stashed changes
     if (!hasRadioCommandLogEntry(db, message.id, null, null, 'rejected')) {
       persistRejectedRadioLog(db, actor, {
         discordMessageId: message.id,
@@ -194,83 +158,59 @@ async function processSingleDiscordMessage({ db, message, actor, getIo, onCampai
         payload: commonPayload
       });
     }
-<<<<<<< Updated upstream
     return {
       processed: true,
       acceptedCount: 0,
       rejectedCount: 1,
       debug: buildProcessedDebug(message, parsed, 'rejected', 'actor_missing')
     };
-=======
-    return { processed: true, acceptedCount: 0, rejectedCount: 1 };
->>>>>>> Stashed changes
   }
 
   if (!actorPermission || !SUPPORTED_PERMISSION_ROLES.has(actorPermission.permissionRole)) {
     if (!hasRadioCommandLogEntry(db, message.id, null, null, 'rejected')) {
       persistRejectedRadioLog(db, actor, {
         discordMessageId: message.id,
-<<<<<<< Updated upstream
         actorIngameName: actorDisplayName,
-=======
-        actorIngameName: parsed.actorName,
->>>>>>> Stashed changes
         commandType: parsed.commandType,
         originalMessage: parsed.originalMessage,
-        reason: 'Keine Berechtigung für diesen Funkbefehl gefunden.',
+        reason: 'Keine Berechtigung fuer diesen Funkbefehl gefunden.',
         payload: commonPayload
       });
     }
-<<<<<<< Updated upstream
     return {
       processed: true,
       acceptedCount: 0,
       rejectedCount: 1,
       debug: buildProcessedDebug(message, parsed, 'rejected', 'permission_missing')
     };
-=======
-    return { processed: true, acceptedCount: 0, rejectedCount: 1 };
->>>>>>> Stashed changes
   }
 
   if (!actorPermission.linkedUserId || !linkedUserMatches) {
     if (!hasRadioCommandLogEntry(db, message.id, null, null, 'rejected')) {
       persistRejectedRadioLog(db, actor, {
         discordMessageId: message.id,
-<<<<<<< Updated upstream
         actorIngameName: actorDisplayName,
-=======
-        actorIngameName: parsed.actorName,
->>>>>>> Stashed changes
         matchedUserId: actorPermission.linkedUserId || null,
         matchedUsername: actorPermission.linkedUsername || null,
         commandType: parsed.commandType,
         originalMessage: parsed.originalMessage,
-        reason: 'Verknüpfter Website-Login fehlt oder ist ungültig.',
+        reason: 'Verknuepfter Website-Login fehlt oder ist ungueltig.',
         payload: commonPayload
       });
     }
-<<<<<<< Updated upstream
     return {
       processed: true,
       acceptedCount: 0,
       rejectedCount: 1,
       debug: buildProcessedDebug(message, parsed, 'rejected', 'linked_user_missing')
     };
-=======
-    return { processed: true, acceptedCount: 0, rejectedCount: 1 };
->>>>>>> Stashed changes
   }
 
   if (!parsed.fleets.length) {
     if (!hasRadioCommandLogEntry(db, message.id, null, parsed.planet?.id || null, 'rejected')) {
       persistRejectedRadioLog(db, actor, {
         discordMessageId: message.id,
-<<<<<<< Updated upstream
         actorIngameName: actorDisplayName,
-=======
-        actorIngameName: parsed.actorName,
->>>>>>> Stashed changes
         matchedUserId: actorPermission.linkedUserId,
         matchedUsername: actorPermission.linkedUsername,
         targetPlanetId: parsed.planet?.id || null,
@@ -281,16 +221,12 @@ async function processSingleDiscordMessage({ db, message, actor, getIo, onCampai
         payload: commonPayload
       });
     }
-<<<<<<< Updated upstream
     return {
       processed: true,
       acceptedCount: 0,
       rejectedCount: 1,
       debug: buildProcessedDebug(message, parsed, 'rejected', 'fleet_missing')
     };
-=======
-    return { processed: true, acceptedCount: 0, rejectedCount: 1 };
->>>>>>> Stashed changes
   }
 
   if (!parsed.planet) {
@@ -299,11 +235,7 @@ async function processSingleDiscordMessage({ db, message, actor, getIo, onCampai
       if (hasRadioCommandLogEntry(db, message.id, fleet.id, null, 'rejected')) return;
       persistRejectedRadioLog(db, actor, {
         discordMessageId: message.id,
-<<<<<<< Updated upstream
         actorIngameName: actorDisplayName,
-=======
-        actorIngameName: parsed.actorName,
->>>>>>> Stashed changes
         matchedUserId: actorPermission.linkedUserId,
         matchedUsername: actorPermission.linkedUsername,
         targetFleetId: fleet.id,
@@ -315,26 +247,18 @@ async function processSingleDiscordMessage({ db, message, actor, getIo, onCampai
       });
       rejectedCount += 1;
     });
-<<<<<<< Updated upstream
     return {
       processed: true,
       acceptedCount: 0,
       rejectedCount,
       debug: buildProcessedDebug(message, parsed, 'rejected', 'planet_missing')
     };
-=======
-    return { processed: true, acceptedCount: 0, rejectedCount };
->>>>>>> Stashed changes
   }
 
   const fleetPermissionIds = new Set((actorPermission.fleets || []).map((fleet) => String(fleet.fleetId || '')).filter(Boolean));
   const acceptedFleetIds = [];
   let acceptedCount = 0;
   let rejectedCount = 0;
-<<<<<<< Updated upstream
-=======
-
->>>>>>> Stashed changes
   const nextState = JSON.parse(JSON.stringify(currentState));
 
   for (const fleetMatch of parsed.fleets) {
@@ -343,11 +267,7 @@ async function processSingleDiscordMessage({ db, message, actor, getIo, onCampai
       if (!hasRadioCommandLogEntry(db, message.id, fleetMatch.id, parsed.planet.id, 'rejected')) {
         persistRejectedRadioLog(db, actor, {
           discordMessageId: message.id,
-<<<<<<< Updated upstream
           actorIngameName: actorDisplayName,
-=======
-          actorIngameName: parsed.actorName,
->>>>>>> Stashed changes
           matchedUserId: actorPermission.linkedUserId,
           matchedUsername: actorPermission.linkedUsername,
           targetFleetId: fleetMatch.id,
@@ -370,11 +290,7 @@ async function processSingleDiscordMessage({ db, message, actor, getIo, onCampai
       if (!hasRadioCommandLogEntry(db, message.id, nextFleet.id, parsed.planet.id, 'rejected')) {
         persistRejectedRadioLog(db, actor, {
           discordMessageId: message.id,
-<<<<<<< Updated upstream
           actorIngameName: actorDisplayName,
-=======
-          actorIngameName: parsed.actorName,
->>>>>>> Stashed changes
           matchedUserId: actorPermission.linkedUserId,
           matchedUsername: actorPermission.linkedUsername,
           targetFleetId: nextFleet.id,
@@ -396,7 +312,7 @@ async function processSingleDiscordMessage({ db, message, actor, getIo, onCampai
     const previousPlanetId = String(nextFleet.locationPlanetId || nextFleet.planetId || '').trim();
     nextFleet.locationPlanetId = parsed.planet.id;
     nextFleet.planetId = parsed.planet.id;
-    nextFleet.lastMovedBy = actorPermission.linkedUsername || parsed.actorName;
+    nextFleet.lastMovedBy = actorPermission.linkedUsername || actorDisplayName;
     nextFleet.lastMovedByUserId = actorPermission.linkedUserId;
     nextFleet.lastMovedAt = new Date().toISOString();
     nextFleet.lastMoveFromPlanetId = previousPlanetId || null;
@@ -404,11 +320,7 @@ async function processSingleDiscordMessage({ db, message, actor, getIo, onCampai
 
     insertRadioCommandLog(db, {
       discordMessageId: message.id,
-<<<<<<< Updated upstream
       actorIngameName: actorDisplayName,
-=======
-      actorIngameName: parsed.actorName,
->>>>>>> Stashed changes
       matchedUserId: actorPermission.linkedUserId,
       matchedUsername: actorPermission.linkedUsername,
       targetFleetId: nextFleet.id,
@@ -428,11 +340,7 @@ async function processSingleDiscordMessage({ db, message, actor, getIo, onCampai
 
     writeAuditLog(db, {
       actorUserId: actorPermission.linkedUserId,
-<<<<<<< Updated upstream
       actorUsername: actorPermission.linkedUsername || actorDisplayName,
-=======
-      actorUsername: actorPermission.linkedUsername || parsed.actorName,
->>>>>>> Stashed changes
       actorRole: actorPermission.permissionRole,
       action: 'fleet.moved',
       entityType: 'fleet',
@@ -449,11 +357,7 @@ async function processSingleDiscordMessage({ db, message, actor, getIo, onCampai
         arrivesAt: null,
         routePlanetIds: [],
         source: 'discord_radio',
-<<<<<<< Updated upstream
         actorUsername: actorPermission.linkedUsername || actorDisplayName,
-=======
-        actorUsername: actorPermission.linkedUsername || parsed.actorName,
->>>>>>> Stashed changes
         actorUserId: actorPermission.linkedUserId,
         discordMessageId: String(message.id || '')
       }
@@ -461,11 +365,7 @@ async function processSingleDiscordMessage({ db, message, actor, getIo, onCampai
 
     writeAuditLog(db, {
       actorUserId: actorPermission.linkedUserId,
-<<<<<<< Updated upstream
       actorUsername: actorPermission.linkedUsername || actorDisplayName,
-=======
-      actorUsername: actorPermission.linkedUsername || parsed.actorName,
->>>>>>> Stashed changes
       actorRole: actorPermission.permissionRole,
       action: 'radio.command.accepted',
       entityType: 'fleet',
@@ -473,11 +373,7 @@ async function processSingleDiscordMessage({ db, message, actor, getIo, onCampai
       payload: {
         source: 'discord_radio',
         discordMessageId: String(message.id || ''),
-<<<<<<< Updated upstream
         actorIngameName: actorDisplayName,
-=======
-        actorIngameName: parsed.actorName,
->>>>>>> Stashed changes
         targetFleetId: nextFleet.id,
         targetFleetName: nextFleet.name,
         targetPlanetId: parsed.planet.id,
@@ -502,11 +398,7 @@ async function processSingleDiscordMessage({ db, message, actor, getIo, onCampai
       changedKeys: ['fleets'],
       actor: {
         id: actorPermission.linkedUserId,
-<<<<<<< Updated upstream
         username: actorPermission.linkedUsername || actorDisplayName,
-=======
-        username: actorPermission.linkedUsername || parsed.actorName,
->>>>>>> Stashed changes
         role: actorPermission.permissionRole
       }
     });
@@ -517,7 +409,6 @@ async function processSingleDiscordMessage({ db, message, actor, getIo, onCampai
     });
   }
 
-<<<<<<< Updated upstream
   return {
     processed: true,
     acceptedCount,
@@ -529,9 +420,6 @@ async function processSingleDiscordMessage({ db, message, actor, getIo, onCampai
       acceptedCount > 0 ? 'fleet_moved' : 'no_changes'
     )
   };
-=======
-  return { processed: true, acceptedCount, rejectedCount };
->>>>>>> Stashed changes
 }
 
 function persistRejectedRadioLog(db, actor, input) {
@@ -577,7 +465,6 @@ async function fetchDiscordMessages(config) {
   const payload = await response.json();
   return Array.isArray(payload) ? payload : [];
 }
-<<<<<<< Updated upstream
 
 function extractRadioMessageText(message) {
   const textParts = [];
@@ -642,5 +529,3 @@ function resolveActorPermission(db, parsedActorName, fallbackNames = []) {
 
   return null;
 }
-=======
->>>>>>> Stashed changes
