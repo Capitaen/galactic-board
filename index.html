@@ -5876,23 +5876,6 @@ function drawInfluencePlanetHalo(ctx, x, y, innerColor, outerColor, radius) {
   ctx.fill();
 }
 
-function drawCustomRoutesOnCanvas(ctx) {
-  if (!layers.hyperlanes) return;
-  ctx.save();
-  ctx.strokeStyle = 'rgba(245,248,255,.96)';
-  ctx.lineWidth = 5;
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
-  ctx.setLineDash([10, 8]);
-  tacticalRouteCache.filter(isCustomRoute).forEach((route) => {
-    route.paths.forEach((path) => {
-      canvasPathFromPoints(ctx, path);
-      ctx.stroke();
-    });
-  });
-  ctx.restore();
-}
-
 function renderInfluenceClouds() {
   const width = influenceCanvas.width || WORLD_SIZE;
   const height = influenceCanvas.height || WORLD_SIZE;
@@ -6182,10 +6165,7 @@ function renderTacticalBase() {
     try {
       if (layers.grid) tacticalCtx.drawImage(getTacticalSectionCanvas('grid', data, projectionMode, width, height), 0, 0);
       if (layers.sectorLabels) tacticalCtx.drawImage(getTacticalSectionCanvas('sectors', data, projectionMode, width, height), 0, 0);
-      if (layers.hyperlanes) {
-        tacticalCtx.drawImage(getTacticalSectionCanvas('hyperlanes', data, projectionMode, width, height), 0, 0);
-        drawCustomRoutesOnCanvas(tacticalCtx);
-      }
+      if (layers.hyperlanes) tacticalCtx.drawImage(getTacticalSectionCanvas('hyperlanes', data, projectionMode, width, height), 0, 0);
 
       renderTacticalRouteInteraction();
       return;
@@ -6244,22 +6224,30 @@ function renderTacticalBase() {
   }
 
   if (layers.hyperlanes) {
+    const adjacency = getInfluenceAdjacency();
     routeCache.forEach(({ a, b }) => {
       const start = getSchematicPlanetPosition(a);
       const end = getSchematicPlanetPosition(b);
+      const visual = getHyperlaneVisualState(a, b, adjacency);
       const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
       line.setAttribute('x1', start.x);
       line.setAttribute('y1', start.y);
       line.setAttribute('x2', end.x);
       line.setAttribute('y2', end.y);
       line.setAttribute('class', 'tactical-hyperlane');
+      line.style.stroke = visual.color;
       frag.appendChild(line);
     });
     tacticalRouteCache.filter(isCustomRoute).forEach((route) => {
-      route.svgPaths.forEach((pathData) => {
+      route.svgPaths.forEach((pathData, pathIndex) => {
+        const connection = getRouteConnections(route)[pathIndex];
+        const startPlanet = connection ? planetIndex.get(connection.startPlanetId) : null;
+        const endPlanet = connection ? planetIndex.get(connection.endPlanetId) : null;
+        const visual = getHyperlaneVisualState(startPlanet, endPlanet, adjacency);
         const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
         path.setAttribute('d', pathData);
         path.setAttribute('class', 'tactical-hyperlane');
+        path.style.stroke = visual.color;
         frag.appendChild(path);
       });
     });
