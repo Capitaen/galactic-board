@@ -931,7 +931,8 @@ app.post('/api/economy/market/buy', (req, res) => {
       investorId,
       userId: session?.id || '',
       consumerKey,
-      companyId: String(req.body?.companyId || '')
+      companyId: String(req.body?.companyId || ''),
+      quantity: portfolioEnabled ? Number(req.body?.quantity || 1) : 1
     });
     res.json({
       ok: true,
@@ -955,7 +956,8 @@ app.post('/api/economy/market/sell', requireAuth, (req, res) => {
   try {
     const sale = sellMarketShare(db, {
       investorId,
-      companyId: String(req.body?.companyId || '')
+      companyId: String(req.body?.companyId || ''),
+      quantity: Number(req.body?.quantity || 1)
     });
     res.json({
       ok: true,
