@@ -4,6 +4,266 @@ import Database from 'better-sqlite3';
 import bcrypt from 'bcryptjs';
 import { extractDefaultData } from './extractDefaultData.js';
 
+const RESOURCE_MARKET_CONFIG = {
+  quadraniumErz: { label: 'Metalle', holdingLabel: 'Metall-Holding', basePrice: 420 },
+  agrinium: { label: 'Technologien', holdingLabel: 'Technologie-Holding', basePrice: 560 },
+  tibannaGas: { label: 'Treibstoffe', holdingLabel: 'Treibstoff-Holding', basePrice: 480 },
+  baradium: { label: 'Chemikalien', holdingLabel: 'Chemikalien-Holding', basePrice: 450 },
+  kavamSalz: { label: 'Versorgungsgueter', holdingLabel: 'Versorgungsgueter-Holding', basePrice: 360 }
+};
+
+const RESOURCE_KEYS = Object.keys(RESOURCE_MARKET_CONFIG);
+const DEMAND_TICK_MS = 5 * 60 * 1000;
+const INSTITUTIONAL_TICK_MS = 10 * 60 * 1000;
+const ACP_HISTORY_WINDOW_MS = 183 * 24 * 60 * 60 * 1000;
+const MAX_INTELLIGENCE_REPORTS = 80;
+const MAX_TRADE_HISTORY_ROWS = 6000;
+
+const MANUAL_SECTOR_NAME_MAP = {
+  sector_d4anle0m: 'Kernwelten',
+  sector_pm6k5bhy: 'Jaso',
+  sector_ocnjl43q: 'Kailion',
+  sector_r4pmaqh9: 'Moddell',
+  sector_uuorxxi1: 'Immalia',
+  sector_si2w2rop: 'Koradin',
+  sector_pa6rxm0p: 'Fakir',
+  sector_3f5j6jen: 'Bakura',
+  sector_fs1aguyw: 'Ghost Nebula',
+  sector_65xlnot1: 'Chiss Ascendancy',
+  sector_zr2pt8ow: 'Chiss Ascendancy Ost',
+  sector_kg7o3bhc: 'Senex',
+  sector_oqzgmnla: 'Adari',
+  sector_nnznyf1u: 'Juvex',
+  sector_2xupaugv: 'Lambda',
+  sector_tx4u8yni: 'Sujimis',
+  sector_42tlt9nw: 'Arkanis',
+  sector_rzufj9mc: 'Orus',
+  sector_2u4p5w3r: 'Circarpous',
+  sector_5gdyarqw: 'Fellwe',
+  sector_fh4ssgam: 'Outer Jalor',
+  sector_iarp8he6: 'Mytaranor',
+  sector_jn7s8b8r: 'Venzeiia',
+  sector_g17tba4m: 'Belasco',
+  sector_y5b2uqvy: 'Harron',
+  sector_58z5iob4: 'Hutt Space',
+  sector_vzhu4kdl: 'Baxel',
+  sector_9beoa19b: 'Bright Jewel',
+  sector_q2phgqu7: 'Jalor',
+  sector_z6b43usd: 'Hapes Cluster',
+  sector_6paoww17: 'Japrael',
+  sector_3i9vxzmr: 'Irishi',
+  sector_4p3wlmxg: 'Calaron',
+  sector_pcvpcp72: 'Centrality',
+  sector_kosk9wdd: 'Vardoss',
+  sector_yq5od42w: 'Atrivis',
+  sector_pl8wxcgz: 'Rago',
+  sector_n26qkyn3: 'Lahara',
+  sector_5ckya7l3: 'Ariarch',
+  sector_h7up5ihg: 'Velcar',
+  sector_rk5unz12: 'Relgim',
+  sector_m1dumi12: 'Calamari',
+  sector_tcj013m2: 'Maldrood',
+  sector_dv1xk1xi: 'Kanz',
+  sector_padd3m7f: 'Taldot',
+  sector_0si6qh47: 'Romintine',
+  sector_8ldu422a: 'Ash Worlds',
+  sector_00xuih4q: 'Veragi',
+  sector_3ktg9il3: 'Locris',
+  sector_ew9cfwg8: 'Mandalore',
+  sector_51m4fawy: 'Quelii',
+  sector_ql2zewr1: 'Gordian Reach',
+  sector_0032zetf: 'Corporate Sector',
+  sector_5z29dqsz: 'Corva',
+  sector_fyakxcbe: 'Kalamith',
+  sector_l8gje809: 'Sith Worlds',
+  sector_t549gd3d: 'Cronese Mandate',
+  sector_76edpmoc: 'Pakuuni',
+  sector_f4s8vacj: 'Bothan Space',
+  sector_vj1yfx9d: 'Abrion'
+};
+
+const INSTITUTIONAL_INVESTOR_SEEDS = [
+  { id: 'inst_republic_infra_fund', name: 'Republic Infrastructure Fund', strategy: 'infrastructure', riskTolerance: 0.62, corruptionAffinity: 0.7, creditBalance: 420000 },
+  { id: 'inst_core_pension', name: 'Core Worlds Pension Trust', strategy: 'stability', riskTolerance: 0.35, corruptionAffinity: 0.2, creditBalance: 355000 },
+  { id: 'inst_banking_consortium', name: 'Galactic Banking Consortium', strategy: 'speculation', riskTolerance: 0.74, corruptionAffinity: 0.55, creditBalance: 520000 },
+  { id: 'inst_sector_authority', name: 'Sector Development Authority', strategy: 'regional', riskTolerance: 0.48, corruptionAffinity: 0.4, creditBalance: 280000 },
+  { id: 'inst_reconstruction', name: 'War Reconstruction Fund', strategy: 'recovery', riskTolerance: 0.58, corruptionAffinity: 0.65, creditBalance: 300000 },
+  { id: 'inst_logistics_cartel', name: 'Private Logistics Cartel', strategy: 'logistics', riskTolerance: 0.69, corruptionAffinity: 0.8, creditBalance: 390000 }
+];
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function round2(value) {
+  return Math.round(Number(value || 0) * 100) / 100;
+}
+
+function average(values) {
+  if (!Array.isArray(values) || !values.length) return 0;
+  return values.reduce((sum, value) => sum + Number(value || 0), 0) / values.length;
+}
+
+function stableNoise(seed, amplitude = 0.05) {
+  const digest = crypto.createHash('sha1').update(String(seed || '')).digest('hex');
+  const value = parseInt(digest.slice(0, 8), 16) / 0xffffffff;
+  return (value - 0.5) * amplitude * 2;
+}
+
+function centroidOfPoints(points) {
+  if (!Array.isArray(points) || !points.length) return { x: 0, y: 0 };
+  const total = points.reduce((accumulator, point) => ({
+    x: accumulator.x + Number(point?.x || 0),
+    y: accumulator.y + Number(point?.y || 0)
+  }), { x: 0, y: 0 });
+  return {
+    x: total.x / points.length,
+    y: total.y / points.length
+  };
+}
+
+function distanceBetween(left, right) {
+  return Math.hypot(Number(left?.x || 0) - Number(right?.x || 0), Number(left?.y || 0) - Number(right?.y || 0));
+}
+
+function getMarketResourceConfig(resourceKey) {
+  return RESOURCE_MARKET_CONFIG[resourceKey] || null;
+}
+
+function getHoldingCompanyId(sectorName, resourceKey) {
+  const digest = crypto.createHash('sha1').update(`${sectorName}:${resourceKey}`).digest('hex');
+  return `sector_holding_${digest.slice(0, 16)}`;
+}
+
+function getHoldingSymbol(sectorName, resourceKey) {
+  const digest = crypto.createHash('sha1').update(`${sectorName}:${resourceKey}`).digest('hex');
+  return `S${digest.slice(0, 7).toUpperCase()}`;
+}
+
+function buildCanonicalManualSectors(campaignState) {
+  return (campaignState?.meta?.manualSectors || []).map((sector) => ({
+    ...sector,
+    name: String(MANUAL_SECTOR_NAME_MAP[sector?.id] || sector?.name || '').trim()
+  })).filter((sector) => sector.name);
+}
+
+function summarizeSectorSlots(state, planetIds) {
+  const summary = {
+    civilianSlots: 0,
+    militarySlots: 0,
+    developmentSlots: 0,
+    activeMineProjects: 0,
+    activeShipProjects: 0,
+    fleetPresence: 0,
+    production: Object.fromEntries(RESOURCE_KEYS.map((key) => [key, 0]))
+  };
+  const slotMap = state?.planetResources || {};
+  planetIds.forEach((planetId) => {
+    const slots = Array.isArray(slotMap?.[planetId]) ? slotMap[planetId] : [];
+    slots.forEach((slot) => {
+      if (!slot) return;
+      if (RESOURCE_KEYS.includes(slot)) {
+        summary.militarySlots += 1;
+        summary.production[slot] += 1;
+        return;
+      }
+      if (slot.startsWith('civilian_')) {
+        summary.civilianSlots += 1;
+        const resourceKey = slot.replace('civilian_', '');
+        if (RESOURCE_KEYS.includes(resourceKey)) summary.production[resourceKey] += 1;
+        return;
+      }
+      summary.developmentSlots += 1;
+    });
+  });
+  const jobs = Array.isArray(state?.buildJobs) ? state.buildJobs : [];
+  jobs.forEach((job) => {
+    if (!planetIds.has(job?.locationId)) return;
+    if (job?.status !== 'building') return;
+    if (job?.jobType === 'mine') summary.activeMineProjects += 1;
+    else summary.activeShipProjects += 1;
+  });
+  const fleets = Array.isArray(state?.fleets) ? state.fleets : [];
+  fleets.forEach((fleet) => {
+    if (planetIds.has(fleet?.locationId || fleet?.planetId)) summary.fleetPresence += 1;
+  });
+  return summary;
+}
+
+function buildSectorMembership(state, manualSectors) {
+  const planets = Array.isArray(state?.planets) ? state.planets : [];
+  return manualSectors.map((sector) => {
+    const points = Array.isArray(sector?.points) ? sector.points : [];
+    const sectorPlanets = planets.filter((planet) => pointInPolygon({ x: Number(planet?.x), y: Number(planet?.y) }, points));
+    const planetIds = new Set(sectorPlanets.map((planet) => planet.id));
+    const ownerCounts = new Map();
+    sectorPlanets.forEach((planet) => {
+      const owner = String(planet?.owner || 'NEUTRAL').trim() || 'NEUTRAL';
+      ownerCounts.set(owner, (ownerCounts.get(owner) || 0) + 1);
+    });
+    const dominantOwner = [...ownerCounts.entries()].sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))[0]?.[0] || 'NEUTRAL';
+    return {
+      id: String(sector.id || sector.name),
+      name: sector.name,
+      points,
+      centroid: centroidOfPoints(points),
+      planets: sectorPlanets,
+      planetIds,
+      ownerCounts,
+      dominantOwner,
+      slotSummary: summarizeSectorSlots(state, planetIds)
+    };
+  });
+}
+
+function buildNeighborMap(sectors, limit = 4) {
+  const map = new Map();
+  sectors.forEach((sector) => {
+    const neighbors = sectors
+      .filter((candidate) => candidate.id !== sector.id)
+      .map((candidate) => ({ id: candidate.id, distance: distanceBetween(sector.centroid, candidate.centroid) }))
+      .sort((left, right) => left.distance - right.distance)
+      .slice(0, limit)
+      .map((entry) => entry.id);
+    map.set(sector.id, neighbors);
+  });
+  return map;
+}
+
+function buildAcpSnapshot(companies, historyRows) {
+  const currentByResource = {};
+  RESOURCE_KEYS.forEach((resourceKey) => {
+    const resourceCompanies = companies.filter((company) => company.resourceKey === resourceKey);
+    currentByResource[resourceKey] = {
+      resourceKey,
+      label: RESOURCE_MARKET_CONFIG[resourceKey].label,
+      averagePrice: round2(average(resourceCompanies.map((company) => Number(company.currentPrice || 0)))),
+      averageBasePrice: round2(average(resourceCompanies.map((company) => Number(company.basePrice || 0)))),
+      companyCount: resourceCompanies.length
+    };
+  });
+  const groupedHistory = {};
+  historyRows.forEach((row) => {
+    const resourceKey = row.resourceKey;
+    if (!RESOURCE_KEYS.includes(resourceKey)) return;
+    const bucketDate = new Date(row.recordedAt);
+    bucketDate.setUTCMinutes(0, 0, 0);
+    const bucketKey = bucketDate.toISOString();
+    if (!groupedHistory[resourceKey]) groupedHistory[resourceKey] = new Map();
+    if (!groupedHistory[resourceKey].has(bucketKey)) groupedHistory[resourceKey].set(bucketKey, []);
+    groupedHistory[resourceKey].get(bucketKey).push(Number(row.price || 0));
+  });
+  const history = {};
+  RESOURCE_KEYS.forEach((resourceKey) => {
+    history[resourceKey] = [...(groupedHistory[resourceKey]?.entries() || [])]
+      .sort((left, right) => left[0].localeCompare(right[0]))
+      .map(([recordedAt, values]) => ({ recordedAt, price: round2(average(values)) }));
+  });
+  return {
+    current: Object.values(currentByResource),
+    history
+  };
+}
 function pointInPolygon(point, polygon) {
   if (!point || !Array.isArray(polygon) || polygon.length < 3) return false;
   let inside = false;
@@ -178,11 +438,95 @@ export function createDb(projectRoot) {
       updated_at TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS sector_economy_state (
+      sector_id TEXT PRIMARY KEY,
+      sector_name TEXT NOT NULL,
+      population_index REAL NOT NULL DEFAULT 1,
+      industrial_index REAL NOT NULL DEFAULT 1,
+      logistics_index REAL NOT NULL DEFAULT 1,
+      war_pressure REAL NOT NULL DEFAULT 0,
+      consumer_confidence REAL NOT NULL DEFAULT 1,
+      infrastructure_demand REAL NOT NULL DEFAULT 1,
+      black_market_pressure REAL NOT NULL DEFAULT 0,
+      import_dependency_json TEXT NOT NULL DEFAULT '{}',
+      export_strength_json TEXT NOT NULL DEFAULT '{}',
+      last_demand_tick TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS sector_resource_demand (
+      sector_id TEXT NOT NULL,
+      sector_name TEXT NOT NULL,
+      resource_type TEXT NOT NULL,
+      demand_score REAL NOT NULL DEFAULT 1,
+      supply_score REAL NOT NULL DEFAULT 1,
+      import_dependency REAL NOT NULL DEFAULT 0,
+      export_strength REAL NOT NULL DEFAULT 0,
+      market_multiplier REAL NOT NULL DEFAULT 1,
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (sector_id, resource_type)
+    );
+
+    CREATE TABLE IF NOT EXISTS institutional_investors (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      strategy TEXT NOT NULL,
+      risk_tolerance REAL NOT NULL DEFAULT 0.5,
+      corruption_affinity REAL NOT NULL DEFAULT 0.5,
+      credit_balance REAL NOT NULL DEFAULT 0,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS institutional_trades (
+      id TEXT PRIMARY KEY,
+      investor_id TEXT NOT NULL,
+      company_id TEXT NOT NULL,
+      sector_id TEXT NOT NULL,
+      resource_type TEXT NOT NULL,
+      action TEXT NOT NULL,
+      quantity INTEGER NOT NULL,
+      price REAL NOT NULL,
+      reason TEXT NOT NULL,
+      corruption_opportunity_score REAL NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS market_intelligence_reports (
+      id TEXT PRIMARY KEY,
+      severity TEXT NOT NULL,
+      sector_id TEXT NOT NULL,
+      resource_type TEXT NOT NULL,
+      message TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS corruption_watch_log (
+      id TEXT PRIMARY KEY,
+      timestamp TEXT NOT NULL,
+      policy_change_id TEXT,
+      project_id TEXT,
+      affected_sector TEXT NOT NULL,
+      affected_resource TEXT NOT NULL,
+      affected_holding TEXT NOT NULL,
+      institutional_investor TEXT NOT NULL,
+      trade_action TEXT NOT NULL,
+      corruption_opportunity_score REAL NOT NULL,
+      estimated_benefit REAL NOT NULL
+    );
+
     CREATE UNIQUE INDEX IF NOT EXISTS idx_radio_command_log_unique_target
       ON radio_command_log (discord_message_id, target_fleet_id, target_planet_id, status);
 
     CREATE INDEX IF NOT EXISTS idx_radio_command_log_created_at
       ON radio_command_log (created_at DESC);
+
+    CREATE INDEX IF NOT EXISTS idx_sector_resource_demand_updated_at
+      ON sector_resource_demand (updated_at DESC);
+
+    CREATE INDEX IF NOT EXISTS idx_institutional_trades_created_at
+      ON institutional_trades (created_at DESC);
+
+    CREATE INDEX IF NOT EXISTS idx_market_intelligence_reports_created_at
+      ON market_intelligence_reports (created_at DESC);
   `);
 
   const userColumns = new Set(db.prepare('PRAGMA table_info(users)').all().map((column) => column.name));
@@ -276,12 +620,11 @@ export function createDb(projectRoot) {
 
   const campaignStateRow = db.prepare("SELECT state_json FROM app_state WHERE id = 'main'").get();
   const campaignState = JSON.parse(campaignStateRow?.state_json || '{}');
-  const manualSectors = (campaignState.meta?.manualSectors || [])
-    .map((sector) => ({
-      ...sector,
-      name: String(sector?.name || '').trim()
-    }))
-    .filter((sector) => sector.name);
+  const previousSectorNamesById = new Map((campaignState.meta?.manualSectors || [])
+    .map((sector) => [String(sector?.id || ''), String(sector?.name || '').trim()]));
+  const manualSectors = buildCanonicalManualSectors(campaignState);
+  campaignState.meta = campaignState.meta || {};
+  campaignState.meta.manualSectors = manualSectors;
   const sectorOwners = new Map();
   const sectorNames = new Set();
   let campaignStateChanged = false;
@@ -316,17 +659,22 @@ export function createDb(projectRoot) {
   }
 
   const sectorHoldingResources = [
-    ['quadraniumErz', 'Metall-Holding', 420],
-    ['agrinium', 'Technologie-Holding', 560],
-    ['tibannaGas', 'Treibstoff-Holding', 480],
-    ['baradium', 'Chemikalien-Holding', 450],
-    ['kavamSalz', 'Versorgungsgueter-Holding', 360]
+    ['quadraniumErz', RESOURCE_MARKET_CONFIG.quadraniumErz.holdingLabel, RESOURCE_MARKET_CONFIG.quadraniumErz.basePrice],
+    ['agrinium', RESOURCE_MARKET_CONFIG.agrinium.holdingLabel, RESOURCE_MARKET_CONFIG.agrinium.basePrice],
+    ['tibannaGas', RESOURCE_MARKET_CONFIG.tibannaGas.holdingLabel, RESOURCE_MARKET_CONFIG.tibannaGas.basePrice],
+    ['baradium', RESOURCE_MARKET_CONFIG.baradium.holdingLabel, RESOURCE_MARKET_CONFIG.baradium.basePrice],
+    ['kavamSalz', RESOURCE_MARKET_CONFIG.kavamSalz.holdingLabel, RESOURCE_MARKET_CONFIG.kavamSalz.basePrice]
   ];
   const insertSectorHolding = db.prepare(`
-    INSERT OR IGNORE INTO market_companies (
+    INSERT INTO market_companies (
       id, symbol, name, faction, sector, resource_key,
       base_price, current_price, previous_price, updated_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const updateSectorHolding = db.prepare(`
+    UPDATE market_companies
+    SET symbol = ?, name = ?, faction = ?, sector = ?, resource_key = ?, base_price = ?, updated_at = ?
+    WHERE id = ?
   `);
   const initialHistory = db.prepare(`
     INSERT OR IGNORE INTO market_history (id, company_id, price, recorded_at)
@@ -337,9 +685,15 @@ export function createDb(projectRoot) {
   const deleteCompanyHoldings = db.prepare('DELETE FROM market_holdings WHERE company_id = ?');
   const deleteCompany = db.prepare('DELETE FROM market_companies WHERE id = ?');
   const existingSectorCompanies = db.prepare(`
-    SELECT id FROM market_companies
+    SELECT id, sector, resource_key AS resourceKey FROM market_companies
     WHERE id LIKE 'sector_holding_%'
   `);
+  const existingSectorCompaniesBySector = db.prepare(`
+    SELECT id, sector, resource_key AS resourceKey, current_price AS currentPrice, previous_price AS previousPrice
+    FROM market_companies
+    WHERE id LIKE 'sector_holding_%'
+  `).all();
+  const existingCompanyLookup = new Map(existingSectorCompaniesBySector.map((company) => [`${company.sector}::${company.resourceKey}`, company]));
 
   db.transaction(() => {
     const canonicalSectorNames = [...sectorNames].sort((a, b) => a.localeCompare(b, 'de', { numeric: true }));
@@ -348,23 +702,39 @@ export function createDb(projectRoot) {
       const ownerCounts = sectorOwners.get(sector) || new Map();
       const faction = [...ownerCounts.entries()]
         .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))[0]?.[0] || 'NEUTRAL';
+      const manualSector = manualSectors.find((entry) => entry.name === sector);
+      const previousSectorName = previousSectorNamesById.get(String(manualSector?.id || '')) || sector;
       sectorHoldingResources.forEach(([resourceKey, holdingLabel, price]) => {
-        const digest = crypto.createHash('sha1').update(`${sector}:${resourceKey}`).digest('hex');
-        const companyId = `sector_holding_${digest.slice(0, 16)}`;
+        const existingCompany = existingCompanyLookup.get(`${sector}::${resourceKey}`)
+          || existingCompanyLookup.get(`${previousSectorName}::${resourceKey}`);
+        const companyId = existingCompany?.id || getHoldingCompanyId(sector, resourceKey);
         validCompanyIds.add(companyId);
-        const symbol = `S${digest.slice(0, 7).toUpperCase()}`;
-        insertSectorHolding.run(
-          companyId,
-          symbol,
-          `${sector} ${holdingLabel}`,
-          faction,
-          sector,
-          resourceKey,
-          price,
-          price,
-          price,
-          migrationTime
-        );
+        const symbol = getHoldingSymbol(sector, resourceKey);
+        if (existingCompany) {
+          updateSectorHolding.run(
+            symbol,
+            `${sector} ${holdingLabel}`,
+            faction,
+            sector,
+            resourceKey,
+            price,
+            migrationTime,
+            companyId
+          );
+        } else {
+          insertSectorHolding.run(
+            companyId,
+            symbol,
+            `${sector} ${holdingLabel}`,
+            faction,
+            sector,
+            resourceKey,
+            price,
+            price,
+            price,
+            migrationTime
+          );
+        }
         if (!existingHistory.get(companyId)) {
           initialHistory.run(`seed_${companyId}`, companyId, price, migrationTime);
         }
@@ -377,6 +747,28 @@ export function createDb(projectRoot) {
       deleteCompany.run(id);
     });
   })();
+
+  const seedInstitutionalInvestor = db.prepare(`
+    INSERT INTO institutional_investors (
+      id, name, strategy, risk_tolerance, corruption_affinity, credit_balance, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      name = excluded.name,
+      strategy = excluded.strategy,
+      risk_tolerance = excluded.risk_tolerance,
+      corruption_affinity = excluded.corruption_affinity
+  `);
+  INSTITUTIONAL_INVESTOR_SEEDS.forEach((investor) => {
+    seedInstitutionalInvestor.run(
+      investor.id,
+      investor.name,
+      investor.strategy,
+      investor.riskTolerance,
+      investor.corruptionAffinity,
+      investor.creditBalance,
+      migrationTime
+    );
+  });
 
   const now = new Date().toISOString();
   const defaultAdmin = db.prepare('SELECT id FROM users WHERE lower(username) = lower(?)').get('admin');
@@ -709,6 +1101,484 @@ export function getOrCreateMarketInvestor(db, investorId, userId = '') {
   return db.prepare('SELECT * FROM market_investors WHERE id = ?').get(investorId);
 }
 
+function getPolicyForEconomy(db) {
+  return db.prepare(`
+    SELECT faction, tax_rate AS taxRate, subsidy, updated_at AS updatedAt
+    FROM economy_policy WHERE faction = 'GAR'
+  `).get() || { faction: 'GAR', taxRate: 0.05, subsidy: 'none' };
+}
+
+function getActiveEventImpact(db, nowIso) {
+  const events = db.prepare(`
+    SELECT * FROM market_events
+    WHERE ends_at > ?
+    ORDER BY started_at DESC
+  `).all(nowIso);
+  return {
+    events,
+    totalImpact: events.reduce((sum, event) => sum + Number(event.impact || 0), 0)
+  };
+}
+
+function buildDemandComputationContext(db, state, now = Date.now()) {
+  const manualSectors = buildCanonicalManualSectors(state);
+  const sectors = buildSectorMembership(state, manualSectors);
+  const neighbors = buildNeighborMap(sectors, 4);
+  const inflationRate = Math.min(0.25, Number(state?.resources?.GAR?.credits || 0) / 2000000);
+  const policy = getPolicyForEconomy(db);
+  const activeEvents = getActiveEventImpact(db, new Date(now).toISOString());
+  const previousDemandRows = db.prepare(`
+    SELECT sector_id AS sectorId, sector_name AS sectorName, resource_type AS resourceType,
+      demand_score AS demandScore, supply_score AS supplyScore,
+      import_dependency AS importDependency, export_strength AS exportStrength,
+      market_multiplier AS marketMultiplier, updated_at AS updatedAt
+    FROM sector_resource_demand
+  `).all();
+  const previousDemandMap = new Map(previousDemandRows.map((row) => [`${row.sectorId}::${row.resourceType}`, row]));
+  return {
+    now,
+    state,
+    sectors,
+    neighbors,
+    inflationRate,
+    policy,
+    activeEvents,
+    previousDemandMap
+  };
+}
+
+export function getNeighborSectorDemand(sectorId, resourceType, state, options = {}) {
+  const sectors = options.sectors || [];
+  const neighbors = options.neighbors || new Map();
+  const targetIds = neighbors.get(sectorId) || [];
+  if (!targetIds.length) return { averageNeed: 0, strongestNeed: 0 };
+  const sectorMap = new Map(sectors.map((sector) => [sector.id, sector]));
+  const scores = targetIds.map((neighborId) => {
+    const neighbor = sectorMap.get(neighborId);
+    if (!neighbor) return 0;
+    const production = Number(neighbor.slotSummary?.production?.[resourceType] || 0);
+    const pressure = (
+      Number(neighbor.slotSummary?.civilianSlots || 0) * (resourceType === 'kavamSalz' ? 0.09 : 0.03)
+      + Number(neighbor.slotSummary?.militarySlots || 0) * (resourceType === 'quadraniumErz' ? 0.06 : 0.025)
+      + Number(neighbor.slotSummary?.activeShipProjects || 0) * (resourceType === 'tibannaGas' ? 0.12 : 0.07)
+    );
+    return Math.max(0, pressure - (production * 0.04));
+  });
+  return {
+    averageNeed: average(scores),
+    strongestNeed: Math.max(0, ...scores)
+  };
+}
+
+export function calculateSectorImportExport(sectorId, resourceType, state, options = {}) {
+  const sector = (options.sectors || []).find((entry) => entry.id === sectorId);
+  if (!sector) return { importDependency: 0.35, exportStrength: 0.1 };
+  const production = Number(sector.slotSummary?.production?.[resourceType] || 0);
+  const neighborDemand = getNeighborSectorDemand(sectorId, resourceType, state, options);
+  const localDemandProxy = (
+    Number(sector.slotSummary?.civilianSlots || 0) * (resourceType === 'kavamSalz' ? 0.12 : 0.04)
+    + Number(sector.slotSummary?.militarySlots || 0) * (resourceType === 'quadraniumErz' ? 0.08 : 0.05)
+    + Number(sector.slotSummary?.activeMineProjects || 0) * (resourceType === 'quadraniumErz' ? 0.15 : 0.08)
+    + Number(sector.slotSummary?.activeShipProjects || 0) * (resourceType === 'tibannaGas' ? 0.16 : 0.1)
+  );
+  const surplus = production - localDemandProxy;
+  return {
+    importDependency: clamp(0.18 + Math.max(0, -surplus) * 0.09 + neighborDemand.averageNeed * 0.12, 0.05, 1.6),
+    exportStrength: clamp(Math.max(0, surplus) * 0.08 + neighborDemand.strongestNeed * 0.14, 0, 1.8)
+  };
+}
+
+export function calculateResourceDemand(sectorId, resourceType, state, options = {}) {
+  const sector = (options.sectors || []).find((entry) => entry.id === sectorId);
+  if (!sector) {
+    return {
+      demandScore: 1,
+      supplyScore: 1,
+      importDependency: 0.35,
+      exportStrength: 0.1,
+      marketMultiplier: 1
+    };
+  }
+  const production = Number(sector.slotSummary?.production?.[resourceType] || 0);
+  const planets = sector.planets.length;
+  const civilians = Number(sector.slotSummary?.civilianSlots || 0);
+  const military = Number(sector.slotSummary?.militarySlots || 0);
+  const development = Number(sector.slotSummary?.developmentSlots || 0);
+  const mineProjects = Number(sector.slotSummary?.activeMineProjects || 0);
+  const shipProjects = Number(sector.slotSummary?.activeShipProjects || 0);
+  const fleets = Number(sector.slotSummary?.fleetPresence || 0);
+  const ownerCount = sector.ownerCounts.size;
+  const warPressure = clamp((military * 0.03) + (shipProjects * 0.12) + (fleets * 0.025) + Math.max(0, ownerCount - 1) * 0.14, 0, 2.4);
+  const populationIndex = clamp(0.45 + (planets * 0.055) + (civilians * 0.035) + (development * 0.03), 0.4, 3.2);
+  const industrialIndex = clamp(0.4 + (military * 0.05) + (development * 0.045) + (shipProjects * 0.1), 0.3, 3.2);
+  const logisticsIndex = clamp(0.45 + (civilians * 0.03) + (fleets * 0.04) + (planets * 0.02), 0.3, 2.8);
+  const consumerConfidence = clamp(1.08 - options.inflationRate * 0.85 - (warPressure * 0.12) + (options.policy?.subsidy === 'civilian' ? 0.08 : 0), 0.55, 1.35);
+  const infrastructureDemand = clamp(0.55 + (mineProjects * 0.16) + (development * 0.035) + (shipProjects * 0.06), 0.4, 2.6);
+  const blackMarketPressure = clamp((warPressure * 0.18) + (options.inflationRate * 0.6) + (sector.dominantOwner === 'HUTT' ? 0.22 : 0), 0, 1.8);
+  const { importDependency, exportStrength } = calculateSectorImportExport(sectorId, resourceType, state, options);
+  const neighborDemand = getNeighborSectorDemand(sectorId, resourceType, state, options);
+  const baseDemand = {
+    quadraniumErz: 0.7 + infrastructureDemand * 0.65 + mineProjects * 0.16 + shipProjects * 0.08 + industrialIndex * 0.25,
+    agrinium: 0.62 + industrialIndex * 0.4 + development * 0.06 + shipProjects * 0.08 + (options.policy?.subsidy === 'research' ? 0.12 : 0),
+    tibannaGas: 0.7 + logisticsIndex * 0.4 + fleets * 0.07 + warPressure * 0.24 + importDependency * 0.1,
+    baradium: 0.55 + industrialIndex * 0.3 + warPressure * 0.28 + shipProjects * 0.06,
+    kavamSalz: 0.9 + populationIndex * 0.55 + warPressure * 0.18 + options.inflationRate * 0.2
+  }[resourceType] || 1;
+  const supplyScore = clamp(0.35 + (production * 0.34) + exportStrength * 0.08, 0.15, 5.2);
+  const randomNoise = stableNoise(`${sectorId}:${resourceType}:${Math.floor(options.now / DEMAND_TICK_MS)}`, 0.035);
+  const speculationFactor = stableNoise(`spec:${sectorId}:${resourceType}:${Math.floor(options.now / (DEMAND_TICK_MS * 2))}`, 0.05);
+  const tradeRouteDisruption = warPressure * 0.04 + blackMarketPressure * 0.03;
+  const corruptionMultiplier = 1 + (blackMarketPressure * 0.03);
+  const previous = options.previousDemandMap?.get(`${sectorId}::${resourceType}`);
+  const rawDemand = clamp(baseDemand + neighborDemand.averageNeed * 0.35 + randomNoise + speculationFactor, 0.25, 5.6);
+  const delayedDemandEffect = previous ? (Number(previous.demandScore || rawDemand) * 0.7) + (rawDemand * 0.3) : rawDemand;
+  const marketMultiplier = clamp(
+    1
+      + ((delayedDemandEffect - supplyScore) * 0.07)
+      + (importDependency * 0.06)
+      + (exportStrength * 0.045)
+      + ((consumerConfidence - 1) * 0.08)
+      + options.activeEvents.totalImpact * 0.5
+      - tradeRouteDisruption
+      + (options.inflationRate * 0.04),
+    0.72,
+    1.45
+  ) * corruptionMultiplier;
+  return {
+    demandScore: round2(delayedDemandEffect),
+    supplyScore: round2(supplyScore),
+    importDependency: round2(importDependency),
+    exportStrength: round2(exportStrength),
+    marketMultiplier: round2(clamp(marketMultiplier, 0.72, 1.45)),
+    sectorState: {
+      populationIndex: round2(populationIndex),
+      industrialIndex: round2(industrialIndex),
+      logisticsIndex: round2(logisticsIndex),
+      warPressure: round2(warPressure),
+      consumerConfidence: round2(consumerConfidence),
+      infrastructureDemand: round2(infrastructureDemand),
+      blackMarketPressure: round2(blackMarketPressure)
+    }
+  };
+}
+
+export function calculateSectorDemand(sectorId, state, options = {}) {
+  const demandByResource = {};
+  RESOURCE_KEYS.forEach((resourceKey) => {
+    demandByResource[resourceKey] = calculateResourceDemand(sectorId, resourceKey, state, options);
+  });
+  return demandByResource;
+}
+
+export function calculateCorruptionOpportunity(projectOrPolicy, affectedSector, affectedResource) {
+  const text = JSON.stringify(projectOrPolicy || {});
+  const projectWeight = /ship|venator|werft|bau/i.test(text) ? 0.26 : 0.12;
+  const policyWeight = /civilian|research|logistics|subsidy|tax/i.test(text) ? 0.2 : 0.08;
+  const resourceWeight = {
+    quadraniumErz: 0.24,
+    agrinium: 0.21,
+    tibannaGas: 0.18,
+    baradium: 0.16,
+    kavamSalz: 0.14
+  }[affectedResource] || 0.1;
+  const sectorWeight = stableNoise(`${affectedSector}:${affectedResource}:${text}`, 0.08) + 0.12;
+  return round2(clamp(projectWeight + policyWeight + resourceWeight + sectorWeight, 0, 1.25));
+}
+
+export function createMarketIntelligenceReport(demandData, options = {}) {
+  const { sectorName = '', resourceKey = '', marketMultiplier = 1, warPressure = 0, exportStrength = 0, importDependency = 0 } = demandData || {};
+  const label = RESOURCE_MARKET_CONFIG[resourceKey]?.label || resourceKey;
+  if (marketMultiplier >= 1.18) return { severity: 'positive', message: `${label}-Nachfrage im Sektor ${sectorName} zieht an.` };
+  if (marketMultiplier <= 0.84) return { severity: 'warning', message: `${label}-Preise im Sektor ${sectorName} stehen unter Druck.` };
+  if (warPressure >= 1.1 && ['tibannaGas', 'baradium', 'kavamSalz'].includes(resourceKey)) {
+    return { severity: 'neutral', message: `Flottenbewegungen im Sektor ${sectorName} treiben die ${label}-Nachfrage.` };
+  }
+  if (exportStrength >= 0.9) return { severity: 'positive', message: `${sectorName} profitiert aktuell von starkem ${label}-Export.` };
+  if (importDependency >= 1.1) return { severity: 'warning', message: `${sectorName} ist bei ${label} spürbar importabhängig.` };
+  return options.fallback ? { severity: 'neutral', message: `${label}-Märkte im Sektor ${sectorName} bleiben uneinheitlich.` } : null;
+}
+
+export function runCivilianDemandTick(state, options = {}) {
+  const db = options.db;
+  if (!db) return { ran: false, reason: 'no-db' };
+  const now = Number(options.now || Date.now());
+  const latestTick = db.prepare('SELECT MAX(last_demand_tick) AS lastTick FROM sector_economy_state').get()?.lastTick;
+  if (latestTick && (now - Date.parse(latestTick)) < DEMAND_TICK_MS) {
+    return { ran: false, reason: 'cooldown', nextTickAt: new Date(Date.parse(latestTick) + DEMAND_TICK_MS).toISOString() };
+  }
+  const context = buildDemandComputationContext(db, state, now);
+  const recordedAt = new Date(now).toISOString();
+  const upsertSectorEconomy = db.prepare(`
+    INSERT INTO sector_economy_state (
+      sector_id, sector_name, population_index, industrial_index, logistics_index,
+      war_pressure, consumer_confidence, infrastructure_demand, black_market_pressure,
+      import_dependency_json, export_strength_json, last_demand_tick
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(sector_id) DO UPDATE SET
+      sector_name = excluded.sector_name,
+      population_index = excluded.population_index,
+      industrial_index = excluded.industrial_index,
+      logistics_index = excluded.logistics_index,
+      war_pressure = excluded.war_pressure,
+      consumer_confidence = excluded.consumer_confidence,
+      infrastructure_demand = excluded.infrastructure_demand,
+      black_market_pressure = excluded.black_market_pressure,
+      import_dependency_json = excluded.import_dependency_json,
+      export_strength_json = excluded.export_strength_json,
+      last_demand_tick = excluded.last_demand_tick
+  `);
+  const upsertResourceDemand = db.prepare(`
+    INSERT INTO sector_resource_demand (
+      sector_id, sector_name, resource_type, demand_score, supply_score,
+      import_dependency, export_strength, market_multiplier, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(sector_id, resource_type) DO UPDATE SET
+      sector_name = excluded.sector_name,
+      demand_score = excluded.demand_score,
+      supply_score = excluded.supply_score,
+      import_dependency = excluded.import_dependency,
+      export_strength = excluded.export_strength,
+      market_multiplier = excluded.market_multiplier,
+      updated_at = excluded.updated_at
+  `);
+  const insertReport = db.prepare(`
+    INSERT INTO market_intelligence_reports (id, severity, sector_id, resource_type, message, created_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `);
+  db.transaction(() => {
+    context.sectors.forEach((sector) => {
+      const demandByResource = calculateSectorDemand(sector.id, state, context);
+      const importDependencyJson = {};
+      const exportStrengthJson = {};
+      let referenceSectorState = null;
+      RESOURCE_KEYS.forEach((resourceKey) => {
+        const demandRow = demandByResource[resourceKey];
+        referenceSectorState = referenceSectorState || demandRow.sectorState;
+        importDependencyJson[resourceKey] = demandRow.importDependency;
+        exportStrengthJson[resourceKey] = demandRow.exportStrength;
+        upsertResourceDemand.run(
+          sector.id,
+          sector.name,
+          resourceKey,
+          demandRow.demandScore,
+          demandRow.supplyScore,
+          demandRow.importDependency,
+          demandRow.exportStrength,
+          demandRow.marketMultiplier,
+          recordedAt
+        );
+        const report = createMarketIntelligenceReport({
+          sectorName: sector.name,
+          resourceKey,
+          marketMultiplier: demandRow.marketMultiplier,
+          warPressure: demandRow.sectorState.warPressure,
+          exportStrength: demandRow.exportStrength,
+          importDependency: demandRow.importDependency
+        });
+        if (report) insertReport.run(crypto.randomUUID(), report.severity, sector.id, resourceKey, report.message, recordedAt);
+      });
+      upsertSectorEconomy.run(
+        sector.id,
+        sector.name,
+        referenceSectorState?.populationIndex || 1,
+        referenceSectorState?.industrialIndex || 1,
+        referenceSectorState?.logisticsIndex || 1,
+        referenceSectorState?.warPressure || 0,
+        referenceSectorState?.consumerConfidence || 1,
+        referenceSectorState?.infrastructureDemand || 1,
+        referenceSectorState?.blackMarketPressure || 0,
+        JSON.stringify(importDependencyJson),
+        JSON.stringify(exportStrengthJson),
+        recordedAt
+      );
+    });
+    db.prepare(`
+      DELETE FROM market_intelligence_reports
+      WHERE id NOT IN (
+        SELECT id FROM market_intelligence_reports
+        ORDER BY created_at DESC
+        LIMIT ${MAX_INTELLIGENCE_REPORTS}
+      )
+    `).run();
+  })();
+  return { ran: true, recordedAt };
+}
+
+export function calculateCivilianMineYield(db, sectorName, resourceType, amount, state, options = {}) {
+  const baseConfig = getMarketResourceConfig(resourceType);
+  if (!baseConfig) return 0;
+  const producedAmount = Math.max(0, Number(amount || 0));
+  const demandRow = db.prepare(`
+    SELECT market_multiplier AS marketMultiplier, import_dependency AS importDependency
+    FROM sector_resource_demand
+    WHERE sector_name = ? AND resource_type = ?
+  `).get(String(sectorName || '').trim(), resourceType);
+  const company = db.prepare(`
+    SELECT current_price AS currentPrice, base_price AS basePrice
+    FROM market_companies
+    WHERE sector = ? AND resource_key = ?
+    LIMIT 1
+  `).get(String(sectorName || '').trim(), resourceType);
+  const marketConditionMultiplier = company?.basePrice
+    ? clamp(Number(company.currentPrice || company.basePrice) / Number(company.basePrice || 1), 0.85, 1.25)
+    : 1;
+  const sectorDemandMultiplier = clamp(0.82 + Number(demandRow?.marketMultiplier || 1) * 0.22 + Number(demandRow?.importDependency || 0) * 0.05, 0.7, 1.45);
+  const randomCivilianTradeFactor = clamp(1 + stableNoise(`civil:${sectorName}:${resourceType}:${Math.floor(Date.now() / (60 * 60 * 1000))}`, 0.035), 0.92, 1.08);
+  return round2(
+    producedAmount
+      * baseConfig.basePrice
+      * sectorDemandMultiplier
+      * marketConditionMultiplier
+      * randomCivilianTradeFactor
+      * clamp(Number(options.additionalMultiplier || 1), 0.5, 2)
+  );
+}
+
+export function applyDemandToMiningHolding(db, sectorName, resourceType, demandData, options = {}) {
+  const company = db.prepare(`
+    SELECT id, current_price AS currentPrice, base_price AS basePrice
+    FROM market_companies
+    WHERE sector = ? AND resource_key = ?
+    LIMIT 1
+  `).get(sectorName, resourceType);
+  if (!company) return null;
+  const recordedAt = options.recordedAt || new Date().toISOString();
+  const demandPressure = (Number(demandData?.demandScore || 1) - Number(demandData?.supplyScore || 1)) * 0.012;
+  const multiplierPressure = (Number(demandData?.marketMultiplier || 1) - 1) * 0.09;
+  const inflationPressure = Math.min(0.08, Math.max(0, Number(options.inflationRate || 0))) * 0.04;
+  const noise = stableNoise(`price:${sectorName}:${resourceType}:${Math.floor(Date.parse(recordedAt) / DEMAND_TICK_MS)}`, 0.018);
+  const nextPrice = Math.max(
+    25,
+    round2(Number(company.currentPrice || company.basePrice || 0) * (1 + demandPressure + multiplierPressure + inflationPressure + noise))
+  );
+  db.prepare(`
+    UPDATE market_companies
+    SET previous_price = current_price, current_price = ?, updated_at = ?
+    WHERE id = ?
+  `).run(nextPrice, recordedAt, company.id);
+  db.prepare(`
+    INSERT INTO market_history (id, company_id, price, recorded_at)
+    VALUES (?, ?, ?, ?)
+  `).run(crypto.randomUUID(), company.id, nextPrice, recordedAt);
+  return { companyId: company.id, nextPrice };
+}
+
+export function runInstitutionalInvestorTick(state, options = {}) {
+  const db = options.db;
+  if (!db) return { ran: false, reason: 'no-db' };
+  const now = Number(options.now || Date.now());
+  const latestTrade = db.prepare('SELECT MAX(created_at) AS createdAt FROM institutional_trades').get()?.createdAt;
+  if (latestTrade && (now - Date.parse(latestTrade)) < INSTITUTIONAL_TICK_MS) {
+    return { ran: false, reason: 'cooldown' };
+  }
+  const recordedAt = new Date(now).toISOString();
+  const demandRows = db.prepare(`
+    SELECT sector_id AS sectorId, sector_name AS sectorName, resource_type AS resourceType,
+      demand_score AS demandScore, supply_score AS supplyScore,
+      import_dependency AS importDependency, export_strength AS exportStrength,
+      market_multiplier AS marketMultiplier
+    FROM sector_resource_demand
+  `).all();
+  if (!demandRows.length) return { ran: false, reason: 'no-demand' };
+  const companies = db.prepare(`
+    SELECT id, name, sector, resource_key AS resourceKey, current_price AS currentPrice
+    FROM market_companies
+    WHERE id LIKE 'sector_holding_%'
+  `).all();
+  const companyMap = new Map(companies.map((company) => [`${company.sector}::${company.resourceKey}`, company]));
+  const investors = db.prepare(`
+    SELECT id, name, strategy, risk_tolerance AS riskTolerance,
+      corruption_affinity AS corruptionAffinity, credit_balance AS creditBalance
+    FROM institutional_investors
+  `).all();
+  const insertTrade = db.prepare(`
+    INSERT INTO institutional_trades (
+      id, investor_id, company_id, sector_id, resource_type, action, quantity, price, reason,
+      corruption_opportunity_score, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const updateInvestor = db.prepare(`
+    UPDATE institutional_investors
+    SET credit_balance = ?, updated_at = ?
+    WHERE id = ?
+  `);
+  const insertCorruptionLog = db.prepare(`
+    INSERT INTO corruption_watch_log (
+      id, timestamp, policy_change_id, project_id, affected_sector, affected_resource,
+      affected_holding, institutional_investor, trade_action, corruption_opportunity_score, estimated_benefit
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  db.transaction(() => {
+    investors.forEach((investor, index) => {
+      const ranked = demandRows
+        .map((row) => {
+          const company = companyMap.get(`${row.sectorName}::${row.resourceType}`);
+          if (!company) return null;
+          const trendScore = Number(row.marketMultiplier || 1) + (Number(row.exportStrength || 0) * 0.18) - (Number(row.importDependency || 0) * 0.05);
+          return { ...row, company, trendScore };
+        })
+        .filter(Boolean)
+        .sort((left, right) => right.trendScore - left.trendScore);
+      const pick = ranked[index % Math.max(1, ranked.length)];
+      if (!pick) return;
+      const wantsToSell = pick.marketMultiplier < 0.92 && investor.strategy !== 'recovery';
+      const quantity = Math.max(1, Math.round((investor.riskTolerance * 18) + (pick.marketMultiplier * 8)));
+      const tradePrice = Number(pick.company.currentPrice || 0);
+      const value = tradePrice * quantity;
+      let nextBalance = Number(investor.creditBalance || 0);
+      if (!wantsToSell && nextBalance < value) return;
+      const corruptionOpportunityScore = calculateCorruptionOpportunity(
+        { subsidy: getPolicyForEconomy(db).subsidy, activeShipProjects: 1, resourceType: pick.resourceType },
+        pick.sectorName,
+        pick.resourceType
+      ) * Number(investor.corruptionAffinity || 0.5);
+      nextBalance = wantsToSell ? nextBalance + value : nextBalance - value;
+      updateInvestor.run(round2(nextBalance), recordedAt, investor.id);
+      insertTrade.run(
+        crypto.randomUUID(),
+        investor.id,
+        pick.company.id,
+        pick.sectorId,
+        pick.resourceType,
+        wantsToSell ? 'SELL' : 'BUY',
+        quantity,
+        tradePrice,
+        wantsToSell ? 'Überproduktion / politische Unsicherheit' : 'Steigende Nachfrageprognose',
+        round2(corruptionOpportunityScore),
+        recordedAt
+      );
+      if (corruptionOpportunityScore >= 0.45) {
+        insertCorruptionLog.run(
+          crypto.randomUUID(),
+          recordedAt,
+          `policy_${recordedAt.slice(0, 13)}`,
+          '',
+          pick.sectorName,
+          pick.resourceType,
+          pick.company.name,
+          investor.name,
+          wantsToSell ? 'SELL' : 'BUY',
+          round2(corruptionOpportunityScore),
+          round2(value * Math.max(0.08, pick.marketMultiplier - 0.92))
+        );
+      }
+      applyDemandToMiningHolding(db, pick.sectorName, pick.resourceType, pick, {
+        inflationRate: options.inflationRate || 0,
+        recordedAt
+      });
+    });
+    db.prepare(`
+      DELETE FROM institutional_trades
+      WHERE id NOT IN (
+        SELECT id FROM institutional_trades
+        ORDER BY created_at DESC
+        LIMIT ${MAX_TRADE_HISTORY_ROWS}
+      )
+    `).run();
+  })();
+  return { ran: true, recordedAt };
+}
+
 export function readMarketSnapshot(db, investorId = '', userId = '') {
   const companies = db.prepare(`
     SELECT id, symbol, name, faction, base_price AS basePrice,
@@ -716,10 +1586,11 @@ export function readMarketSnapshot(db, investorId = '', userId = '') {
       current_price AS currentPrice, previous_price AS previousPrice, updated_at AS updatedAt
     FROM market_companies ORDER BY symbol
   `).all();
-  const historyCutoff = new Date(Date.now() - (183 * 24 * 60 * 60 * 1000)).toISOString();
+  const historyCutoff = new Date(Date.now() - ACP_HISTORY_WINDOW_MS).toISOString();
   const historyRows = db.prepare(`
-    SELECT company_id AS companyId, price, recorded_at AS recordedAt
-    FROM market_history
+    SELECT h.company_id AS companyId, h.price, h.recorded_at AS recordedAt, c.resource_key AS resourceKey
+    FROM market_history h
+    LEFT JOIN market_companies c ON c.id = h.company_id
     WHERE recorded_at >= ?
     ORDER BY recorded_at
   `).all(historyCutoff);
@@ -778,15 +1649,51 @@ export function readMarketSnapshot(db, investorId = '', userId = '') {
     FROM market_events
     ORDER BY started_at DESC LIMIT 15
   `).all();
-  const policy = db.prepare(`
-    SELECT faction, tax_rate AS taxRate, subsidy, updated_at AS updatedAt
-    FROM economy_policy WHERE faction = 'GAR'
-  `).get() || { faction: 'GAR', taxRate: 0.05, subsidy: 'none' };
+  const policy = getPolicyForEconomy(db);
+  const sectorDemand = db.prepare(`
+    SELECT sector_id AS sectorId, sector_name AS sectorName, resource_type AS resourceType,
+      demand_score AS demandScore, supply_score AS supplyScore,
+      import_dependency AS importDependency, export_strength AS exportStrength,
+      market_multiplier AS marketMultiplier, updated_at AS updatedAt
+    FROM sector_resource_demand
+    ORDER BY sector_name COLLATE NOCASE, resource_type
+  `).all();
+  const intelligenceReports = db.prepare(`
+    SELECT id, severity, sector_id AS sectorId, resource_type AS resourceType, message, created_at AS createdAt
+    FROM market_intelligence_reports
+    ORDER BY created_at DESC
+    LIMIT 20
+  `).all();
+  const institutionalTrades = db.prepare(`
+    SELECT t.id, i.name AS investorName, t.company_id AS companyId, t.sector_id AS sectorId,
+      t.resource_type AS resourceType, t.action, t.quantity, t.price, t.reason,
+      t.corruption_opportunity_score AS corruptionOpportunityScore, t.created_at AS createdAt
+    FROM institutional_trades t
+    LEFT JOIN institutional_investors i ON i.id = t.investor_id
+    ORDER BY t.created_at DESC
+    LIMIT 20
+  `).all();
   const factionAccounts = Object.fromEntries(db.prepare(`
     SELECT faction, credits, updated_at AS updatedAt
     FROM faction_accounts ORDER BY faction
   `).all().map((account) => [account.faction, account]));
-  return { companies, history, topLastHour, holdings, purchaseOrders, investor, leaderboard, events, policy, factionAccounts };
+  const acp = buildAcpSnapshot(companies, historyRows.filter((row) => RESOURCE_KEYS.includes(row.resourceKey)));
+  return {
+    companies,
+    history,
+    topLastHour,
+    holdings,
+    purchaseOrders,
+    investor,
+    leaderboard,
+    events,
+    policy,
+    factionAccounts,
+    sectorDemand,
+    intelligenceReports,
+    institutionalTrades,
+    acp
+  };
 }
 
 export function purchaseMarketShare(db, investorId, companyId, now = Date.now()) {
@@ -1003,7 +1910,11 @@ export function updateEconomyPolicy(db, { taxRate, subsidy }) {
   `).get();
 }
 
-export function runMarketTick(db, inflationRate = 0, now = Date.now()) {
+export function runMarketTick(db, inflationRate = 0, now = Date.now(), state = null) {
+  if (state) {
+    runCivilianDemandTick(state, { db, now });
+    runInstitutionalInvestorTick(state, { db, now, inflationRate });
+  }
   const companies = db.prepare('SELECT * FROM market_companies').all();
   if (!companies.length) return false;
   const latestUpdate = Math.max(...companies.map((company) => Date.parse(company.updated_at) || 0));
@@ -1018,13 +1929,26 @@ export function runMarketTick(db, inflationRate = 0, now = Date.now()) {
   const insertHistory = db.prepare(`
     INSERT INTO market_history (id, company_id, price, recorded_at) VALUES (?, ?, ?, ?)
   `);
+  const demandMap = new Map(db.prepare(`
+    SELECT sector_name AS sectorName, resource_type AS resourceType,
+      demand_score AS demandScore, supply_score AS supplyScore,
+      market_multiplier AS marketMultiplier, import_dependency AS importDependency,
+      export_strength AS exportStrength
+    FROM sector_resource_demand
+  `).all().map((row) => [`${row.sectorName}::${row.resourceType}`, row]));
   db.transaction(() => {
     companies.forEach((company) => {
+      const demandData = company.sector && company.resource_key
+        ? demandMap.get(`${company.sector}::${company.resource_key}`)
+        : null;
       const pullToBase = (company.base_price - company.current_price) / company.base_price * 0.04;
       const noise = (Math.random() - 0.5) * 0.04;
       const eventImpact = Number(activeEvent?.impact || 0);
       const inflationImpact = Math.min(0.08, Math.max(0, inflationRate)) * 0.25;
-      const nextPrice = Math.max(25, Math.round(company.current_price * (1 + pullToBase + noise + eventImpact + inflationImpact) * 100) / 100);
+      const demandImpact = demandData
+        ? ((Number(demandData.marketMultiplier || 1) - 1) * 0.14) + ((Number(demandData.demandScore || 1) - Number(demandData.supplyScore || 1)) * 0.015)
+        : 0;
+      const nextPrice = Math.max(25, Math.round(company.current_price * (1 + pullToBase + noise + eventImpact + inflationImpact + demandImpact) * 100) / 100);
       updateCompany.run(nextPrice, recordedAt, company.id);
       insertHistory.run(crypto.randomUUID(), company.id, nextPrice, recordedAt);
     });

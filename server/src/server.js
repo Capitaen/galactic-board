@@ -7,6 +7,7 @@ import bcrypt from 'bcryptjs';
 import { createServer } from 'node:https';
 import { Server as SocketServer } from 'socket.io';
 import {
+  calculateCivilianMineYield,
   createDb,
   createRadioCommandPermission,
   createUser,
@@ -407,9 +408,13 @@ function getFactionProductionRateFromState(state, faction = 'GAR') {
     for (const key of RAW_RESOURCE_KEYS) {
       totals[key] += base[key] * (1 + Math.min(MAX_CIVILIAN_PRODUCTION_BONUS, bonuses[key]));
     }
-    totals.credits += civilianProduction.reduce((sum, entry) => (
-      sum + (entry.credits * (1 + Math.min(MAX_CIVILIAN_PRODUCTION_BONUS, bonuses[entry.resource] || 0)))
-    ), 0);
+    const sectorName = String(planet?.sector || '').trim();
+    totals.credits += civilianProduction.reduce((sum, entry) => {
+      const boostedAmount = 1 * (1 + Math.min(MAX_CIVILIAN_PRODUCTION_BONUS, bonuses[entry.resource] || 0));
+      return sum + calculateCivilianMineYield(db, sectorName, entry.resource, boostedAmount, state, {
+        additionalMultiplier: 1
+      });
+    }, 0);
   }
   for (const key of RESOURCE_KEYS) {
     totals[key] = Math.round(totals[key] * 100) / 100;
@@ -891,7 +896,7 @@ app.get('/api/economy/market', (req, res) => {
   const consumerKey = session ? '' : getMarketConsumerKey(req);
   const { state } = readCampaignState(db);
   const inflationRate = Math.min(0.25, Number(state.resources?.GAR?.credits || 0) / 2000000);
-  runMarketTick(db, inflationRate);
+  runMarketTick(db, inflationRate, Date.now(), state);
   const snapshot = readMarketSnapshot(db, investorId, session?.id || '');
   const factionAccounts = {
     ...snapshot.factionAccounts,
@@ -1290,7 +1295,7 @@ io.on('connection', (socket) => {
 function runServerCampaignMaintenance() {
   const { state, revision } = readCampaignState(db);
   const inflationRate = Math.min(0.25, Number(state.resources?.GAR?.credits || 0) / 2000000);
-  runMarketTick(db, inflationRate);
+  runMarketTick(db, inflationRate, Date.now(), state);
   const resetResult = applyOneTimeResourceReset(state);
   const productionResult = applyServerProductionTicks(resetResult.state);
   if (!resetResult.changed && !productionResult.changed) return;
