@@ -132,7 +132,7 @@ async function processSingleDiscordMessage({ db, message, actor, getIo, onCampai
 
   const authorFallbackNames = buildAuthorFallbackNames(message);
   const actorPermission = resolveActorPermission(db, parsed.actorName);
-  const actorDisplayName = parsed.actorName || '';
+  const actorDisplayName = parsed.actorName || recoverActorNameFromContent(content) || '';
   const linkedUserMatches = actorPermission?.linkedUserId
     ? listUsers(db).find((user) => user.id === actorPermission.linkedUserId)
     : null;
@@ -487,6 +487,47 @@ function extractRadioMessageText(message) {
   return textParts.join('\n').trim();
 }
 
+function recoverActorNameFromContent(content) {
+  const lines = String(content || '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  for (const line of lines) {
+    const candidate = recoverActorNameFromLine(line);
+    if (candidate) return candidate;
+  }
+
+  return recoverActorNameFromLine(String(content || '').trim());
+}
+
+function recoverActorNameFromLine(line) {
+  const normalized = String(line || '')
+    .replace(/^\[Langstreckenfunk\]\s*/i, '')
+    .replace(/[_*`~|>()[\]{}]/g, ' ')
+    .trim();
+
+  const colonIndex = normalized.indexOf(':');
+  if (colonIndex < 0) return '';
+
+  const leftSide = normalized.slice(0, colonIndex)
+    .replace(/\b[A-Z]{1,8}(?:\/[A-Z]{1,8})+\b/g, ' ')
+    .replace(/\b[A-Z]{2,8}\b/g, ' ')
+    .replace(/\b\d+(?:th|st|nd|rd)?\b/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const multiWordMatch = leftSide.match(/([A-ZÄÖÜ][\p{L}'’-]+(?:\s+[A-ZÄÖÜ][\p{L}'’-]+){1,3})$/u);
+  if (multiWordMatch?.[1]) return multiWordMatch[1].trim();
+
+  const directOrderMatch = normalized.match(
+    /([A-ZÄÖÜ][\p{L}'’-]+(?:\s+[A-ZÄÖÜ][\p{L}'’-]+){1,3})\s*:\s*an\s+/u
+  );
+  if (directOrderMatch?.[1]) return directOrderMatch[1].trim();
+
+  return '';
+}
+
 function buildMessagePreview(content) {
   return String(content || '')
     .replace(/\s+/g, ' ')
@@ -495,12 +536,14 @@ function buildMessagePreview(content) {
 }
 
 function buildProcessedDebug(message, parsed, status, reason) {
+  const content = extractRadioMessageText(message);
+  const recoveredActorName = recoverActorNameFromContent(content);
   return {
     messageId: String(message?.id || ''),
     matched: true,
     status,
     reason,
-    actorName: parsed.actorName || buildAuthorFallbackNames(message)[0] || '',
+    actorName: parsed.actorName || recoveredActorName || buildAuthorFallbackNames(message)[0] || '',
     fleetNames: parsed.fleets.map((fleet) => fleet.name),
     planetName: parsed.planet?.name || '',
     preview: buildMessagePreview(parsed.originalMessage)
