@@ -52,6 +52,18 @@ const sessions = new Map();
 const COOKIE_NAME = 'gcb_session';
 const PORT = Number(process.env.PORT || 443);
 const RESOURCE_KEYS = ['quadraniumErz', 'agrinium', 'tibannaGas', 'baradium', 'kavamSalz'];
+const INFRASTRUCTURE_PRODUCTION_RESOURCES = {
+  quadraniumErz: 'quadraniumErz',
+  agrinium: 'agrinium',
+  tibannaGas: 'tibannaGas',
+  baradium: 'baradium',
+  kavamSalz: 'kavamSalz',
+  civilian_quadraniumErz: 'quadraniumErz',
+  civilian_agrinium: 'agrinium',
+  civilian_tibannaGas: 'tibannaGas',
+  civilian_baradium: 'baradium',
+  civilian_kavamSalz: 'kavamSalz'
+};
 const CIVILIAN_INFRASTRUCTURE_BONUSES = {
   civil_trade_center: { quadraniumErz: 0.03, agrinium: 0.03, tibannaGas: 0.03, baradium: 0.03, kavamSalz: 0.03 },
   civil_industrial_complex: { quadraniumErz: 0.06, baradium: 0.04 },
@@ -59,7 +71,10 @@ const CIVILIAN_INFRASTRUCTURE_BONUSES = {
   civil_research_academy: { agrinium: 0.08 },
   civil_orbital_trade_station: { quadraniumErz: 0.10, agrinium: 0.10, tibannaGas: 0.10, baradium: 0.10, kavamSalz: 0.10 }
 };
-const INFRASTRUCTURE_KEYS = [...RESOURCE_KEYS, ...Object.keys(CIVILIAN_INFRASTRUCTURE_BONUSES)];
+const INFRASTRUCTURE_KEYS = [
+  ...Object.keys(INFRASTRUCTURE_PRODUCTION_RESOURCES),
+  ...Object.keys(CIVILIAN_INFRASTRUCTURE_BONUSES)
+];
 const MAX_CIVILIAN_PRODUCTION_BONUS = 0.30;
 const RESOURCE_FACTIONS = ['GAR', 'KUS'];
 const RESOURCE_PRODUCTION_TICK_MS = 60 * 60 * 1000;
@@ -357,7 +372,8 @@ function getFactionProductionRateFromState(state, faction = 'GAR') {
     const bonuses = createEmptyFactionResources();
     for (const slot of getPlanetResourceSlotsFromState(state, planet.id)) {
       if (!slot) continue;
-      if (RESOURCE_KEYS.includes(slot)) base[slot] += 1;
+      const productionResource = INFRASTRUCTURE_PRODUCTION_RESOURCES[slot];
+      if (productionResource) base[productionResource] += 1;
       for (const key of RESOURCE_KEYS) {
         bonuses[key] += Number(CIVILIAN_INFRASTRUCTURE_BONUSES[slot]?.[key] || 0);
       }

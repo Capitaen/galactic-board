@@ -640,37 +640,67 @@ const MINE_PROJECT_DEFS = {
     productionResource: 'kavamSalz',
     cost: { quadraniumErz: 350, agrinium: 210, tibannaGas: 210, baradium: 140, kavamSalz: 980 }
   },
+  civilian_quadraniumErz: {
+    label: 'Metallmine',
+    category: 'civilian',
+    productionResource: 'quadraniumErz',
+    cost: { quadraniumErz: 980, agrinium: 280, tibannaGas: 140, baradium: 210, kavamSalz: 280 }
+  },
+  civilian_agrinium: {
+    label: 'Technologie-Komplex',
+    category: 'civilian',
+    productionResource: 'agrinium',
+    cost: { quadraniumErz: 420, agrinium: 980, tibannaGas: 280, baradium: 140, kavamSalz: 280 }
+  },
+  civilian_tibannaGas: {
+    label: 'Tibanna-Gas-Raffinerie',
+    category: 'civilian',
+    productionResource: 'tibannaGas',
+    cost: { quadraniumErz: 350, agrinium: 280, tibannaGas: 980, baradium: 210, kavamSalz: 210 }
+  },
+  civilian_baradium: {
+    label: 'Chemiewerk / Baradium-Foerderung',
+    category: 'civilian',
+    productionResource: 'baradium',
+    cost: { quadraniumErz: 420, agrinium: 210, tibannaGas: 210, baradium: 980, kavamSalz: 210 }
+  },
+  civilian_kavamSalz: {
+    label: 'Versorgungsgueter-Depot',
+    category: 'civilian',
+    productionResource: 'kavamSalz',
+    cost: { quadraniumErz: 350, agrinium: 210, tibannaGas: 210, baradium: 140, kavamSalz: 980 }
+  },
   civil_trade_center: {
     label: 'Handelszentrum',
-    category: 'civilian',
+    category: 'development',
     description: '+3 % Produktion auf alle Rohstoffe dieses Planeten',
     bonuses: { quadraniumErz: 0.03, agrinium: 0.03, tibannaGas: 0.03, baradium: 0.03, kavamSalz: 0.03 },
     cost: { quadraniumErz: 560, agrinium: 420, tibannaGas: 280, baradium: 210, kavamSalz: 490 }
   },
   civil_industrial_complex: {
     label: 'Industriekomplex',
-    category: 'civilian',
+    category: 'development',
     description: '+6 % Metalle und +4 % Chemikalien',
     bonuses: { quadraniumErz: 0.06, baradium: 0.04 },
     cost: { quadraniumErz: 840, agrinium: 350, tibannaGas: 350, baradium: 490, kavamSalz: 420 }
   },
   civil_logistics_center: {
     label: 'Logistikzentrum',
-    category: 'civilian',
+    category: 'development',
     description: '+6 % Treibstoffe und +3 % auf alle anderen Rohstoffe',
     bonuses: { quadraniumErz: 0.03, agrinium: 0.03, tibannaGas: 0.06, baradium: 0.03, kavamSalz: 0.03 },
     cost: { quadraniumErz: 630, agrinium: 420, tibannaGas: 700, baradium: 280, kavamSalz: 560 }
   },
   civil_research_academy: {
     label: 'Forschungsakademie',
-    category: 'civilian',
+    category: 'development',
     description: '+8 % Technologien',
     bonuses: { agrinium: 0.08 },
     cost: { quadraniumErz: 490, agrinium: 840, tibannaGas: 350, baradium: 350, kavamSalz: 420 }
   },
   civil_orbital_trade_station: {
     label: 'Orbitale Handelsstation',
-    category: 'civilian',
+    category: 'development',
     description: '+10 % Produktion auf alle Rohstoffe dieses Planeten',
     bonuses: { quadraniumErz: 0.10, agrinium: 0.10, tibannaGas: 0.10, baradium: 0.10, kavamSalz: 0.10 },
     cost: { quadraniumErz: 1400, agrinium: 1120, tibannaGas: 980, baradium: 840, kavamSalz: 1120 }
@@ -3153,7 +3183,9 @@ function renderResourcePills(slots) {
   if (!visibleSlots.length) return '<span class="muted">Keine Infrastruktur vorhanden.</span>';
   return visibleSlots.map((slot) => {
     const building = getMineProjectMeta(slot);
-    const category = building.category === 'civilian' ? 'Zivil' : 'Militärisch';
+    const category = building.category === 'development'
+      ? 'Entwicklungszentrum'
+      : (building.category === 'civilian' ? 'Zivil' : 'Militärisch');
     return `<span class="resource-pill">${category}: ${building.label}</span>`;
   }).join('');
 }
@@ -3176,9 +3208,9 @@ function getBuildJobLocationName(job) {
 
 function getBuildJobTypeLabel(job) {
   if (job?.jobType !== 'mine') return 'Schiffbau';
-  return getMineProjectMeta(job.buildingKey || job.resourceKey)?.category === 'civilian'
-    ? 'Zivile Infrastruktur'
-    : 'Militärische Infrastruktur';
+  const category = getMineProjectMeta(job.buildingKey || job.resourceKey)?.category;
+  if (category === 'development') return 'Wirtschafts- und Entwicklungszentrum';
+  return category === 'civilian' ? 'Zivile Infrastruktur' : 'Militärische Infrastruktur';
 }
 
 function getBuildJobProgressBar(job) {
@@ -6905,7 +6937,11 @@ function openPlanet(id) {
     .filter(([, entry]) => entry.category === 'civilian')
     .map(([key, entry]) => `<option value="${key}">${entry.label}</option>`)
     .join('');
-  const resourceOptions = `<option value="">Leer</option><optgroup label="Militärische Infrastruktur">${militaryInfrastructureOptions}</optgroup><optgroup label="Zivile Infrastruktur">${civilianInfrastructureOptions}</optgroup>`;
+  const developmentInfrastructureOptions = Object.entries(MINE_PROJECT_DEFS)
+    .filter(([, entry]) => entry.category === 'development')
+    .map(([key, entry]) => `<option value="${key}">${entry.label}</option>`)
+    .join('');
+  const resourceOptions = `<option value="">Leer</option><optgroup label="Militärische Infrastruktur">${militaryInfrastructureOptions}</optgroup><optgroup label="Zivile Infrastruktur">${civilianInfrastructureOptions}</optgroup><optgroup label="Wirtschafts- und Entwicklungszentren">${developmentInfrastructureOptions}</optgroup>`;
   const resourceSlotControls = resourceSlots.map((slot, index) => {
     const slotEditable = canEditPlanetResourceSlot(p, index);
     return `
@@ -8583,7 +8619,9 @@ function renderBuildProjectsView() {
   const selectedPlanetId = document.getElementById('mineBuildPlanet')?.value || minePlanetChoices[0]?.id || '';
   const selectedPlanet = minePlanetChoices.find((planet) => planet.id === selectedPlanetId) || minePlanetChoices[0] || null;
   const requestedCategory = document.getElementById('infrastructureCategory')?.value || 'military';
-  const selectedCategory = requestedCategory === 'civilian' ? 'civilian' : 'military';
+  const selectedCategory = ['military', 'civilian', 'development'].includes(requestedCategory)
+    ? requestedCategory
+    : 'military';
   const categoryProjects = Object.entries(MINE_PROJECT_DEFS).filter(([, project]) => project.category === selectedCategory);
   const requestedBuildingKey = document.getElementById('mineBuildResource')?.value || '';
   const selectedBuildingKey = categoryProjects.some(([key]) => key === requestedBuildingKey)
@@ -8625,6 +8663,7 @@ function renderBuildProjectsView() {
           <select id="infrastructureCategory" ${canStartMineProject ? '' : 'disabled'} onchange="renderBuildProjectsView()">
             <option value="military" ${selectedCategory === 'military' ? 'selected' : ''}>Militärische Infrastruktur</option>
             <option value="civilian" ${selectedCategory === 'civilian' ? 'selected' : ''}>Zivile Infrastruktur</option>
+            <option value="development" ${selectedCategory === 'development' ? 'selected' : ''}>Wirtschafts- und Entwicklungszentren</option>
           </select>
         </div>
         <div class="form-row">
@@ -8643,7 +8682,7 @@ function renderBuildProjectsView() {
         </div>
         <div class="workspace-card compact">
           <strong>${selectedMineMeta?.label || 'Gebäude'}</strong>
-          <p>${selectedMineMeta?.category === 'civilian'
+          <p>${selectedMineMeta?.category === 'development'
             ? selectedMineMeta.description
             : `Produziert +1 ${RESOURCE_LABELS[selectedMineMeta?.productionResource] || 'Ressource'} pro Stunde.`}</p>
           <strong>Kosten</strong>
@@ -8660,7 +8699,7 @@ function renderBuildProjectsView() {
             ${RESOURCE_KEYS.map((key) => `<tr><td>${RESOURCE_LABELS[key]}</td><td>+${Math.round((selectedPlanetBonuses[key] || 0) * 100)} %</td><td>+${formatResourceAmount(selectedPlanetProduction[key])}</td></tr>`).join('')}
           </tbody>
         </table>
-        <p class="muted">Zivile Boni wirken nur auf produzierende Gebäude desselben Planeten und sind je Rohstoff bei +${MAX_CIVILIAN_PRODUCTION_BONUS * 100} % gedeckelt.</p>
+        <p class="muted">Boni der Wirtschafts- und Entwicklungszentren wirken auf alle militärischen und zivilen Produktionsgebäude desselben Planeten. Je Rohstoff gilt ein Maximum von +${MAX_CIVILIAN_PRODUCTION_BONUS * 100} %.</p>
       </div>
       <div class="workspace-card">
         <h3>Projektübersicht</h3>
