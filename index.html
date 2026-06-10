@@ -3608,7 +3608,7 @@ function createCustomRoute(connection, name = '') {
   const routes = ensureCustomRouteStore();
   const route = {
     id: `custom_route_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
-    name: String(name || '').trim() || `Neue Route ${routes.length + 1}`,
+    name: String(name || '').trim() || 'Neue Route',
     connections: [serializeRouteConnection(normalizedConnection)]
   };
   routes.push(route);
@@ -3643,6 +3643,19 @@ function getRoutePlanets(route) {
   return [...planets.values()];
 }
 
+function getRouteEndpointPlanets(route) {
+  const degree = new Map();
+  getRouteConnections(route).forEach((connection) => {
+    degree.set(connection.startPlanetId, (degree.get(connection.startPlanetId) || 0) + 1);
+    degree.set(connection.endPlanetId, (degree.get(connection.endPlanetId) || 0) + 1);
+  });
+  const endpoints = [...degree.entries()]
+    .filter(([, count]) => count === 1)
+    .map(([planetId]) => planetIndex.get(planetId))
+    .filter(Boolean);
+  return endpoints.length >= 2 ? endpoints : getRoutePlanets(route);
+}
+
 function getDefaultRouteDominance(route) {
   const routePlanets = getRoutePlanets(route);
   const endpoints = routePlanets.length
@@ -3670,6 +3683,12 @@ function getRouteDominance(route) {
 
 function getRouteDisplayName(route) {
   const meta = getRouteMeta(route);
+  const rawName = String(meta?.name || route?.name || '').trim();
+  if ((!meta?.name && isUnnamedRoute(route)) || /^(?:gelöste|neue) route(?:\s+\d+)?$/i.test(rawName)) {
+    const planets = getRouteEndpointPlanets(route);
+    if (planets.length === 2) return `${planets[0].name} – ${planets[1].name}`;
+    if (planets.length > 2) return `${planets[0].name} – ${planets[planets.length - 1].name}`;
+  }
   if (meta?.name) return String(meta.name);
   if (route.name) return String(route.name);
   if (route.a && route.b) return `${route.a.name} - ${route.b.name}`;
@@ -4730,7 +4749,7 @@ function pointToSegmentDistanceSq(px, py, ax, ay, bx, by) {
   return dx * dx + dy * dy;
 }
 
-function nearestDisplayedRoute(x, y, maxDistance = 18) {
+function nearestDisplayedRoute(x, y, maxDistance = 8) {
   if (!layers.hyperlanes) return null;
   let best = null;
   let bestDistanceSq = maxDistance * maxDistance;
@@ -5092,7 +5111,7 @@ function renderFrontline() {
     hitbox.setAttribute('y2', end.y);
     hitbox.setAttribute('stroke', '#ffffff');
     hitbox.setAttribute('stroke-opacity', '0.001');
-    hitbox.setAttribute('stroke-width', '28');
+    hitbox.setAttribute('stroke-width', '10');
     hitbox.setAttribute('stroke-linecap', 'round');
     hitbox.setAttribute('class', 'route-hitbox ' + (cls === 'purple' ? 'contestedLine' : 'frontLine'));
     hitbox.dataset.routeId = id;
@@ -6305,9 +6324,9 @@ function openRoute(id) {
   infoPanel.style.display = 'block';
   infoPanel.innerHTML = `
     ${getInfoPanelHeader(getRouteDisplayName(route))}
-    <p><span class="badge">${route.name || 'Hyperroute'}</span></p>
+    <p><span class="badge">${getRouteDisplayName(route)}</span></p>
     <p class="muted">Route-ID: ${route.id} • Verbundene Planeten: ${routePlanets}</p>
-    <div class="form-row"><label>Routenname</label><input id="routeName" value="${meta?.name || getRouteDisplayName(route)}" ${disabled}></div>
+    <div class="form-row"><label>Routenname</label><input id="routeName" value="${getRouteDisplayName(route)}" ${disabled}></div>
     <p class="muted">Dominanz automatisch aus den verbundenen Planeten berechnet.</p>
     <p class="muted">GAR ${dominance.gar.toFixed(0)}% • KUS ${dominance.kus.toFixed(0)}% • HUTT ${dominance.hutt.toFixed(0)}% • Neutral / umkämpft ${dominance.neutral.toFixed(0)}%</p>
     ${canManuallyEditRoute(route) ? `
@@ -6428,7 +6447,7 @@ function removeRouteConnection(id, index) {
   const detachedRoute = createCustomRoute({
     ...serializeRouteConnection(removed),
     ...(!removed.path && automaticMatch?.path ? { path: automaticMatch.path } : {})
-  }, `Gelöste Route ${ensureCustomRouteStore().length + 1}`);
+  });
   if (!detachedRoute) return;
   const remainingConnections = connections
     .filter((_, connectionIndex) => connectionIndex !== index)
@@ -8226,13 +8245,13 @@ function finishInteraction(event) {
 window.addEventListener('pointermove', (event) => {
   if (!activeInteraction) {
     const worldPos = eventToWorld(event);
-    const hoveredRoute = nearestDisplayedRoute(worldPos.x, worldPos.y, 18);
-    queueHoveredRoute(hoveredRoute ? hoveredRoute.id : null);
+    const hoveredPlanet = nearestDisplayedPlanet(worldPos.x, worldPos.y, 18);
+    const hoveredRoute = hoveredPlanet ? null : nearestDisplayedRoute(worldPos.x, worldPos.y, 8);
+    queueHoveredRoute(hoveredRoute?.id || null);
     setHoveredZone(nearestDisplayedZone(worldPos.x, worldPos.y));
-    const hoveredMarker = hoveredRoute ? null : nearestDisplayedMarker(worldPos.x, worldPos.y, 20);
+    const hoveredMarker = (hoveredPlanet || hoveredRoute) ? null : nearestDisplayedMarker(worldPos.x, worldPos.y, 20);
     hoveredMarkerId = hoveredMarker?.id || null;
-    const hoveredPlanet = (hoveredRoute || hoveredMarker) ? null : nearestDisplayedPlanet(worldPos.x, worldPos.y, 16);
-    setHoveredPlanet(hoveredPlanet ? hoveredPlanet.id : null);
+    setHoveredPlanet(hoveredPlanet?.id || null);
   }
   if (!activeInteraction) return;
   if (activeInteraction.mode === 'planet-drag') {
@@ -8313,14 +8332,7 @@ viewport.addEventListener('pointerdown', (event) => {
     handleSectorDraftMapClick(worldPos);
     return;
   }
-  const clickedRoute = nearestDisplayedRoute(worldPos.x, worldPos.y, 22);
-  if (clickedRoute) {
-    event.preventDefault();
-    event.stopPropagation();
-    openRoute(clickedRoute.id);
-    return;
-  }
-  const clickedPlanet = nearestDisplayedPlanet(worldPos.x, worldPos.y, 18);
+  const clickedPlanet = nearestDisplayedPlanet(worldPos.x, worldPos.y, 22);
   if (clickedPlanet) {
     if (currentRole() === 'Admin' && event.altKey) {
       event.preventDefault();
@@ -8330,6 +8342,13 @@ viewport.addEventListener('pointerdown', (event) => {
       return;
     }
     openPlanet(clickedPlanet.id);
+    return;
+  }
+  const clickedRoute = nearestDisplayedRoute(worldPos.x, worldPos.y, 8);
+  if (clickedRoute) {
+    event.preventDefault();
+    event.stopPropagation();
+    openRoute(clickedRoute.id);
     return;
   }
   activeInteraction = {
