@@ -11,6 +11,9 @@ import { parseRadioCommandMessage } from './radioCommandParser.js';
 
 const DISCORD_API_BASE_URL = 'https://discord.com/api/v10';
 const SUPPORTED_PERMISSION_ROLES = new Set(['fleet_officer', 'staff_officer', 'faction_admin', 'admiralty']);
+const WORLD_SIZE = 2048;
+const FLEET_TRAVEL_REFERENCE_DURATION_MS = 5 * 60 * 1000;
+const FLEET_TRAVEL_REFERENCE_DISTANCE = WORLD_SIZE;
 
 export function createDiscordRadioListener({
   db,
@@ -310,11 +313,23 @@ async function processSingleDiscordMessage({ db, message, actor, getIo, onCampai
     if (hasRadioCommandLogEntry(db, message.id, nextFleet.id, parsed.planet.id, 'accepted')) continue;
 
     const previousPlanetId = String(nextFleet.locationPlanetId || nextFleet.planetId || '').trim();
-    nextFleet.locationPlanetId = parsed.planet.id;
-    nextFleet.planetId = parsed.planet.id;
+    const startedAtMs = Date.now();
+    const startedAtIso = new Date(startedAtMs).toISOString();
+    const durationMs = estimateFleetMotionDurationMs(nextState, previousPlanetId, parsed.planet.id);
+    const motion = {
+      fleetId: nextFleet.id,
+      sourcePlanetId: previousPlanetId,
+      sourcePlanetName: getPlanetNameById(nextState, previousPlanetId || null),
+      targetPlanetId: parsed.planet.id,
+      targetPlanetName: parsed.planet.name,
+      startedByUserId: actorPermission.linkedUserId || null,
+      startedAtMs,
+      durationMs
+    };
+    upsertFleetMotion(nextState, motion);
     nextFleet.lastMovedBy = actorPermission.linkedUsername || actorDisplayName;
     nextFleet.lastMovedByUserId = actorPermission.linkedUserId;
-    nextFleet.lastMovedAt = new Date().toISOString();
+    nextFleet.lastMovedAt = startedAtIso;
     nextFleet.lastMoveFromPlanetId = previousPlanetId || null;
     nextFleet.lastMoveToPlanetId = parsed.planet.id;
 
@@ -342,7 +357,7 @@ async function processSingleDiscordMessage({ db, message, actor, getIo, onCampai
       actorUserId: actorPermission.linkedUserId,
       actorUsername: actorPermission.linkedUsername || actorDisplayName,
       actorRole: actorPermission.permissionRole,
-      action: 'fleet.moved',
+      action: 'fleet.jump.started',
       entityType: 'fleet',
       entityId: nextFleet.id,
       payload: {
@@ -353,8 +368,8 @@ async function processSingleDiscordMessage({ db, message, actor, getIo, onCampai
         fromPlanetName: getPlanetNameById(nextState, previousPlanetId || null),
         toPlanetId: parsed.planet.id,
         toPlanetName: parsed.planet.name,
-        startedAt: nextFleet.lastMovedAt,
-        arrivesAt: null,
+        startedAt: startedAtIso,
+        arrivesAt: new Date(startedAtMs + durationMs).toISOString(),
         routePlanetIds: [],
         source: 'discord_radio',
         actorUsername: actorPermission.linkedUsername || actorDisplayName,
@@ -395,12 +410,24 @@ async function processSingleDiscordMessage({ db, message, actor, getIo, onCampai
     io?.emit?.('campaign:state-changed', {
       revision: nextRevision,
       updatedAt,
-      changedKeys: ['fleets'],
+      changedKeys: ['fleets', 'fleetMotions'],
       actor: {
         id: actorPermission.linkedUserId,
         username: actorPermission.linkedUsername || actorDisplayName,
         role: actorPermission.permissionRole
       }
+    });
+    acceptedFleetIds.forEach((fleetId) => {
+      const motion = (Array.isArray(nextState.fleetMotions) ? nextState.fleetMotions : []).find((entry) => entry.fleetId === fleetId);
+      if (!motion) return;
+      io?.emit?.('fx:fleet-jump-start', {
+        motion,
+        actor: {
+          id: actorPermission.linkedUserId,
+          username: actorPermission.linkedUsername || actorDisplayName,
+          role: actorPermission.permissionRole
+        }
+      });
     });
     onCampaignChanged({
       revision: nextRevision,
@@ -417,7 +444,7 @@ async function processSingleDiscordMessage({ db, message, actor, getIo, onCampai
       message,
       parsed,
       acceptedCount > 0 ? 'accepted' : 'rejected',
-      acceptedCount > 0 ? 'fleet_moved' : 'no_changes'
+      acceptedCount > 0 ? 'fleet_jump_started' : 'no_changes'
     )
   };
 }
@@ -572,6 +599,29 @@ function buildProcessedDebug(message, parsed, status, reason) {
     lineCount: String(content || '').split(/\r?\n/).filter(Boolean).length,
     embedSummaries
   };
+}
+
+function getPlanetById(state, planetId) {
+  const planets = Array.isArray(state?.planets) ? state.planets : [];
+  return planets.find((planet) => String(planet?.id || '').trim() === String(planetId || '').trim()) || null;
+}
+
+function estimateFleetMotionDurationMs(state, sourcePlanetId, targetPlanetId) {
+  const sourcePlanet = getPlanetById(state, sourcePlanetId);
+  const targetPlanet = getPlanetById(state, targetPlanetId);
+  if (!sourcePlanet || !targetPlanet) return 6000;
+  const distance = Math.hypot(
+    Number(targetPlanet.x || 0) - Number(sourcePlanet.x || 0),
+    Number(targetPlanet.y || 0) - Number(sourcePlanet.y || 0)
+  );
+  return Math.max(6000, (distance / FLEET_TRAVEL_REFERENCE_DISTANCE) * FLEET_TRAVEL_REFERENCE_DURATION_MS);
+}
+
+function upsertFleetMotion(state, motion) {
+  state.fleetMotions = Array.isArray(state?.fleetMotions)
+    ? state.fleetMotions.filter((entry) => String(entry?.fleetId || '').trim() !== String(motion?.fleetId || '').trim())
+    : [];
+  state.fleetMotions.push(motion);
 }
 
 function buildAuthorFallbackNames(message) {
