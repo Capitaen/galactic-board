@@ -467,6 +467,12 @@ a { color:#8bc7ff; }
       <option>Republic Navy / GAR</option>
       <option>Galaktischer Senats Admin</option>
       <option>Senat</option>
+      <option>Black Sun Syndikat Admin</option>
+      <option>Black Sun Syndikat</option>
+      <option>Pyke-Syndikat Admin</option>
+      <option>Pyke-Syndikat</option>
+      <option>Huttenkartell Admin</option>
+      <option>Huttenkartell</option>
       <option selected>Viewer</option>
     </select>
     <div class="topbar-auth">
@@ -854,13 +860,22 @@ const LOGIN_ROLE_DEFINITIONS = {
   Senat: { label: 'Galaktischer Senat', baseRole: 'Senat', faction: 'senate', level: 'member' },
   'Eventleiter / KUS Admin': { label: 'Eventleiter / KUS Admin', baseRole: 'Eventleiter / KUS', faction: 'event', level: 'admin' },
   'Eventleiter / KUS': { label: 'Eventleiter / KUS', baseRole: 'Eventleiter / KUS', faction: 'event', level: 'member' },
+  'Black Sun Syndikat Admin': { label: 'Black Sun Syndikat Fraktions-Admin', baseRole: 'Black Sun Syndikat', faction: 'blackSun', level: 'faction-admin' },
+  'Black Sun Syndikat': { label: 'Black Sun Syndikat', baseRole: 'Black Sun Syndikat', faction: 'blackSun', level: 'member' },
+  'Pyke-Syndikat Admin': { label: 'Pyke-Syndikat Fraktions-Admin', baseRole: 'Pyke-Syndikat', faction: 'pyke', level: 'faction-admin' },
+  'Pyke-Syndikat': { label: 'Pyke-Syndikat', baseRole: 'Pyke-Syndikat', faction: 'pyke', level: 'member' },
+  'Huttenkartell Admin': { label: 'Huttenkartell Fraktions-Admin', baseRole: 'Huttenkartell', faction: 'hutts', level: 'faction-admin' },
+  Huttenkartell: { label: 'Huttenkartell', baseRole: 'Huttenkartell', faction: 'hutts', level: 'member' },
   Viewer: { label: 'Viewer', baseRole: 'Viewer', faction: 'system', level: 'viewer' }
 };
 const LOGIN_ROLES = Object.keys(LOGIN_ROLE_DEFINITIONS);
 const LOGIN_FACTIONS = [
   { id: 'navy', label: 'Republic Navy', memberRole: 'Republic Navy / GAR', adminRole: 'Republic Navy Admin' },
   { id: 'senate', label: 'Galaktischer Senat', memberRole: 'Senat', adminRole: 'Galaktischer Senats Admin' },
-  { id: 'event', label: 'Eventleiter / KUS', memberRole: 'Eventleiter / KUS', adminRole: 'Eventleiter / KUS Admin' }
+  { id: 'event', label: 'Eventleiter / KUS', memberRole: 'Eventleiter / KUS', adminRole: 'Eventleiter / KUS Admin' },
+  { id: 'blackSun', label: 'Black Sun Syndikat', memberRole: 'Black Sun Syndikat', adminRole: 'Black Sun Syndikat Admin' },
+  { id: 'pyke', label: 'Pyke-Syndikat', memberRole: 'Pyke-Syndikat', adminRole: 'Pyke-Syndikat Admin' },
+  { id: 'hutts', label: 'Huttenkartell', memberRole: 'Huttenkartell', adminRole: 'Huttenkartell Admin' }
 ];
 const SENATE_POSITIONS = ['Vizekanzler', 'Regierungsdirektor', 'Minister', 'Vizeminister'];
 const sectorDrawBtn = document.getElementById('sectorDrawBtn');
@@ -4693,8 +4708,12 @@ function isAdminRole() {
   return currentRole() === 'Admin';
 }
 
+function isUnderworldRole(role = currentRole()) {
+  return ['Black Sun Syndikat', 'Pyke-Syndikat', 'Huttenkartell'].includes(role);
+}
+
 function canManageLogins() {
-  return ['global', 'admin'].includes(LOGIN_ROLE_DEFINITIONS[currentAssignedRole()]?.level);
+  return ['global', 'admin', 'faction-admin'].includes(LOGIN_ROLE_DEFINITIONS[currentAssignedRole()]?.level);
 }
 
 function canManageRadioCommands() {
@@ -4706,7 +4725,7 @@ function getManageableLoginRoles() {
   if (actor?.level === 'global') return LOGIN_ROLES;
   const faction = LOGIN_FACTIONS.find((entry) => entry.id === actor?.faction);
   if (!faction) return [];
-  if (actor.level === 'admin') return [faction.adminRole, faction.memberRole];
+  if (actor.level === 'admin' || actor.level === 'faction-admin') return [faction.adminRole, faction.memberRole];
   return [];
 }
 
@@ -7206,7 +7225,7 @@ function saveFleetManagementFleet(id) {
 
 function createFleetManagementFleet() {
   const role = currentRole();
-  if (role === 'Viewer' || role === 'Senat') return;
+  if (role === 'Viewer' || role === 'Senat' || isUnderworldRole(role)) return;
   const faction = role === 'Eventleiter / KUS'
     ? 'KUS'
     : (fleetManagementFactionFilter === 'KUS' ? 'KUS' : 'GAR');
@@ -7306,8 +7325,8 @@ function startBuildOrder() {
     setStatus('Senat hat keinen Zugriff auf den Schiffbau.');
     return;
   }
-  if (role === 'Viewer') {
-    setStatus('Viewer können keine Schiffe bauen.');
+  if (role === 'Viewer' || isUnderworldRole(role)) {
+    setStatus('Diese Fraktion kann aktuell keine Schiffe bauen.');
     return;
   }
   if (role === 'Republic Navy / GAR' && faction !== 'GAR') {
@@ -7546,7 +7565,7 @@ function clearFleetManifestFilter() {
 
 function createFleetManagementCategory() {
   const role = currentRole();
-  if (role === 'Viewer' || role === 'Senat') return;
+  if (role === 'Viewer' || role === 'Senat' || isUnderworldRole(role)) return;
   const faction = role === 'Eventleiter / KUS'
     ? 'KUS'
     : (fleetManagementFactionFilter === 'KUS' ? 'KUS' : 'GAR');
@@ -7892,7 +7911,7 @@ function renderFleetManagementView() {
           </select>
         ` : ''}
         <button class="mini-btn primary" onclick="createFleetManagementFleet()">Neuen Verband anlegen</button>
-        ${role !== 'Viewer' ? '<button class="mini-btn" onclick="createFleetManagementCategory()">Neue Kategorie</button>' : ''}
+        ${role !== 'Viewer' && !isUnderworldRole(role) ? '<button class="mini-btn" onclick="createFleetManagementCategory()">Neue Kategorie</button>' : ''}
         ${role === 'Admin' ? '<button class="mini-btn" onclick="triggerTrelloImport()">Trello JSON importieren</button>' : ''}
       </div>
     </div>

@@ -229,8 +229,8 @@ function getHiddenPlanetFallbackOwner(planet) {
 
 function findIndexHtml() {
   const candidates = [
-    path.join(projectRoot, 'public', 'index.html'),
-    path.join(projectRoot, 'index.html')
+    path.join(projectRoot, 'index.html'),
+    path.join(projectRoot, 'public', 'index.html')
   ];
 
   for (const filePath of candidates) {
@@ -250,7 +250,7 @@ app.use((req, res, next) => {
   }
   next();
 });
-app.use(express.static(path.join(projectRoot, 'public')));
+app.use(express.static(path.join(projectRoot, 'public'), { index: false }));
 app.use('/assets', express.static(path.join(projectRoot, 'assets')));
 app.use('/public/assets', express.static(path.join(projectRoot, 'public', 'assets')));
 
