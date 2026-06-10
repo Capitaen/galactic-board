@@ -8224,8 +8224,6 @@ function renderLoginManagerView() {
     `;
   };
   const systemUsers = state.authUsers.filter((user) => LOGIN_ROLE_DEFINITIONS[user.role]?.faction === 'system');
-  const mainFactions = visibleFactions.filter((faction) => !['blackSun', 'pyke', 'hutts'].includes(faction.id));
-  const underworldFactions = visibleFactions.filter((faction) => ['blackSun', 'pyke', 'hutts'].includes(faction.id));
   workspacePanel.innerHTML = `
     <div class="workspace-head">
       <div>
@@ -8234,18 +8232,7 @@ function renderLoginManagerView() {
       </div>
     </div>
     <div class="workspace-section login-faction-grid">
-      ${mainFactions.map(renderFactionSection).join('')}
-    </div>
-    ${underworldFactions.length ? `
-    <div class="workspace-section">
-      <h3>Weitere Fraktionen</h3>
-      <p class="muted">Unterweltfraktionen mit eigener Login- und Fraktions-Admin-Verwaltung.</p>
-      <div class="login-faction-grid">
-        ${underworldFactions.map(renderFactionSection).join('')}
-      </div>
-    </div>
-    ` : ''}
-    <div class="workspace-section login-faction-grid">
+      ${visibleFactions.map(renderFactionSection).join('')}
       ${actorDefinition.level === 'global' ? `
       <div class="workspace-card">
         <div class="login-faction-head">
