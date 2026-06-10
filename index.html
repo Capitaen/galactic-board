@@ -8502,7 +8502,11 @@ async function pollDiscordRadioCommands() {
     const firstDebug = Array.isArray(payload.result?.debug) ? payload.result.debug.find(Boolean) : null;
     const debugSuffix = firstDebug?.reason ? ` Letzter Grund: ${firstDebug.reason}.` : '';
     const channelInfo = payload.radioConfig?.channelId ? ` Aktiver Channel: ${payload.radioConfig.channelId}.` : '';
-    setStatus(`Discord-Funk ausgewertet: ${fetched} geladen, ${relevant} erkannt, ${processed} verarbeitet, ${accepted} akzeptiert, ${rejected} abgelehnt.${channelInfo}${debugSuffix}`);
+    const parserActorInfo = firstDebug?.parserActorName ? ` Parser-Actor: ${firstDebug.parserActorName}.` : '';
+    const recoveredActorInfo = firstDebug?.recoveredActorName ? ` Fallback-Actor: ${firstDebug.recoveredActorName}.` : '';
+    const authorInfo = firstDebug?.authorFallbackNames?.length ? ` Discord-Autor: ${firstDebug.authorFallbackNames.join(' / ')}.` : '';
+    const contentInfo = firstDebug?.contentPreview ? ` Text: ${firstDebug.contentPreview}.` : '';
+    setStatus(`Discord-Funk ausgewertet: ${fetched} geladen, ${relevant} erkannt, ${processed} verarbeitet, ${accepted} akzeptiert, ${rejected} abgelehnt.${channelInfo}${debugSuffix}${parserActorInfo}${recoveredActorInfo}${authorInfo}${contentInfo}`);
   } catch (error) {
     setStatus(`Discord-Funk Poll fehlgeschlagen: ${error.message}`);
   }
