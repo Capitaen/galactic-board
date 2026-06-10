@@ -89,6 +89,9 @@ export function createDb(projectRoot) {
     CREATE TABLE IF NOT EXISTS market_investors (
       id TEXT PRIMARY KEY,
       alias TEXT NOT NULL,
+      user_id TEXT,
+      balance REAL NOT NULL DEFAULT 5000,
+      portfolio_enabled INTEGER NOT NULL DEFAULT 1,
       last_purchase_at TEXT,
       created_at TEXT NOT NULL
     );
@@ -115,6 +118,17 @@ export function createDb(projectRoot) {
       impact REAL NOT NULL,
       started_at TEXT NOT NULL,
       ends_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS market_consumer_activity (
+      consumer_key TEXT PRIMARY KEY,
+      last_purchase_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS faction_accounts (
+      faction TEXT PRIMARY KEY,
+      credits REAL NOT NULL DEFAULT 0,
+      updated_at TEXT NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS economy_policy (
@@ -145,6 +159,21 @@ export function createDb(projectRoot) {
   if (!marketCompanyColumns.has('resource_key')) {
     db.exec("ALTER TABLE market_companies ADD COLUMN resource_key TEXT NOT NULL DEFAULT ''");
   }
+  const marketInvestorColumns = new Set(db.prepare('PRAGMA table_info(market_investors)').all().map((column) => column.name));
+  if (!marketInvestorColumns.has('user_id')) {
+    db.exec('ALTER TABLE market_investors ADD COLUMN user_id TEXT');
+  }
+  if (!marketInvestorColumns.has('balance')) {
+    db.exec('ALTER TABLE market_investors ADD COLUMN balance REAL NOT NULL DEFAULT 5000');
+  }
+  if (!marketInvestorColumns.has('portfolio_enabled')) {
+    db.exec('ALTER TABLE market_investors ADD COLUMN portfolio_enabled INTEGER NOT NULL DEFAULT 1');
+  }
+  db.prepare(`
+    UPDATE market_investors
+    SET portfolio_enabled = 0
+    WHERE user_id IS NULL OR trim(user_id) = ''
+  `).run();
 
   const legacyFactionAdminRoles = [
     ['Republic Navy Main-Admin', 'Republic Navy Admin'],
@@ -179,6 +208,11 @@ export function createDb(projectRoot) {
     INSERT OR IGNORE INTO economy_policy (faction, tax_rate, subsidy, updated_at)
     VALUES ('GAR', 0.05, 'none', ?)
   `).run(migrationTime);
+  const insertFactionAccount = db.prepare(`
+    INSERT OR IGNORE INTO faction_accounts (faction, credits, updated_at)
+    VALUES (?, 0, ?)
+  `);
+  ['BLACK_SUN', 'PYKE', 'HUTT'].forEach((faction) => insertFactionAccount.run(faction, migrationTime));
 
   const stateRow = db.prepare('SELECT id FROM app_state WHERE id = ?').get('main');
 
@@ -584,19 +618,19 @@ export function insertRadioCommandLog(db, input) {
   return { id, createdAt };
 }
 
-export function getOrCreateMarketInvestor(db, investorId) {
+export function getOrCreateMarketInvestor(db, investorId, userId = '') {
   const existing = db.prepare('SELECT * FROM market_investors WHERE id = ?').get(investorId);
   if (existing) return existing;
   const suffix = investorId.replace(/-/g, '').slice(0, 6).toUpperCase();
   const createdAt = new Date().toISOString();
   db.prepare(`
-    INSERT INTO market_investors (id, alias, created_at)
-    VALUES (?, ?, ?)
-  `).run(investorId, `Investor-${suffix}`, createdAt);
+    INSERT INTO market_investors (id, alias, user_id, balance, portfolio_enabled, created_at)
+    VALUES (?, ?, ?, 5000, 1, ?)
+  `).run(investorId, `Portfolio-${suffix}`, userId || null, createdAt);
   return db.prepare('SELECT * FROM market_investors WHERE id = ?').get(investorId);
 }
 
-export function readMarketSnapshot(db, investorId = '') {
+export function readMarketSnapshot(db, investorId = '', userId = '') {
   const companies = db.prepare(`
     SELECT id, symbol, name, faction, base_price AS basePrice,
       sector, resource_key AS resourceKey,
@@ -618,16 +652,17 @@ export function readMarketSnapshot(db, investorId = '') {
     SELECT company_id AS companyId, shares
     FROM market_holdings WHERE investor_id = ?
   `).all(investorId) : [];
-  const investor = investorId ? getOrCreateMarketInvestor(db, investorId) : null;
+  const investor = investorId ? getOrCreateMarketInvestor(db, investorId, userId) : null;
   const leaderboard = db.prepare(`
     SELECT i.alias,
-      ROUND(COALESCE(SUM(h.shares * c.current_price), 0), 2) AS portfolioValue,
+      ROUND(i.balance + COALESCE(SUM(h.shares * c.current_price), 0), 2) AS portfolioValue,
+      ROUND(i.balance, 2) AS cashBalance,
       COALESCE(SUM(h.shares), 0) AS totalShares
     FROM market_investors i
     LEFT JOIN market_holdings h ON h.investor_id = i.id
     LEFT JOIN market_companies c ON c.id = h.company_id
+    WHERE i.portfolio_enabled = 1
     GROUP BY i.id
-    HAVING totalShares > 0
     ORDER BY portfolioValue DESC
     LIMIT 20
   `).all();
@@ -641,7 +676,11 @@ export function readMarketSnapshot(db, investorId = '') {
     SELECT faction, tax_rate AS taxRate, subsidy, updated_at AS updatedAt
     FROM economy_policy WHERE faction = 'GAR'
   `).get() || { faction: 'GAR', taxRate: 0.05, subsidy: 'none' };
-  return { companies, history, holdings, investor, leaderboard, events, policy };
+  const factionAccounts = Object.fromEntries(db.prepare(`
+    SELECT faction, credits, updated_at AS updatedAt
+    FROM faction_accounts ORDER BY faction
+  `).all().map((account) => [account.faction, account]));
+  return { companies, history, holdings, investor, leaderboard, events, policy, factionAccounts };
 }
 
 export function purchaseMarketShare(db, investorId, companyId, now = Date.now()) {
@@ -680,6 +719,87 @@ export function purchaseMarketShare(db, investorId, companyId, now = Date.now())
     `).run(crypto.randomUUID(), companyId, nextPrice, purchasedAt);
     return { companyId, price: company.current_price, purchasedAt, nextPurchaseAt: new Date(now + cooldownMs).toISOString() };
   })();
+}
+
+export function purchaseMarketDemand(db, { investorId, userId, consumerKey, companyId }, now = Date.now()) {
+  return db.transaction(() => {
+    const company = db.prepare('SELECT * FROM market_companies WHERE id = ?').get(companyId);
+    if (!company) {
+      const error = new Error('Unternehmen nicht gefunden.');
+      error.status = 404;
+      throw error;
+    }
+
+    const purchasedAt = new Date(now).toISOString();
+    const cooldownMs = 60 * 60 * 1000;
+    let purchaseType = 'portfolio';
+    let nextPurchaseAt = null;
+
+    if (investorId) {
+      const investor = getOrCreateMarketInvestor(db, investorId, userId);
+      if (Number(investor.balance || 0) < Number(company.current_price || 0)) {
+        const error = new Error('Nicht genug Credits im persönlichen Portfolio.');
+        error.status = 409;
+        throw error;
+      }
+      db.prepare(`
+        INSERT INTO market_holdings (investor_id, company_id, shares)
+        VALUES (?, ?, 1)
+        ON CONFLICT(investor_id, company_id) DO UPDATE SET shares = shares + 1
+      `).run(investorId, companyId);
+      db.prepare(`
+        UPDATE market_investors
+        SET balance = balance - ?, last_purchase_at = ?
+        WHERE id = ?
+      `).run(company.current_price, purchasedAt, investorId);
+    } else {
+      purchaseType = 'consumer';
+      const activity = db.prepare(`
+        SELECT last_purchase_at FROM market_consumer_activity WHERE consumer_key = ?
+      `).get(consumerKey);
+      const lastPurchaseAt = activity?.last_purchase_at ? Date.parse(activity.last_purchase_at) : 0;
+      if (lastPurchaseAt && now - lastPurchaseAt < cooldownMs) {
+        const error = new Error('Die nächste Nachfrageaktion ist erst nach Ablauf der 60 Minuten möglich.');
+        error.status = 429;
+        error.nextPurchaseAt = new Date(lastPurchaseAt + cooldownMs).toISOString();
+        throw error;
+      }
+      db.prepare(`
+        INSERT INTO market_consumer_activity (consumer_key, last_purchase_at)
+        VALUES (?, ?)
+        ON CONFLICT(consumer_key) DO UPDATE SET last_purchase_at = excluded.last_purchase_at
+      `).run(consumerKey, purchasedAt);
+      nextPurchaseAt = new Date(now + cooldownMs).toISOString();
+    }
+
+    const nextPrice = Math.round(company.current_price * 1.0125 * 100) / 100;
+    db.prepare(`
+      UPDATE market_companies
+      SET previous_price = current_price, current_price = ?, updated_at = ?
+      WHERE id = ?
+    `).run(nextPrice, purchasedAt, companyId);
+    db.prepare(`
+      INSERT INTO market_history (id, company_id, price, recorded_at)
+      VALUES (?, ?, ?, ?)
+    `).run(crypto.randomUUID(), companyId, nextPrice, purchasedAt);
+
+    return {
+      companyId,
+      price: company.current_price,
+      purchasedAt,
+      purchaseType,
+      nextPurchaseAt
+    };
+  })();
+}
+
+export function getConsumerNextPurchaseAt(db, consumerKey) {
+  const activity = db.prepare(`
+    SELECT last_purchase_at FROM market_consumer_activity WHERE consumer_key = ?
+  `).get(consumerKey);
+  return activity?.last_purchase_at
+    ? new Date(Date.parse(activity.last_purchase_at) + (60 * 60 * 1000)).toISOString()
+    : null;
 }
 
 export function updateEconomyPolicy(db, { taxRate, subsidy }) {

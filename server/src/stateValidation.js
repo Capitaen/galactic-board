@@ -240,6 +240,11 @@ export function validateNextCampaignState(role, previousState, nextState) {
   const assignedRole = actor.role;
   const effectiveRole = ROLE_BASE_ROLES[assignedRole] || assignedRole;
   ensure(effectiveRole !== 'Viewer', 'Viewer may not mutate campaign state');
+  if (assignedRole === 'Senat') {
+    ensure(!hasChanged(previousState.resources || {}, nextState.resources || {}), 'Only Senate admins may manage the GAR budget');
+    ensure(!hasChanged(previousState.planetResources || {}, nextState.planetResources || {}), 'Only Senate admins may manage GAR infrastructure');
+    ensure(!hasChanged(previousState.buildJobs || [], nextState.buildJobs || []), 'Only Senate admins may manage GAR construction projects');
+  }
   if (effectiveRole === 'Republic Navy / GAR' && !actor.canCoordinate4thFleet) {
     const previousJobs = indexById(previousState.buildJobs || []);
     const previousShips = indexById(previousState.ships || []);
