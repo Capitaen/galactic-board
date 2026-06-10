@@ -1001,55 +1001,77 @@ app.get('/api/planet-card/:planetId', async (req, res) => {
 });
 
 app.get('/api/economy/market', (req, res) => {
-  const session = getSession(req);
-  const portfolioEnabled = hasPersonalMarketPortfolio(session);
-  const investorId = portfolioEnabled ? `user_${session.id}` : '';
-  const consumerKey = session ? '' : getMarketConsumerKey(req);
-  const { state } = readCampaignState(db);
-  const inflationRate = Math.min(0.25, Number(state.resources?.GAR?.credits || 0) / 2000000);
-  runMarketTick(db, inflationRate, Date.now(), state);
-  const snapshot = readMarketSnapshot(db, investorId, session?.id || '');
-  const factionAccounts = {
-    ...snapshot.factionAccounts,
-    GAR: {
-      faction: 'GAR',
-      credits: Number(state.resources?.GAR?.credits || 0),
-      updatedAt: new Date().toISOString()
-    },
-    KUS: {
-      faction: 'KUS',
-      credits: Number(state.resources?.KUS?.credits || 0),
-      updatedAt: new Date().toISOString()
+  try {
+    const session = getSession(req);
+    const portfolioEnabled = hasPersonalMarketPortfolio(session);
+    const investorId = portfolioEnabled ? `user_${session.id}` : '';
+    const consumerKey = session ? '' : getMarketConsumerKey(req);
+    const { state } = readCampaignState(db);
+    const inflationRate = Math.min(0.25, Number(state.resources?.GAR?.credits || 0) / 2000000);
+    try {
+      runMarketTick(db, inflationRate, Date.now(), state);
+    } catch (tickError) {
+      console.error('Economy market tick failed', tickError);
     }
-  };
-  res.json({
-    ...snapshot,
-    factionAccounts,
-    portfolioEnabled,
-    consumerMode: !session,
-    canPurchase: portfolioEnabled || !session,
-    factionAccountKey: getMarketFactionAccountKey(session?.role),
-    inflationRate,
-    nextPurchaseAt: consumerKey ? getConsumerNextPurchaseAt(db, consumerKey) : null
-  });
+    const snapshot = readMarketSnapshot(db, investorId, session?.id || '');
+    const factionAccounts = {
+      ...snapshot.factionAccounts,
+      GAR: {
+        faction: 'GAR',
+        credits: Number(state.resources?.GAR?.credits || 0),
+        updatedAt: new Date().toISOString()
+      },
+      KUS: {
+        faction: 'KUS',
+        credits: Number(state.resources?.KUS?.credits || 0),
+        updatedAt: new Date().toISOString()
+      }
+    };
+    res.json({
+      ...snapshot,
+      factionAccounts,
+      portfolioEnabled,
+      consumerMode: !session,
+      canPurchase: portfolioEnabled || !session,
+      factionAccountKey: getMarketFactionAccountKey(session?.role),
+      inflationRate,
+      nextPurchaseAt: consumerKey ? getConsumerNextPurchaseAt(db, consumerKey) : null
+    });
+  } catch (error) {
+    console.error('Economy market endpoint failed', error);
+    res.status(error.status || 500).json({ error: error.message || 'Wirtschaftsdaten konnten nicht geladen werden.' });
+  }
 });
 
 app.get('/api/economy/sectors', (req, res) => {
-  const { state } = readCampaignState(db);
-  const inflationRate = Math.min(0.25, Number(state.resources?.GAR?.credits || 0) / 2000000);
-  runMarketTick(db, inflationRate, Date.now(), state);
-  res.json({
-    sectors: listEconomySectors(db, state),
-    canBuyResources: canBuySectorCivilianResources(getSession(req)),
-    canManageEmbargo: getSession(req)?.role === 'Admin'
-  });
+  try {
+    const { state } = readCampaignState(db);
+    const inflationRate = Math.min(0.25, Number(state.resources?.GAR?.credits || 0) / 2000000);
+    try {
+      runMarketTick(db, inflationRate, Date.now(), state);
+    } catch (tickError) {
+      console.error('Sector economy tick failed', tickError);
+    }
+    res.json({
+      sectors: listEconomySectors(db, state),
+      canBuyResources: canBuySectorCivilianResources(getSession(req)),
+      canManageEmbargo: getSession(req)?.role === 'Admin'
+    });
+  } catch (error) {
+    console.error('Sector economy list endpoint failed', error);
+    res.status(error.status || 500).json({ error: error.message || 'Sektor-Wirtschaft konnte nicht geladen werden.' });
+  }
 });
 
 app.get('/api/economy/sectors/:sectorId', (req, res) => {
   try {
     const { state } = readCampaignState(db);
     const inflationRate = Math.min(0.25, Number(state.resources?.GAR?.credits || 0) / 2000000);
-    runMarketTick(db, inflationRate, Date.now(), state);
+    try {
+      runMarketTick(db, inflationRate, Date.now(), state);
+    } catch (tickError) {
+      console.error('Sector economy detail tick failed', tickError);
+    }
     res.json({
       sector: readEconomySector(db, state, req.params.sectorId),
       canBuyResources: canBuySectorCivilianResources(getSession(req)),
@@ -1412,6 +1434,10 @@ app.put('/api/campaign/state', requireAuth, (req, res) => {
   }
 });
 
+app.use('/api', (req, res) => {
+  res.status(404).json({ error: `API-Route nicht gefunden: ${req.method} ${req.originalUrl}` });
+});
+
 app.get('/', (_req, res) => {
   const indexPath = findIndexHtml();
   res.type('html').send(fs.readFileSync(indexPath, 'utf8'));
@@ -1483,7 +1509,11 @@ io.on('connection', (socket) => {
 function runServerCampaignMaintenance() {
   const { state, revision } = readCampaignState(db);
   const inflationRate = Math.min(0.25, Number(state.resources?.GAR?.credits || 0) / 2000000);
-  runMarketTick(db, inflationRate, Date.now(), state);
+  try {
+    runMarketTick(db, inflationRate, Date.now(), state);
+  } catch (error) {
+    console.warn('Economy maintenance tick failed', error);
+  }
   const resetResult = applyOneTimeResourceReset(state);
   const productionResult = applyServerProductionTicks(resetResult.state);
   if (!resetResult.changed && !productionResult.changed) return;
