@@ -42,12 +42,12 @@ body { margin:0; background:#05070b; color:var(--text); font-family: Inter, Sego
 .schematic-ring { fill:none; stroke:rgba(123,143,165,.3); stroke-width:2.5; }
 .region-outline { fill:rgba(247,231,104,.06); stroke:rgba(255,232,92,.72); stroke-width:2.8; }
 .sector-outline { fill:rgba(121,163,212,.06); stroke:rgba(170,214,255,.78); stroke-width:2; }
-.manual-sector-shape { fill:rgba(121,163,212,.06); stroke:rgba(170,214,255,.84); stroke-width:2; }
-.manual-sector-shape.hovered { fill:rgba(143,187,255,.12); stroke:rgba(214,232,255,.96); stroke-width:2.4; }
-.manual-sector-label { fill:rgba(196,223,255,.92); font-size:15px; font-weight:700; text-anchor:middle; stroke:rgba(0,0,0,.55); stroke-width:3px; paint-order:stroke fill; pointer-events:none; }
-.manual-sector-draft-line { fill:none; stroke:rgba(255,182,61,.95); stroke-width:2.2; stroke-dasharray:8 6; }
-.manual-sector-ghost-line { fill:none; stroke:rgba(255,213,135,.9); stroke-width:1.8; stroke-dasharray:5 5; pointer-events:none; }
-.manual-sector-draft-point { fill:rgba(255,182,61,.98); stroke:rgba(255,244,214,.95); stroke-width:1.4; }
+.manual-sector-shape { fill:rgba(188,48,57,.08); stroke:rgba(255,93,93,.9); stroke-width:2; }
+.manual-sector-shape.hovered { fill:rgba(214,78,90,.14); stroke:rgba(255,170,170,.98); stroke-width:2.4; }
+.manual-sector-label { fill:rgba(255,214,214,.96); font-size:15px; font-weight:700; text-anchor:middle; stroke:rgba(0,0,0,.55); stroke-width:3px; paint-order:stroke fill; pointer-events:none; }
+.manual-sector-draft-line { fill:none; stroke:rgba(255,74,74,.98); stroke-width:2.2; stroke-dasharray:8 6; }
+.manual-sector-ghost-line { fill:none; stroke:rgba(255,168,168,.92); stroke-width:1.8; stroke-dasharray:5 5; pointer-events:none; }
+.manual-sector-draft-point { fill:rgba(255,74,74,.98); stroke:rgba(255,231,231,.96); stroke-width:1.4; }
 .tactical-hyperlane { stroke:rgba(255,145,32,.98); stroke-width:4; stroke-linecap:round; stroke-dasharray:10 8; fill:none; }
 .tactical-route-highlight { fill:none; stroke-linecap:round; stroke-linejoin:round; pointer-events:none; }
 .tactical-route-highlight.hover { stroke:rgba(120,220,255,.92); stroke-width:8; stroke-dasharray:10 8; }
@@ -563,8 +563,8 @@ const STARTUP_LAYERS = {
   sectorLabels: true
 };
 const GALACTIC_CORE_CENTER = { x: WORLD_SIZE / 2, y: WORLD_SIZE / 2 };
-const SECTOR_SNAP_RADII = [0.08, 0.11, 0.14, 0.22, 0.31, 0.42, 0.54, 0.67, 0.82].map((factor) => WORLD_SIZE * factor * 0.5);
-const SECTOR_ANGLE_STEP_DEG = 15;
+const SECTOR_SNAP_RADII = [0.06, 0.08, 0.1, 0.12, 0.14, 0.17, 0.2, 0.24, 0.28, 0.32, 0.37, 0.42, 0.48, 0.55, 0.63, 0.72, 0.82].map((factor) => WORLD_SIZE * factor * 0.5);
+const SECTOR_ANGLE_STEP_DEG = 10;
 const AUTO_PLACEMENT_VERSION = 3;
 const POSITION_CALIBRATION_VERSION = 1;
 const ARCGIS_IMPORT_VERSION = 1;
@@ -1077,8 +1077,18 @@ function createManualSectorRecord(data = {}) {
   return {
     id: data.id || `sector_${Math.random().toString(36).slice(2, 10)}`,
     name: String(data.name || 'Neuer Sektor').trim() || 'Neuer Sektor',
+    description: String(data.description || '').trim(),
     points
   };
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
 }
 
 function createFleetCategoryRecord(data = {}) {
@@ -2713,6 +2723,17 @@ function connectServerSocket() {
     scheduleSocketReconnect('Live-Sync Server nicht erreichbar.');
   });
   serverSync.socket.on('campaign:state-changed', (payload) => {
+    if (payload?.serverNowMs) {
+      const serverNowMs = Number(payload.serverNowMs);
+      if (Number.isFinite(serverNowMs) && serverNowMs > 0) {
+        serverSync.clockOffsetMs = Date.now() - serverNowMs;
+      }
+    } else if (payload?.updatedAt) {
+      const updatedAtMs = new Date(payload.updatedAt).getTime();
+      if (Number.isFinite(updatedAtMs) && updatedAtMs > 0) {
+        serverSync.clockOffsetMs = Date.now() - updatedAtMs;
+      }
+    }
     const nextRevision = Number(payload?.revision || 0);
     if (!(nextRevision > serverRevision)) return;
     scheduleCampaignRefresh(160);
@@ -4463,17 +4484,18 @@ function commitSectorDraft() {
 }
 
 function deleteManualSector(name) {
-  const normalizedName = String(name || '').trim();
-  if (!normalizedName || !isAdminRole()) return;
-  const nextSectors = ensureSectorStore().filter((sector) => sector.name !== normalizedName);
+  const sector = getManualSectorByIdentifier(name);
+  if (!sector || !isAdminRole()) return;
+  const nextSectors = ensureSectorStore().filter((entry) => entry.id !== sector.id);
   if (nextSectors.length === ensureSectorStore().length) return;
   state.meta.manualSectors = nextSectors;
   tacticalHoverAreas = buildTacticalHoverAreas(null, viewMode === 'schematic' ? 'schematic' : 'image', viewMode);
-  if (hoveredZoneInfo?.sector?.name === normalizedName) setHoveredZone(null);
+  if (hoveredZoneInfo?.sector?.id === sector.id || hoveredZoneInfo?.sector?.name === sector.name) setHoveredZone(null);
+  if (selected?.type === 'sector' && selected.id === sector.id) closeInfoPanel();
   saveLocal();
   refreshSectorOverlayNow();
   renderAll({ layers: true, routeOverlay: true });
-  setStatus(`Sektor gelöscht: ${normalizedName}`);
+  setStatus(`Sektor gelöscht: ${sector.name}`);
 }
 
 function updateSectorDraftPreview(point) {
@@ -4891,6 +4913,7 @@ async function attemptLogin() {
     if (selected?.type === 'planet') openPlanet(selected.id);
     if (selected?.type === 'fleet') openFleet(selected.id);
     if (selected?.type === 'route') openRoute(selected.id);
+    if (selected?.type === 'sector') openSector(selected.id);
     if (activeMainTab === 'fleetManagement') renderFleetManagementView();
     if (activeMainTab === 'shipyard') renderShipyardView();
     if (activeMainTab === 'buildProjects') renderBuildProjectsView();
@@ -5940,7 +5963,10 @@ function createHoverArea(type, name, centroid, rings) {
 
 function buildManualSectorHoverAreas() {
   return ensureSectorStore()
-    .map((sector) => createHoverArea('sector', sector.name, averagePoints(sector.points), [sector.points]))
+    .map((sector) => {
+      const area = createHoverArea('sector', sector.name, averagePoints(sector.points), [sector.points]);
+      return area ? { ...area, id: sector.id } : null;
+    })
     .filter(Boolean);
 }
 
@@ -7065,6 +7091,83 @@ function deleteMarker(id) {
   saveLocal();
   render({ positions: true, layers: true });
   setStatus(marker ? `Marker gelöscht: ${marker.name}` : 'Marker gelöscht.');
+}
+
+function getManualSectorById(id) {
+  return ensureSectorStore().find((sector) => sector.id === id) || null;
+}
+
+function getManualSectorByName(name) {
+  const normalizedName = String(name || '').trim();
+  if (!normalizedName) return null;
+  return ensureSectorStore().find((sector) => sector.name === normalizedName) || null;
+}
+
+function getManualSectorByIdentifier(identifier) {
+  return getManualSectorById(identifier) || getManualSectorByName(identifier);
+}
+
+function getManualSectorControlSummary(sector) {
+  const summary = { total: 0, GAR: 0, KUS: 0, HUTT: 0, NEUTRAL: 0 };
+  if (!sector?.points?.length) return summary;
+  state.planets.forEach((planet) => {
+    if (!pointInPolygon({ x: planet.x, y: planet.y }, sector.points)) return;
+    summary.total += 1;
+    const owner = ownerClass(planet.owner);
+    summary[owner] = (summary[owner] || 0) + 1;
+  });
+  return summary;
+}
+
+function formatSectorControlPercent(summary, owner) {
+  if (!summary.total) return '0.0%';
+  return `${(((summary[owner] || 0) / summary.total) * 100).toFixed(1)}%`;
+}
+
+function openSector(id) {
+  const sector = getManualSectorByIdentifier(id);
+  if (!sector || !isAdminRole()) {
+    if (selected?.type === 'sector') closeInfoPanel();
+    return;
+  }
+  const control = getManualSectorControlSummary(sector);
+  selected = { type: 'sector', id: sector.id };
+  refreshFleetSelectionState();
+  refreshRouteSelectionState();
+  infoPanel.style.display = 'block';
+  infoPanel.innerHTML = `
+    ${getInfoPanelHeader(sector.name)}
+    <p><span class="badge">Manueller Sektor</span><span class="badge">${control.total} Planet${control.total === 1 ? '' : 'en'}</span></p>
+    <div class="form-row"><label>Sektorname</label><input id="sectorName" value="${escapeHtml(sector.name)}"></div>
+    <div class="form-row"><label>Notiz</label><textarea id="sectorDescription">${escapeHtml(sector.description || '')}</textarea></div>
+    <div class="form-row">
+      <label>Kontrolle im Sektor</label>
+      <div class="workspace-card compact">
+        <div><span class="badge GAR">GAR</span> ${formatSectorControlPercent(control, 'GAR')} (${control.GAR})</div>
+        <div><span class="badge KUS">KUS</span> ${formatSectorControlPercent(control, 'KUS')} (${control.KUS})</div>
+        <div><span class="badge HUTT">HUTT</span> ${formatSectorControlPercent(control, 'HUTT')} (${control.HUTT})</div>
+        <div><span class="badge NEUTRAL">Neutral</span> ${formatSectorControlPercent(control, 'NEUTRAL')} (${control.NEUTRAL})</div>
+      </div>
+    </div>
+    <p class="muted">Diese Sektor-Infocard ist nur fuer Global Admins verfuegbar.</p>
+    <div class="toolbar-row">
+      <button class="primary" onclick="saveSector('${sector.id}')">Sektor speichern</button>
+      <button class="secondary danger" onclick="deleteManualSector('${sector.id}')">Sektor loeschen</button>
+    </div>
+  `;
+}
+
+function saveSector(id) {
+  const sector = getManualSectorById(id);
+  if (!sector || !isAdminRole()) return;
+  sector.name = document.getElementById('sectorName')?.value.trim() || sector.name;
+  sector.description = document.getElementById('sectorDescription')?.value.trim() || '';
+  tacticalHoverAreas = buildTacticalHoverAreas(null, viewMode === 'schematic' ? 'schematic' : 'image', viewMode);
+  saveLocal();
+  refreshSectorOverlayNow();
+  render({ positions: true, layers: true, routeOverlay: true });
+  openSector(sector.id);
+  setStatus(`Sektor gespeichert: ${sector.name}`);
 }
 
 function openPlanet(id) {
@@ -9493,6 +9596,13 @@ viewport.addEventListener('pointerdown', (event) => {
     openRoute(clickedRoute.id);
     return;
   }
+  const clickedSector = nearestDisplayedZone(worldPos.x, worldPos.y)?.sectorArea;
+  if (clickedSector && isAdminRole()) {
+    event.preventDefault();
+    event.stopPropagation();
+    openSector(clickedSector.id || clickedSector.name);
+    return;
+  }
   activeInteraction = {
     mode: 'pan',
     pointerId: event.pointerId,
@@ -9565,7 +9675,8 @@ viewport.addEventListener('contextmenu', (event) => {
   }
   if (hoveredSector && isAdminRole() && !activeSectorDraft) {
     openContextMenu(event.clientX, event.clientY, [
-      { label: `Sektor löschen: ${hoveredSector.name}`, run: () => deleteManualSector(hoveredSector.name) },
+      { label: `Sektor oeffnen: ${hoveredSector.name}`, run: () => openSector(hoveredSector.id || hoveredSector.name) },
+      { label: `Sektor loeschen: ${hoveredSector.name}`, run: () => deleteManualSector(hoveredSector.id || hoveredSector.name) },
       { label: 'Sektor zeichnen starten', run: () => startSectorDraft(worldPos) }
     ]);
     return;
@@ -9660,6 +9771,7 @@ roleSelect.onchange = () => {
   if (selected?.type === 'planet') openPlanet(selected.id);
   if (selected?.type === 'fleet') openFleet(selected.id);
   if (selected?.type === 'route') openRoute(selected.id);
+  if (selected?.type === 'sector') openSector(selected.id);
   if (activeMainTab === 'fleetManagement') renderFleetManagementView();
   if (activeMainTab === 'shipyard') renderShipyardView();
   if (activeMainTab === 'buildProjects') renderBuildProjectsView();
@@ -9769,9 +9881,10 @@ document.addEventListener('visibilitychange', () => {
     const changed = runCampaignMaintenance();
     if (changed) {
       render({ positions: true, frontline: true, influence: true, layers: true });
-      if (selected?.type === 'planet') openPlanet(selected.id);
-      if (selected?.type === 'marker') openMarker(selected.id);
-      if (activeMainTab === 'shipyard') renderShipyardView();
+    if (selected?.type === 'planet') openPlanet(selected.id);
+    if (selected?.type === 'marker') openMarker(selected.id);
+    if (selected?.type === 'sector') openSector(selected.id);
+    if (activeMainTab === 'shipyard') renderShipyardView();
       if (activeMainTab === 'fleetManagement') renderFleetManagementView();
     }
   }
@@ -9782,10 +9895,13 @@ window.setInterval(() => {
   render({ positions: true, frontline: true, influence: true, layers: true });
   if (selected?.type === 'planet') openPlanet(selected.id);
   if (selected?.type === 'marker') openMarker(selected.id);
+  if (selected?.type === 'sector') openSector(selected.id);
   if (activeMainTab === 'shipyard') renderShipyardView();
   if (activeMainTab === 'fleetManagement') renderFleetManagementView();
 }, 60000);
 window.savePlanet = savePlanet;
+window.saveSector = saveSector;
+window.deleteManualSector = deleteManualSector;
 window.saveFleet = saveFleet;
 window.deleteFleet = deleteFleet;
 window.closeInfoPanel = closeInfoPanel;

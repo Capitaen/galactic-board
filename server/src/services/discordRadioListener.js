@@ -409,27 +409,30 @@ async function processSingleDiscordMessage({ db, message, actor, getIo, onCampai
     const nextRevision = revision + 1;
     const updatedAt = writeCampaignState(db, nextState, nextRevision);
     const io = typeof getIo === 'function' ? getIo() : null;
-    io?.emit?.('campaign:state-changed', {
-      revision: nextRevision,
-      updatedAt,
-      changedKeys: ['fleets', 'fleetMotions'],
-      actor: {
-        id: actorPermission.linkedUserId,
-        username: actorPermission.linkedUsername || actorDisplayName,
-        role: actorPermission.permissionRole
-      }
-    });
+    const serverNowMs = Date.now();
     acceptedFleetIds.forEach((fleetId) => {
       const motion = (Array.isArray(nextState.fleetMotions) ? nextState.fleetMotions : []).find((entry) => entry.fleetId === fleetId);
       if (!motion) return;
       io?.emit?.('fx:fleet-jump-start', {
         motion,
+        serverNowMs,
         actor: {
           id: actorPermission.linkedUserId,
           username: actorPermission.linkedUsername || actorDisplayName,
           role: actorPermission.permissionRole
         }
       });
+    });
+    io?.emit?.('campaign:state-changed', {
+      revision: nextRevision,
+      updatedAt,
+      serverNowMs,
+      changedKeys: ['fleets', 'fleetMotions'],
+      actor: {
+        id: actorPermission.linkedUserId,
+        username: actorPermission.linkedUsername || actorDisplayName,
+        role: actorPermission.permissionRole
+      }
     });
     onCampaignChanged({
       revision: nextRevision,
