@@ -323,6 +323,8 @@ async function processSingleDiscordMessage({ db, message, actor, getIo, onCampai
       targetPlanetId: parsed.planet.id,
       targetPlanetName: parsed.planet.name,
       startedByUserId: actorPermission.linkedUserId || null,
+      source: 'discord_radio',
+      serverNowMs: startedAtMs,
       startedAtMs,
       durationMs
     };
