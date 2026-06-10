@@ -49,6 +49,31 @@ const INFRASTRUCTURE_KEYS = new Set([
   'civil_orbital_trade_station'
 ]);
 
+function getSectorControlStatus(state, sectorName) {
+  const normalizedSector = String(sectorName || '').trim();
+  if (!normalizedSector) return 'Neutral';
+  const planets = (Array.isArray(state?.planets) ? state.planets : [])
+    .filter((planet) => String(planet?.sector || '').trim() === normalizedSector);
+  if (!planets.length) return 'Neutral';
+  const ownerCounts = new Map();
+  planets.forEach((planet) => {
+    const owner = String(planet?.owner || 'NEUTRAL').trim() || 'NEUTRAL';
+    ownerCounts.set(owner, (ownerCounts.get(owner) || 0) + 1);
+  });
+  const total = planets.length;
+  const gar = Number(ownerCounts.get('GAR') || 0);
+  const kus = Number(ownerCounts.get('KUS') || 0);
+  if (gar > 0 && kus > 0) return 'Umkämpft';
+  if (gar > 0 && gar >= total * 0.6) return 'BLUFOR';
+  if (kus > 0 && kus >= total * 0.6) return 'OPFOR';
+  return 'Neutral';
+}
+
+function isBluforSenateMineTarget(state, planetId) {
+  const planet = (Array.isArray(state?.planets) ? state.planets : []).find((entry) => entry?.id === planetId);
+  return Boolean(planet?.owner === 'GAR' && getSectorControlStatus(state, planet.sector) === 'BLUFOR');
+}
+
 function canManageLogins(role) {
   const normalizedRole = String(role || '');
   return normalizedRole === 'Admin' || normalizedRole.endsWith(' Admin');
@@ -114,6 +139,7 @@ function validatePlanetResourceChanges(role, previousState, nextState) {
     const nextPlanet = nextPlanets.get(planetId);
     if (role === 'Senat') {
       ensure(beforePlanet?.owner === 'GAR' && nextPlanet?.owner === 'GAR', 'Senat may only manage GAR mine slots', { entity: 'planetResources', planetId });
+      ensure(isBluforSenateMineTarget(nextState, planetId), 'Senatsminen dürfen nur auf BLUFOR-Territorium gebaut werden', { entity: 'planetResources', planetId });
       return;
     }
     if (role === 'Eventleiter / KUS') {
@@ -196,6 +222,7 @@ function validateBuildJobChanges(role, previousState, nextState) {
     if (before && !hasChanged(before, job)) return;
     if (role === 'Senat') {
       ensure((job.faction || 'GAR') === 'GAR' && job.jobType === 'mine' && (!before || ((before.faction || 'GAR') === 'GAR' && before.jobType === 'mine')), 'Senat may only manage GAR mine projects', { entity: 'buildJob', id: job.id });
+      ensure(isBluforSenateMineTarget(nextState, job.buildLocationPlanetId), 'Senatsminen dürfen nur auf BLUFOR-Territorium gebaut werden', { entity: 'buildJob', id: job.id, planetId: job.buildLocationPlanetId });
       return;
     }
     if (role === 'Republic Navy / GAR') {

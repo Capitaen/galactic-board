@@ -553,7 +553,7 @@ textarea { min-height:82px; resize:vertical; }
 }
 .stat-card { padding:14px; }
 .stat-card strong { display:block; font-size:11px; color:#8dc8d8; margin-bottom:8px; text-transform:uppercase; letter-spacing:.16em; }
-.stat-card span { font-size:24px; font-weight:800; color:#dffcff; text-shadow:0 0 12px rgba(72,206,255,.12); }
+.stat-card span { font-size:24px; font-weight:800; color:#dffcff; text-shadow:0 0 12px rgba(72,206,255,.12); overflow-wrap:anywhere; }
 .project-card { padding:14px; margin-bottom:12px; }
 .project-card h4 { margin:0 0 8px; font-size:16px; }
 .project-card p { margin:0 0 8px; }
@@ -1289,6 +1289,15 @@ const economyViewState = {
   intelligenceReports: [],
   institutionalTrades: [],
   sectorDemand: [],
+  economySectors: [],
+  selectedEconomySectorId: '',
+  selectedEconomySector: null,
+  sectorEconomyLoading: false,
+  sectorEconomyError: '',
+  canBuySectorResources: false,
+  canManageSectorEmbargo: false,
+  sectorPurchaseResourceType: 'quadraniumErz',
+  sectorPurchaseQuantity: 10,
   policy: { taxRate: 0.05, subsidy: 'none' },
   inflationRate: 0,
   nextPurchaseAt: null,
@@ -9442,14 +9451,130 @@ async function sellMarketShare(companyId) {
 }
 
 function setEconomySection(section) {
-  economyViewState.activeSection = ['trade', 'detail', 'acp'].includes(section) ? section : 'overview';
+  economyViewState.activeSection = ['trade', 'detail', 'acp', 'sectorEconomy'].includes(section) ? section : 'overview';
   renderEconomyView();
+  if (economyViewState.activeSection === 'sectorEconomy') void fetchSectorEconomyList();
 }
 
 function openMarketCompanyOverview(companyId) {
   economyViewState.selectedCompanyId = companyId;
   economyViewState.activeSection = 'detail';
   renderEconomyView();
+}
+
+async function fetchSectorEconomyList(options = {}) {
+  if (economyViewState.sectorEconomyLoading && !options.force) return;
+  economyViewState.sectorEconomyLoading = true;
+  economyViewState.sectorEconomyError = '';
+  if (activeMainTab === 'economy') renderEconomyView();
+  try {
+    const response = await fetch('/api/economy/sectors', { credentials: 'include' });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || 'Sektor-Wirtschaft konnte nicht geladen werden.');
+    economyViewState.economySectors = payload.sectors || [];
+    economyViewState.canBuySectorResources = Boolean(payload.canBuyResources);
+    economyViewState.canManageSectorEmbargo = Boolean(payload.canManageEmbargo);
+    if (!economyViewState.selectedEconomySectorId && economyViewState.economySectors.length) {
+      economyViewState.selectedEconomySectorId = economyViewState.economySectors[0].id;
+    }
+    if (economyViewState.selectedEconomySectorId) {
+      await fetchSectorEconomyDetail(economyViewState.selectedEconomySectorId, { renderLoading: false });
+    }
+  } catch (error) {
+    economyViewState.sectorEconomyError = error.message;
+  } finally {
+    economyViewState.sectorEconomyLoading = false;
+    if (activeMainTab === 'economy') renderEconomyView();
+  }
+}
+
+async function fetchSectorEconomyDetail(sectorId, options = {}) {
+  const renderLoading = options.renderLoading !== false;
+  economyViewState.sectorEconomyError = '';
+  economyViewState.selectedEconomySectorId = sectorId;
+  if (renderLoading) {
+    economyViewState.sectorEconomyLoading = true;
+    renderEconomyView();
+  }
+  try {
+    const response = await fetch(`/api/economy/sectors/${encodeURIComponent(sectorId)}`, { credentials: 'include' });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || 'Sektor-Wirtschaft konnte nicht geladen werden.');
+    economyViewState.selectedEconomySector = payload.sector || null;
+    economyViewState.canBuySectorResources = Boolean(payload.canBuyResources);
+    economyViewState.canManageSectorEmbargo = Boolean(payload.canManageEmbargo);
+  } catch (error) {
+    economyViewState.sectorEconomyError = error.message;
+  } finally {
+    economyViewState.sectorEconomyLoading = false;
+    renderEconomyView();
+  }
+}
+
+function selectEconomySector(value) {
+  economyViewState.selectedEconomySectorId = value;
+  void fetchSectorEconomyDetail(value);
+}
+
+function setSectorPurchaseResourceType(value) {
+  economyViewState.sectorPurchaseResourceType = value;
+  renderEconomyView();
+}
+
+function setSectorPurchaseQuantity(value) {
+  economyViewState.sectorPurchaseQuantity = Math.max(1, Math.floor(Number(value || 1)));
+  renderEconomyView();
+}
+
+async function buySectorResource() {
+  const sectorId = economyViewState.selectedEconomySectorId;
+  if (!sectorId || economyViewState.sectorEconomyLoading) return;
+  try {
+    const response = await fetch(`/api/economy/sectors/${encodeURIComponent(sectorId)}/buy-resource`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        resourceType: economyViewState.sectorPurchaseResourceType,
+        quantity: economyViewState.sectorPurchaseQuantity
+      })
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || 'Ressourcenkauf fehlgeschlagen.');
+    economyViewState.selectedEconomySector = payload.sector || economyViewState.selectedEconomySector;
+    setStatus(`${payload.purchase?.quantity || 0} ${RESOURCE_LABELS[payload.purchase?.resourceType] || 'Ressourcen'} gekauft. Kosten: ${formatCredits(payload.purchase?.totalPrice || 0)}.`);
+    await fetchEconomyView({ renderLoading: false });
+    await fetchSectorEconomyDetail(sectorId, { renderLoading: false });
+  } catch (error) {
+    setStatus(error.message);
+    economyViewState.sectorEconomyError = error.message;
+    renderEconomyView();
+  }
+}
+
+async function setEconomySectorEmbargo(isEmbargoed) {
+  const sectorId = economyViewState.selectedEconomySectorId;
+  if (!sectorId || !economyViewState.canManageSectorEmbargo) return;
+  try {
+    const response = await fetch(`/api/economy/sectors/${encodeURIComponent(sectorId)}/embargo`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ isEmbargoed })
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || 'Embargo konnte nicht aktualisiert werden.');
+    economyViewState.selectedEconomySector = payload.sector || null;
+    setStatus(isEmbargoed ? 'Embargo verhängt.' : 'Embargo aufgehoben.');
+    await fetchSectorEconomyList({ force: true });
+  } catch (error) {
+    setStatus(error.message);
+    renderEconomyView();
+  }
+}
+
+function openSectorHolding(companyId) {
+  openMarketCompanyOverview(companyId);
 }
 
 async function saveEconomyPolicy() {
@@ -9471,6 +9596,178 @@ async function saveEconomyPolicy() {
   } catch (error) {
     setStatus(error.message);
   }
+}
+
+function renderEconomyMetricCard(label, metric) {
+  const value = typeof metric === 'object' ? metric.label : metric;
+  return `<div class="stat-card"><strong>${escapeLoginManagerText(label)}</strong><span>${escapeLoginManagerText(value || 'Mittel')}</span></div>`;
+}
+
+function renderSectorResourcePriceRows(resourcePrices = []) {
+  return resourcePrices.map((price) => {
+    const change = Number(price.change || 0);
+    return `<tr>
+      <td>${escapeLoginManagerText(price.label || RESOURCE_LABELS[price.resourceType] || price.resourceType)}</td>
+      <td>${formatCredits(price.currentPrice)}</td>
+      <td style="color:${change >= 0 ? '#55d68b' : '#ff6b6b'}">${change >= 0 ? '+' : ''}${formatCredits(change)} (${Number(price.changePercent || 0).toFixed(2).replace('.', ',')} %)</td>
+      <td>${Number(price.demandScore || 0).toFixed(2).replace('.', ',')}</td>
+      <td>${Number(price.supplyScore || 0).toFixed(2).replace('.', ',')}</td>
+      <td>${Number(price.speculationScore || 0).toFixed(2).replace('.', ',')}</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="6">Noch keine Ressourcenpreise.</td></tr>';
+}
+
+function renderSectorAssetTable(title, rows = []) {
+  return `<div class="workspace-card">
+    <h3>${escapeLoginManagerText(title)}</h3>
+    <table class="data-table">
+      <thead><tr><th>Name</th><th>Ressource</th><th>Besitzer</th><th>Produktion/h</th><th>Status</th><th>Ertrag</th></tr></thead>
+      <tbody>${rows.map((asset) => `<tr>
+        <td><strong>${escapeLoginManagerText(asset.name)}</strong><br><small>${escapeLoginManagerText(asset.planetName || '')}</small></td>
+        <td>${escapeLoginManagerText(asset.resourceLabel || '-')}</td>
+        <td>${escapeLoginManagerText(asset.owner || '-')}</td>
+        <td>${Number(asset.productionRatePerHour || 0).toFixed(1).replace('.', ',')}</td>
+        <td>${escapeLoginManagerText(asset.status || 'Aktiv')}</td>
+        <td>${escapeLoginManagerText(asset.yieldType || '-')}</td>
+      </tr>`).join('') || '<tr><td colspan="6">Keine Einträge.</td></tr>'}</tbody>
+    </table>
+  </div>`;
+}
+
+function renderSectorHoldingsTable(holdings = []) {
+  return `<div class="workspace-card">
+    <h3>Holdings im Sektor</h3>
+    <table class="data-table">
+      <thead><tr><th>Holding</th><th>Ressourcen</th><th>Kurs</th><th>Tag</th><th>Wirtschaft</th><th>Risiko</th><th>Status</th><th></th></tr></thead>
+      <tbody>${holdings.map((holding) => {
+        const change = Number(holding.dailyChange || 0);
+        return `<tr>
+          <td><strong>${escapeLoginManagerText(holding.name)}</strong><br><small>${escapeLoginManagerText(holding.symbol || '')}</small></td>
+          <td>${(holding.resourceLabels || []).map(escapeLoginManagerText).join(', ') || '-'}</td>
+          <td>${formatCredits(holding.currentPrice)}</td>
+          <td style="color:${change >= 0 ? '#55d68b' : '#ff6b6b'}">${change >= 0 ? '+' : ''}${formatCredits(change)} (${Number(holding.dailyChangePercent || 0).toFixed(2).replace('.', ',')} %)</td>
+          <td>${escapeLoginManagerText(holding.economyState || 'Normal')}</td>
+          <td>${Math.round(Number(holding.bankruptcyRisk || 0) * 100)} %</td>
+          <td>${escapeLoginManagerText(holding.marketStatusLabel || holding.marketStatus || 'Handelbar')}</td>
+          <td><button class="mini-btn" onclick="openSectorHolding('${holding.id}')">Zur Aktienübersicht</button></td>
+        </tr>`;
+      }).join('') || '<tr><td colspan="8">Keine Holdings in diesem Sektor.</td></tr>'}</tbody>
+    </table>
+  </div>`;
+}
+
+function renderSectorPurchasesTable(purchases = []) {
+  return `<div class="workspace-card">
+    <h3>Letzte Ressourcenkäufe</h3>
+    <table class="data-table">
+      <thead><tr><th>Zeit</th><th>Ressource</th><th>Menge</th><th>Einzelpreis</th><th>Gesamt</th><th>Käufer</th></tr></thead>
+      <tbody>${purchases.map((purchase) => `<tr>
+        <td>${formatMarketDateTime(purchase.createdAt)}</td>
+        <td>${escapeLoginManagerText(purchase.resourceLabel || RESOURCE_LABELS[purchase.resourceType] || purchase.resourceType)}</td>
+        <td>${Number(purchase.quantity || 0).toLocaleString('de-DE')}</td>
+        <td>${formatCredits(purchase.unitPrice)}</td>
+        <td>${formatCredits(purchase.totalPrice)}</td>
+        <td>${escapeLoginManagerText(purchase.buyerName || purchase.buyerRole || '-')}</td>
+      </tr>`).join('') || '<tr><td colspan="6">Noch keine Ressourcenkäufe.</td></tr>'}</tbody>
+    </table>
+  </div>`;
+}
+
+function renderSectorEconomySection() {
+  const sectors = economyViewState.economySectors || [];
+  const selected = economyViewState.selectedEconomySector;
+  const selectedPrice = selected?.resourcePrices?.find((entry) => entry.resourceType === economyViewState.sectorPurchaseResourceType);
+  const estimatedCost = Number(selectedPrice?.currentPrice || 0) * Number(economyViewState.sectorPurchaseQuantity || 0);
+  const purchaseDisabled = !economyViewState.canBuySectorResources
+    || !selected
+    || selected.isEconomyExcluded
+    || selected.economy?.isEmbargoed
+    || selected.economy?.controlStatus !== 'BLUFOR'
+    || economyViewState.sectorEconomyLoading;
+  const warning = selected?.economy?.isEmbargoed
+    ? '<div class="muted-box"><strong>Dieser Sektor steht unter Embargo.</strong> Ziviler Handel ist blockiert.</div>'
+    : '';
+  const excluded = selected?.isEconomyExcluded
+    ? `<div class="muted-box">${escapeLoginManagerText(selected.exclusionReason || 'Dieser Sektor hat keine Wirtschaft und keine Holdings.')}</div>`
+    : '';
+  workspacePanel.innerHTML = `
+    <div class="workspace-head">
+      <div>
+        <h2>Sektor-Wirtschaft</h2>
+        <p>Beobachtung und begrenzte Beschaffung für sektorale Ressourcenmärkte.</p>
+      </div>
+      <div class="toolbar-row end">
+        <button class="mini-btn" onclick="setEconomySection('overview')">Zur Übersicht</button>
+        <button class="mini-btn" onclick="setEconomySection('trade')">Aktienhandel</button>
+        <button class="mini-btn" onclick="fetchSectorEconomyList({ force: true })">Aktualisieren</button>
+      </div>
+    </div>
+    ${economyViewState.sectorEconomyError ? `<div class="muted-box">${escapeLoginManagerText(economyViewState.sectorEconomyError)}</div>` : ''}
+    <div class="workspace-section">
+      <div class="form-grid">
+        <div class="form-row"><label>Sektor</label><select onchange="selectEconomySector(this.value)">
+          ${sectors.map((sector) => `<option value="${escapeLoginManagerText(sector.id)}" ${sector.id === economyViewState.selectedEconomySectorId ? 'selected' : ''}>${escapeLoginManagerText(sector.name)}${sector.isEconomyExcluded ? ' (keine Wirtschaft)' : ''}</option>`).join('')}
+        </select></div>
+      </div>
+      ${economyViewState.sectorEconomyLoading && !selected ? '<div class="muted-box">Sektor-Wirtschaft wird geladen...</div>' : ''}
+    </div>
+    ${selected ? `
+      <div class="workspace-grid">
+        <div class="stat-card"><strong>Sektor</strong><span>${escapeLoginManagerText(selected.name)}</span></div>
+        <div class="stat-card"><strong>Kontrollstatus</strong><span>${escapeLoginManagerText(selected.economy?.controlStatus || 'Neutral')}</span></div>
+        <div class="stat-card"><strong>Embargo</strong><span>${selected.economy?.isEmbargoed ? 'Aktiv' : 'Nein'}</span></div>
+        <div class="stat-card"><strong>Wirtschaft</strong><span>${escapeLoginManagerText(selected.economy?.economyState || 'Normal')}</span></div>
+        ${renderEconomyMetricCard('Verbraucher', selected.economy?.consumerStrength)}
+        ${renderEconomyMetricCard('Industrie', selected.economy?.industryStrength)}
+        ${renderEconomyMetricCard('Logistik', selected.economy?.logisticsStrength)}
+        ${renderEconomyMetricCard('Kriegsdruck', selected.economy?.warPressure)}
+        ${renderEconomyMetricCard('Importabhängigkeit', selected.economy?.importDependency)}
+        ${renderEconomyMetricCard('Exportstärke', selected.economy?.exportStrength)}
+      </div>
+      ${warning}
+      ${excluded}
+      ${selected.isEconomyExcluded ? '' : `
+        <div class="workspace-section workspace-columns">
+          <div class="workspace-card">
+            <h3>Zivile Ressourcen kaufen</h3>
+            <div class="form-row"><label>Ressource</label><select onchange="setSectorPurchaseResourceType(this.value)">
+              ${RESOURCE_KEYS.map((key) => `<option value="${key}" ${economyViewState.sectorPurchaseResourceType === key ? 'selected' : ''}>${RESOURCE_LABELS[key]}</option>`).join('')}
+            </select></div>
+            <div class="form-row"><label>Menge</label><input type="number" min="1" max="100000" value="${economyViewState.sectorPurchaseQuantity}" oninput="setSectorPurchaseQuantity(this.value)"></div>
+            <p>Marktpreis: <strong>${formatCredits(selectedPrice?.currentPrice || 0)}</strong></p>
+            <p>Geschätzte Kosten: <strong>${formatCredits(estimatedCost)}</strong></p>
+            <button class="mini-btn primary" onclick="buySectorResource()" ${purchaseDisabled ? 'disabled' : ''}>Ressourcen kaufen</button>
+          </div>
+          <div class="workspace-card">
+            <h3>Embargo-Verwaltung</h3>
+            <p>${selected.economy?.isEmbargoed ? 'Der zivile Handel ist aktuell blockiert.' : 'Der zivile Handel ist aktuell geöffnet.'}</p>
+            ${economyViewState.canManageSectorEmbargo ? `<div class="toolbar-row">
+              <button class="mini-btn danger" onclick="setEconomySectorEmbargo(true)" ${selected.economy?.isEmbargoed ? 'disabled' : ''}>Embargo setzen</button>
+              <button class="mini-btn" onclick="setEconomySectorEmbargo(false)" ${!selected.economy?.isEmbargoed ? 'disabled' : ''}>Embargo aufheben</button>
+            </div>` : '<div class="muted-box">Nur globale Admins können Embargos setzen oder aufheben.</div>'}
+          </div>
+        </div>
+        <div class="workspace-section">
+          <div class="workspace-card">
+            <h3>Ressourcenpreise</h3>
+            <table class="data-table">
+              <thead><tr><th>Ressource</th><th>Preis</th><th>Änderung</th><th>Nachfrage</th><th>Angebot</th><th>Spekulation</th></tr></thead>
+              <tbody>${renderSectorResourcePriceRows(selected.resourcePrices || [])}</tbody>
+            </table>
+          </div>
+        </div>
+        <div class="workspace-section">${renderSectorHoldingsTable(selected.holdings || [])}</div>
+        <div class="workspace-section workspace-columns">
+          ${renderSectorAssetTable('Zivile Minen', selected.mines?.civilian || [])}
+          ${renderSectorAssetTable('Militärische Minen', selected.mines?.military || [])}
+        </div>
+        <div class="workspace-section workspace-columns">
+          ${renderSectorAssetTable('Infrastruktur', selected.infrastructure || [])}
+          ${renderSectorPurchasesTable(selected.purchases || [])}
+        </div>
+      `}
+    ` : '<div class="muted-box">Bitte einen Sektor auswählen.</div>'}
+  `;
 }
 
 function renderEconomyView() {
@@ -9496,13 +9793,18 @@ function renderEconomyView() {
   const marketQuery = String(economyViewState.sectorQuery || '').trim().toLocaleLowerCase('de');
   const resourceFilter = economyViewState.resourceFilter || 'all';
   const filteredCompanies = (economyViewState.companies || []).filter((company) => {
-    const matchesResource = resourceFilter === 'all' || company.resourceKey === resourceFilter;
+    const companyResources = Array.isArray(company.resourceRefs) && company.resourceRefs.length ? company.resourceRefs : [company.resourceKey];
+    const matchesResource = resourceFilter === 'all' || companyResources.includes(resourceFilter);
     const searchable = `${company.sector || ''} ${company.name || ''} ${company.symbol || ''}`.toLocaleLowerCase('de');
     return matchesResource && (!marketQuery || searchable.includes(marketQuery));
   });
   const visibleCompanies = filteredCompanies.slice(0, 60);
   const topLastHour = (economyViewState.topLastHour || []).slice(0, 50);
   const acpRows = economyViewState.acp?.current || [];
+  if (economyViewState.activeSection === 'sectorEconomy') {
+    renderSectorEconomySection();
+    return;
+  }
   if (economyViewState.activeSection === 'detail') {
     const company = economyViewState.companies.find((entry) => entry.id === economyViewState.selectedCompanyId);
     if (!company) {
@@ -9522,8 +9824,8 @@ function renderEconomyView() {
     workspacePanel.innerHTML = `
       <div class="workspace-head">
         <div><h2>${escapeLoginManagerText(company.name)} <span class="badge">${escapeLoginManagerText(company.symbol)}</span></h2>
-        <p>${escapeLoginManagerText(company.sector || company.faction)} • ${escapeLoginManagerText(RESOURCE_LABELS[company.resourceKey] || company.faction)}</p></div>
-        <div class="toolbar-row end"><button class="mini-btn" onclick="setEconomySection('trade')">Zurück zum Handel</button><button class="mini-btn" onclick="setEconomySection('acp')">ACP</button><button class="mini-btn" onclick="fetchEconomyView()">Aktualisieren</button></div>
+        <p>${escapeLoginManagerText(company.sector || company.faction)} • ${escapeLoginManagerText((company.resourceRefs || [company.resourceKey]).map((key) => RESOURCE_LABELS[key] || key).join(', ') || company.faction)} • ${escapeLoginManagerText(company.marketStatusLabel || 'Handelbar')}</p></div>
+        <div class="toolbar-row end"><button class="mini-btn" onclick="setEconomySection('trade')">Zurück zum Handel</button><button class="mini-btn" onclick="setEconomySection('sectorEconomy')">Sektor-Wirtschaft</button><button class="mini-btn" onclick="setEconomySection('acp')">ACP</button><button class="mini-btn" onclick="fetchEconomyView()">Aktualisieren</button></div>
       </div>
       <div class="workspace-grid">
         <div class="stat-card"><strong>Aktueller Kurs</strong><span>${formatCredits(company.currentPrice)}</span></div>
@@ -9537,7 +9839,7 @@ function renderEconomyView() {
       <div class="workspace-section workspace-columns">
         <div class="workspace-card"><h3>Kaufen</h3><p>Verfügbar: ${formatCredits(portfolioBalance)} • Maximal ${buyMax} Aktie(n)</p>
           ${economyViewState.portfolioEnabled && buyMax > 0 ? `<div class="trade-quantity"><input id="buyQuantity_${company.id}" type="range" min="1" max="${buyMax}" value="1" oninput="updateMarketQuantity('buy','${company.id}',this.value)"><output id="buyQuantityOutput_${company.id}">1</output></div>` : ''}
-          <button class="mini-btn primary" onclick="buyMarketShare('${company.id}')" ${!economyViewState.canPurchase || (!economyViewState.consumerMode && buyMax < 1) || (economyViewState.consumerMode && cooldown > 0) ? 'disabled' : ''}>${economyViewState.consumerMode ? 'Nachfrage erzeugen' : 'Ausgewählte Menge kaufen'}</button>
+          <button class="mini-btn primary" onclick="buyMarketShare('${company.id}')" ${!economyViewState.canPurchase || (company.marketStatus && company.marketStatus !== 'tradeable') || company.isEmbargoed || (!economyViewState.consumerMode && buyMax < 1) || (economyViewState.consumerMode && cooldown > 0) ? 'disabled' : ''}>${economyViewState.consumerMode ? 'Nachfrage erzeugen' : 'Ausgewählte Menge kaufen'}</button>
         </div>
         <div class="workspace-card"><h3>Verkaufen</h3><p>Eigener Bestand: ${shares} Aktie(n). Der Erlös wird sofort dem persönlichen Portfolio gutgeschrieben.</p>
           ${economyViewState.portfolioEnabled && shares > 0 ? `<div class="trade-quantity"><input id="sellQuantity_${company.id}" type="range" min="1" max="${shares}" value="1" oninput="updateMarketQuantity('sell','${company.id}',this.value)"><output id="sellQuantityOutput_${company.id}">1</output></div>` : ''}
@@ -9556,6 +9858,7 @@ function renderEconomyView() {
         </div>
         <div class="toolbar-row end">
           <button class="mini-btn" onclick="setEconomySection('overview')">Zur Übersicht</button>
+          <button class="mini-btn" onclick="setEconomySection('sectorEconomy')">Sektor-Wirtschaft</button>
           <button class="mini-btn" onclick="setEconomySection('acp')">ACP</button>
           <button class="mini-btn" onclick="fetchEconomyView()">Aktualisieren</button>
         </div>
@@ -9594,10 +9897,10 @@ function renderEconomyView() {
               <h4>${escapeLoginManagerText(company.name)} <span class="badge">${company.symbol}</span></h4>
               <p><strong>${formatCredits(company.currentPrice)}</strong> <span style="color:${change >= 0 ? '#55d68b' : '#ff6b6b'}">${change >= 0 ? '+' : ''}${change.toFixed(2)}</span></p>
               ${renderMarketSparkline(company.id)}
-              <p class="project-meta">${economyViewState.portfolioEnabled ? `Eigener Bestand: ${shares} Aktie(n) • ` : ''}${escapeLoginManagerText(company.sector || company.faction)}</p>
+              <p class="project-meta">${economyViewState.portfolioEnabled ? `Eigener Bestand: ${shares} Aktie(n) • ` : ''}${escapeLoginManagerText(company.sector || company.faction)} • ${escapeLoginManagerText(company.marketStatusLabel || 'Handelbar')}</p>
               ${economyViewState.portfolioEnabled && buyMax > 0 ? `<div class="trade-quantity"><input id="buyQuantity_${company.id}" type="range" min="1" max="${buyMax}" value="1" oninput="updateMarketQuantity('buy','${company.id}',this.value)"><output id="buyQuantityOutput_${company.id}">1</output></div>` : ''}
               <div class="toolbar-row">
-                <button class="mini-btn primary" onclick="buyMarketShare('${company.id}')" ${!economyViewState.canPurchase || (economyViewState.consumerMode && cooldown > 0) || (economyViewState.portfolioEnabled && portfolioBalance < Number(company.currentPrice || 0)) || economyViewState.loading ? 'disabled' : ''}>${economyViewState.consumerMode ? 'Nachfrage erzeugen' : 'Kaufen'}</button>
+                <button class="mini-btn primary" onclick="buyMarketShare('${company.id}')" ${!economyViewState.canPurchase || (company.marketStatus && company.marketStatus !== 'tradeable') || company.isEmbargoed || (economyViewState.consumerMode && cooldown > 0) || (economyViewState.portfolioEnabled && portfolioBalance < Number(company.currentPrice || 0)) || economyViewState.loading ? 'disabled' : ''}>${economyViewState.consumerMode ? 'Nachfrage erzeugen' : 'Kaufen'}</button>
                 ${economyViewState.portfolioEnabled ? `<button class="mini-btn danger" onclick="sellMarketShare('${company.id}')" ${shares < 1 || economyViewState.loading ? 'disabled' : ''}>Verkaufen</button>` : ''}
                 <button class="mini-btn" onclick="openMarketCompanyOverview('${company.id}')">Übersicht</button>
               </div>
@@ -9621,6 +9924,7 @@ function renderEconomyView() {
         <div class="toolbar-row end">
           <button class="mini-btn" onclick="setEconomySection('overview')">Zur Übersicht</button>
           <button class="mini-btn" onclick="setEconomySection('trade')">Aktienhandel</button>
+          <button class="mini-btn" onclick="setEconomySection('sectorEconomy')">Sektor-Wirtschaft</button>
           <button class="mini-btn" onclick="fetchEconomyView()">Aktualisieren</button>
         </div>
       </div>
@@ -9666,6 +9970,7 @@ function renderEconomyView() {
       </div>
       <div class="toolbar-row end">
         <button class="mini-btn primary" onclick="setEconomySection('trade')">Aktienhandel</button>
+        <button class="mini-btn" onclick="setEconomySection('sectorEconomy')">Sektor-Wirtschaft</button>
         <button class="mini-btn" onclick="setEconomySection('acp')">ACP</button>
         <button class="mini-btn" onclick="fetchEconomyView()">Aktualisieren</button>
       </div>
@@ -10610,6 +10915,14 @@ window.buyMarketShare = buyMarketShare;
 window.sellMarketShare = sellMarketShare;
 window.setEconomySection = setEconomySection;
 window.openMarketCompanyOverview = openMarketCompanyOverview;
+window.fetchSectorEconomyList = fetchSectorEconomyList;
+window.fetchSectorEconomyDetail = fetchSectorEconomyDetail;
+window.selectEconomySector = selectEconomySector;
+window.setSectorPurchaseResourceType = setSectorPurchaseResourceType;
+window.setSectorPurchaseQuantity = setSectorPurchaseQuantity;
+window.buySectorResource = buySectorResource;
+window.setEconomySectorEmbargo = setEconomySectorEmbargo;
+window.openSectorHolding = openSectorHolding;
 window.setMarketRange = setMarketRange;
 window.updateMarketQuantity = updateMarketQuantity;
 window.updateEconomySectorQuery = updateEconomySectorQuery;

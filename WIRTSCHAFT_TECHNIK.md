@@ -163,3 +163,121 @@ Die oeffentliche Rangliste zeigt anonyme Portfolios nach Gesamtwert. Nur aktivie
 ## UI-Aktualisierung
 
 Wenn der Wirtschaftsbereich geoeffnet ist, ruft die UI alle `15 Sekunden` `/api/economy/market` ab. Dadurch werden Kurse, Charts, Bestandswerte, Rangliste und Auftragsveraenderungen regelmaessig aktualisiert. Manuelle Aktualisierung ueber den Button bleibt weiterhin moeglich.
+
+## Sektor-Wirtschaft
+
+Der Tab `Sektor-Wirtschaft` liest seine Daten ueber die neuen API-Routen:
+
+- `GET /api/economy/sectors`
+- `GET /api/economy/sectors/:sectorId`
+- `GET /api/economy/sectors/:sectorId/holdings`
+- `POST /api/economy/sectors/:sectorId/buy-resource`
+- `POST /api/economy/sectors/:sectorId/embargo`
+
+Die 62 Sektoren kommen aus `meta.manualSectors`. Der Server normalisiert die bekannten Umbenennungen, darunter `Sith Worlds` zu `Tynquay` und `Ariarch` beziehungsweise `Sektor 61` zu `Chubara`. Bestimmte Sektoren sind wirtschaftlich ausgeschlossen und erhalten keine sektoralen Holdings und keine zivile Wirtschaft: Velcar, Rago, Chiss Ascendancy Ost, Chiss Ascendancy, Chss Ascendancy, Vardoss, Ghost Nebula, Bakura und Corva.
+
+Pro Sektor wird aus den enthaltenen Planeten ein Kontrollstatus abgeleitet:
+
+- `BLUFOR`, wenn GAR den Sektor klar kontrolliert.
+- `OPFOR`, wenn KUS den Sektor klar kontrolliert.
+- `Umkaempft`, wenn GAR und KUS gleichzeitig relevante Praesenz haben.
+- `Neutral`, wenn keine klare GAR- oder KUS-Kontrolle besteht.
+
+Die UI zeigt grobe Labels wie `Sehr niedrig`, `Niedrig`, `Mittel`, `Hoch` und `Sehr hoch`. Intern bleiben die Werte numerisch, damit Preise und Risikoformeln fein reagieren koennen.
+
+## Sektorale Ressourcenpreise
+
+Die Tabelle `sector_resource_prices` speichert fuer jeden Sektor und jede Ressource:
+
+- Basispreis
+- aktuellen Preis
+- vorherigen Preis
+- Nachfragewert
+- Angebotswert
+- Spekulationswert
+
+Der Nachfrage-Tick schreibt weiterhin `sector_resource_demand` und fuehrt daraus geglaettete Preise ab. Preisbewegungen werden gedrosselt: vorhandene Preise bewegen sich nur schrittweise in Richtung des neu berechneten Zielwerts. Dadurch fuehren einzelne Ereignisse oder Kaeufe nicht zu komplett zerstoerten Preisen.
+
+Ein Ressourcenkauf durch Navy oder Senat erhoeht:
+
+1. den lokalen Ressourcenpreis,
+2. den Nachfragewert,
+3. den Spekulationswert,
+4. die passende sektorale Holding,
+5. die Marktberichte und galaktischen Ereignisse.
+
+Die Wirkung grosser Kaeufe steigt ueber eine Quadratwurzel-Formel. Grosse Mengen sind also sichtbar, aber nicht linear uebermaechtig.
+
+## Ziviler Ressourcenkauf
+
+Navy-Admins, Senats-Admins, Senatoren und globale Admins duerfen im Tab `Sektor-Wirtschaft` zivile Ressourcen fuer den GAR-/Militaerpool kaufen. Normale Spieler koennen nur beobachten.
+
+Beim Kauf prueft der Server:
+
+- gueltiger Sektor,
+- gueltige Ressource,
+- gueltige positive Menge,
+- kein ausgeschlossener Wirtschaftssektor,
+- kein Embargo,
+- kein OPFOR-Sektor,
+- Kontrollstatus `BLUFOR`,
+- ausreichende GAR-Credits,
+- keine negativen oder ungueltigen Preise.
+
+Danach werden GAR-Credits reduziert, die gekaufte Ressource dem GAR-Pool hinzugefuegt und ein Eintrag in `civilian_resource_purchases` geschrieben. Der Kauf erzeugt ausserdem einen Marktbericht und ein galaktisches Ereignis.
+
+## Embargos
+
+Embargos werden serverseitig in `sector_economy_state.is_embargoed` gespeichert. OPFOR-Sektoren gelten fuer den zivilen GAR-Markt automatisch als blockiert.
+
+Embargo bedeutet technisch:
+
+- zivile Minen in diesem Sektor zahlen keinen normalen Marktertrag aus,
+- zivile Ressourcenkaufe werden serverseitig abgelehnt,
+- sektorale Holdings werden als `embargo` markiert,
+- normale Aktienkaeufe fuer diese Holdings werden blockiert,
+- institutionelle Anleger ignorieren diese Werte im regulaeren Tick.
+
+Admins koennen Embargos ueber `POST /api/economy/sectors/:sectorId/embargo` setzen oder aufheben. Jede Aenderung erzeugt ein Ereignis in `market_events`.
+
+## Holdings, Insolvenz und Uebernahmen
+
+`market_companies` wurde defensiv erweitert:
+
+- `sector_id`
+- `resource_refs_json`
+- `market_status`
+- `bankruptcy_risk`
+- `debt_index`
+- `confidence_index`
+- `is_embargoed`
+- `acquired_by_company_id`
+- `merged_name`
+
+Die bestehende Einzelressource `resource_key` bleibt erhalten, damit alte Portfolios, Kurse und History-Daten weiter funktionieren. Neue Mehrfachressourcen einer uebernommenen Holding liegen in `resource_refs_json`.
+
+Das Insolvenzrisiko steigt durch schwache Nachfrage, fallende Kurse, Embargo, Rezession, Schulden und sinkendes Vertrauen. Bei hohem Risiko kann der Handel ausgesetzt oder die Holding als insolvent markiert werden. Das erzeugt ein Ereignis.
+
+Starke Holdings im gleichen Sektor koennen insolvente oder extrem schwache Holdings uebernehmen. Dabei wird:
+
+1. die starke Holding um die Ressourcen der schwachen Holding erweitert,
+2. der Name dynamisch zusammengefuehrt oder zu einer Industrial-Holding verdichtet,
+3. die schwache Holding auf `takeover` gesetzt,
+4. ein Eintrag in `holding_mergers` geschrieben,
+5. ein galaktisches Ereignis erzeugt.
+
+Bestehende Portfolio-Bestaende bleiben erhalten, weil die urspruenglichen Firmen-IDs nicht geloescht werden.
+
+## Senatsminen und BLUFOR-Regel
+
+Senatsminen duerfen nur auf BLUFOR-Territorium entstehen. Diese Regel wird in `stateValidation.js` serverseitig erzwungen.
+
+Der Server prueft dabei:
+
+- Zielplanet gehoert GAR,
+- Zielsektor ist nicht KUS,
+- Zielsektor ist nicht neutral,
+- Zielsektor ist nicht umkaempft,
+- der abgeleitete Kontrollstatus ist `BLUFOR`.
+
+Dadurch reicht es nicht, die UI zu umgehen: nicht erlaubte Senatsminen werden beim Speichern des Kampagnenzustands blockiert.

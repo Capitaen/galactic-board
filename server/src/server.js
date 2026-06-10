@@ -7,6 +7,7 @@ import bcrypt from 'bcryptjs';
 import { createServer } from 'node:https';
 import { Server as SocketServer } from 'socket.io';
 import {
+  buyCivilianSectorResource,
   calculateCivilianMineYield,
   createDb,
   createRadioCommandPermission,
@@ -15,14 +16,18 @@ import {
   deleteUser,
   findUserByNormalizedUsername,
   getConsumerNextPurchaseAt,
+  listEconomySectors,
   listRadioCommandLogs,
   listRadioCommandPermissions,
   listUsers,
   purchaseMarketDemand,
   readCampaignState,
+  readEconomySector,
+  readEconomySectorHoldings,
   readMarketSnapshot,
   runMarketTick,
   sellMarketShare,
+  setSectorEmbargo,
   updateEconomyPolicy,
   updateRadioCommandPermission,
   updateUser,
@@ -611,6 +616,25 @@ function requireSenateEconomyManager(req, res, next) {
   next();
 }
 
+function canBuySectorCivilianResources(user) {
+  if (!user?.id) return false;
+  return ['Admin', 'Republic Navy Admin', 'Galaktischer Senats Admin', 'Senat'].includes(user.role);
+}
+
+function requireSectorCivilianBuyer(req, res, next) {
+  if (!canBuySectorCivilianResources(req.user)) {
+    return res.status(403).json({ error: 'Nur Navy-Admins und Senatsmitglieder dürfen zivile Ressourcen einkaufen.' });
+  }
+  next();
+}
+
+function requireSectorEmbargoManager(req, res, next) {
+  if (!req.user || req.user.role !== 'Admin') {
+    return res.status(403).json({ error: 'Nur globale Admins dürfen Sektor-Embargos setzen.' });
+  }
+  next();
+}
+
 function hasPersonalMarketPortfolio(user) {
   const definition = LOGIN_ROLE_DEFINITIONS[user?.role];
   return Boolean(user?.id && definition?.level === 'member' && definition.faction !== 'system');
@@ -921,6 +945,83 @@ app.get('/api/economy/market', (req, res) => {
     inflationRate,
     nextPurchaseAt: consumerKey ? getConsumerNextPurchaseAt(db, consumerKey) : null
   });
+});
+
+app.get('/api/economy/sectors', (req, res) => {
+  const { state } = readCampaignState(db);
+  const inflationRate = Math.min(0.25, Number(state.resources?.GAR?.credits || 0) / 2000000);
+  runMarketTick(db, inflationRate, Date.now(), state);
+  res.json({
+    sectors: listEconomySectors(db, state),
+    canBuyResources: canBuySectorCivilianResources(getSession(req)),
+    canManageEmbargo: getSession(req)?.role === 'Admin'
+  });
+});
+
+app.get('/api/economy/sectors/:sectorId', (req, res) => {
+  try {
+    const { state } = readCampaignState(db);
+    const inflationRate = Math.min(0.25, Number(state.resources?.GAR?.credits || 0) / 2000000);
+    runMarketTick(db, inflationRate, Date.now(), state);
+    res.json({
+      sector: readEconomySector(db, state, req.params.sectorId),
+      canBuyResources: canBuySectorCivilianResources(getSession(req)),
+      canManageEmbargo: getSession(req)?.role === 'Admin'
+    });
+  } catch (error) {
+    res.status(error.status || 500).json({ error: error.message || 'Sektor-Wirtschaft konnte nicht geladen werden.' });
+  }
+});
+
+app.get('/api/economy/sectors/:sectorId/holdings', (req, res) => {
+  try {
+    const { state } = readCampaignState(db);
+    res.json({ holdings: readEconomySectorHoldings(db, state, req.params.sectorId) });
+  } catch (error) {
+    res.status(error.status || 500).json({ error: error.message || 'Sektor-Holdings konnten nicht geladen werden.' });
+  }
+});
+
+app.post('/api/economy/sectors/:sectorId/buy-resource', requireAuth, requireSectorCivilianBuyer, (req, res) => {
+  try {
+    const { state, revision } = readCampaignState(db);
+    const result = buyCivilianSectorResource(db, state, {
+      sectorId: req.params.sectorId,
+      resourceType: String(req.body?.resourceType || ''),
+      quantity: Number(req.body?.quantity || 0),
+      buyerRole: req.user.role,
+      buyerName: req.user.senatePosition || req.user.username || req.user.role,
+      buyerAccount: 'GAR'
+    });
+    const updatedAt = writeCampaignState(db, result.state, revision + 1);
+    broadcastCampaignChange({
+      state: result.state,
+      revision: revision + 1,
+      updatedAt,
+      changedKeys: ['resources']
+    });
+    res.json({
+      ok: true,
+      purchase: result.purchase,
+      sector: readEconomySector(db, result.state, req.params.sectorId)
+    });
+  } catch (error) {
+    res.status(error.status || 500).json({ error: error.message || 'Ressourcenkauf fehlgeschlagen.' });
+  }
+});
+
+app.post('/api/economy/sectors/:sectorId/embargo', requireAuth, requireSectorEmbargoManager, (req, res) => {
+  try {
+    const { state } = readCampaignState(db);
+    const sector = setSectorEmbargo(db, state, {
+      sectorId: req.params.sectorId,
+      isEmbargoed: Boolean(req.body?.isEmbargoed),
+      actor: req.user.username
+    });
+    res.json({ ok: true, sector });
+  } catch (error) {
+    res.status(error.status || 500).json({ error: error.message || 'Embargo konnte nicht aktualisiert werden.' });
+  }
 });
 
 app.post('/api/economy/market/buy', (req, res) => {
