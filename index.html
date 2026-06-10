@@ -198,6 +198,13 @@ textarea { min-height:82px; resize:vertical; }
 .resource-slot-row { display:grid; grid-template-columns:repeat(5,1fr); gap:8px; }
 .resource-slot-cell small { display:block; margin-top:4px; color:var(--muted); font-size:11px; text-align:center; }
 .resource-pill { display:inline-flex; align-items:center; gap:6px; padding:5px 9px; border-radius:999px; background:rgba(69,123,255,.12); color:#cfe0ff; border:1px solid rgba(69,123,255,.24); font-size:12px; margin:0 6px 6px 0; }
+.radio-permission-stack { display:flex; flex-direction:column; gap:10px; min-width:280px; }
+.radio-selected-fleets { display:flex; flex-wrap:wrap; gap:8px; }
+.radio-selected-fleet { display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:999px; background:rgba(69,123,255,.12); color:#d7e6ff; border:1px solid rgba(69,123,255,.28); font-size:12px; }
+.radio-selected-fleet button { border:none; background:transparent; color:#9fbfff; cursor:pointer; font-size:14px; line-height:1; padding:0; }
+.radio-fleet-search-results { display:flex; flex-wrap:wrap; gap:8px; }
+.radio-fleet-search-empty { color:var(--muted); font-size:12px; }
+.radio-role-badge { display:inline-flex; align-items:center; padding:6px 10px; border-radius:999px; font-size:12px; border:1px solid rgba(255,255,255,.12); background:rgba(255,255,255,.05); color:#dbe6f8; }
 .route-connection-list { max-height:260px; overflow:auto; display:flex; flex-direction:column; gap:6px; margin:8px 0; }
 .route-connection-row { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:8px 10px; border:1px solid rgba(255,255,255,.1); border-radius:8px; background:rgba(255,255,255,.035); }
 .route-connection-row span { min-width:0; overflow-wrap:anywhere; }
@@ -924,6 +931,7 @@ let radioCommandAdminState = {
   users: [],
   fleets: [],
   radioConfig: null,
+  fleetSearch: {},
   loading: false
 };
 let currentAuthenticatedUsername = '';
@@ -8290,19 +8298,42 @@ function createRadioPermissionDraft() {
     fleets: [],
     isDraft: true
   });
+  radioCommandAdminState.fleetSearch = { ...(radioCommandAdminState.fleetSearch || {}), [radioCommandAdminState.permissions[0].id]: '' };
   renderRadioCommandCenterView();
 }
 
-function toggleRadioPermissionFleet(permissionId, fleetId) {
+function getDerivedRadioPermissionRole(permission) {
+  return permission?.linkedUserRole === 'Admin' || permission?.linkedUserRole === 'Republic Navy Admin'
+    ? 'admiralty'
+    : 'fleet_officer';
+}
+
+function setRadioPermissionFleetSearch(permissionId, value) {
+  radioCommandAdminState.fleetSearch = {
+    ...(radioCommandAdminState.fleetSearch || {}),
+    [permissionId]: String(value || '')
+  };
+  renderRadioCommandCenterView();
+}
+
+function addRadioPermissionFleet(permissionId, fleetId) {
   const permission = radioCommandAdminState.permissions.find((entry) => entry.id === permissionId);
   const fleet = radioCommandAdminState.fleets.find((entry) => entry.id === fleetId);
   if (!permission || !fleet) return;
   const existing = Array.isArray(permission.fleets) ? permission.fleets : [];
-  if (existing.some((entry) => entry.fleetId === fleetId)) {
-    permission.fleets = existing.filter((entry) => entry.fleetId !== fleetId);
-  } else {
-    permission.fleets = [...existing, { fleetId: fleet.id, fleetName: fleet.name }];
-  }
+  if (existing.some((entry) => entry.fleetId === fleetId)) return;
+  permission.fleets = [...existing, { fleetId: fleet.id, fleetName: fleet.name }];
+  radioCommandAdminState.fleetSearch = {
+    ...(radioCommandAdminState.fleetSearch || {}),
+    [permissionId]: ''
+  };
+  renderRadioCommandCenterView();
+}
+
+function removeRadioPermissionFleet(permissionId, fleetId) {
+  const permission = radioCommandAdminState.permissions.find((entry) => entry.id === permissionId);
+  if (!permission) return;
+  permission.fleets = (Array.isArray(permission.fleets) ? permission.fleets : []).filter((entry) => entry.fleetId !== fleetId);
   renderRadioCommandCenterView();
 }
 
@@ -8312,7 +8343,6 @@ async function saveRadioPermission(id) {
   if (!permission) return;
   const ingameName = document.getElementById(`radioIngame_${id}`)?.value.trim() || '';
   const linkedUserId = document.getElementById(`radioLinkedUser_${id}`)?.value || '';
-  const permissionRole = document.getElementById(`radioPermissionRole_${id}`)?.value || 'fleet_officer';
   const fleets = Array.isArray(permission.fleets) ? permission.fleets : [];
   try {
     const response = await fetch(permission.isDraft ? '/api/admin/radio-command-permissions' : `/api/admin/radio-command-permissions/${id}`, {
@@ -8322,7 +8352,6 @@ async function saveRadioPermission(id) {
       body: JSON.stringify({
         ingameName,
         linkedUserId,
-        permissionRole,
         fleets
       })
     });
@@ -8415,8 +8444,17 @@ function renderRadioCommandCenterView() {
   const fleets = radioCommandAdminState.fleets || [];
   const permissions = radioCommandAdminState.permissions || [];
   const audit = radioCommandAdminState.audit || [];
+  const fleetSearch = radioCommandAdminState.fleetSearch || {};
+  const userById = new Map(users.map((user) => [user.id, user]));
   const permissionRows = permissions.length ? permissions.map((permission) => {
+    const linkedUser = userById.get(permission.linkedUserId) || null;
+    permission.linkedUserRole = linkedUser?.role || '';
+    permission.permissionRole = getDerivedRadioPermissionRole(permission);
     const selectedFleetIds = new Set((permission.fleets || []).map((fleet) => fleet.fleetId));
+    const selectedFleets = fleets.filter((fleet) => selectedFleetIds.has(fleet.id));
+    const searchValue = String(fleetSearch[permission.id] || '');
+    const normalizedSearch = searchValue.trim().toLowerCase();
+    const filteredFleets = fleets.filter((fleet) => !selectedFleetIds.has(fleet.id) && (!normalizedSearch || fleet.name.toLowerCase().includes(normalizedSearch))).slice(0, 8);
     return `
       <tr>
         <td><input id="radioIngame_${permission.id}" value="${escapeRadioCommandText(permission.ingameName || '')}" placeholder="z.B. Kendal Ozzel"></td>
@@ -8427,21 +8465,23 @@ function renderRadioCommandCenterView() {
           </select>
         </td>
         <td>
-          <select id="radioPermissionRole_${permission.id}">
-            <option value="fleet_officer" ${permission.permissionRole === 'fleet_officer' ? 'selected' : ''}>fleet_officer</option>
-            <option value="staff_officer" ${permission.permissionRole === 'staff_officer' ? 'selected' : ''}>staff_officer</option>
-            <option value="faction_admin" ${permission.permissionRole === 'faction_admin' ? 'selected' : ''}>faction_admin</option>
-            <option value="admiralty" ${permission.permissionRole === 'admiralty' ? 'selected' : ''}>admiralty</option>
-          </select>
+          <span class="radio-role-badge">${permission.permissionRole === 'admiralty' ? 'Automatisch: Admiralität' : 'Automatisch: Flottenoffizier'}</span>
         </td>
         <td>
-          <div class="resource-pill-list">
-            ${fleets.map((fleet) => `
-              <label class="resource-pill">
-                <input type="checkbox" ${selectedFleetIds.has(fleet.id) ? 'checked' : ''} onchange="toggleRadioPermissionFleet('${permission.id}','${fleet.id}')">
-                <span>${escapeRadioCommandText(fleet.name)}</span>
-              </label>
-            `).join('')}
+          <div class="radio-permission-stack">
+            <div class="radio-selected-fleets">
+              ${selectedFleets.length
+                ? selectedFleets.map((fleet) => `<span class="radio-selected-fleet">${escapeRadioCommandText(fleet.name)}<button type="button" onclick="removeRadioPermissionFleet('${permission.id}','${fleet.id}')">×</button></span>`).join('')
+                : `<span class="radio-fleet-search-empty">${permission.permissionRole === 'admiralty' ? 'Admiralität darf alle GAR-Verbände bewegen.' : 'Noch keine Verbände zugewiesen.'}</span>`}
+            </div>
+            ${permission.permissionRole === 'admiralty' ? '' : `
+              <input value="${escapeRadioCommandText(searchValue)}" placeholder="Verband suchen..." oninput="setRadioPermissionFleetSearch('${permission.id}', this.value)">
+              <div class="radio-fleet-search-results">
+                ${filteredFleets.length
+                  ? filteredFleets.map((fleet) => `<button type="button" class="mini-btn" onclick="addRadioPermissionFleet('${permission.id}','${fleet.id}')">${escapeRadioCommandText(fleet.name)}</button>`).join('')
+                  : `<span class="radio-fleet-search-empty">${normalizedSearch ? 'Keine passenden Verbände gefunden.' : 'Tippe zum Suchen eines Verbandes.'}</span>`}
+              </div>
+            `}
           </div>
         </td>
         <td class="actions">
@@ -8477,7 +8517,7 @@ function renderRadioCommandCenterView() {
     <div class="workspace-section">
       <div class="workspace-card">
         <h3>Berechtigungen</h3>
-        <p class="muted">${radioCommandAdminState.loading ? 'Lade Daten...' : 'fleet_officer darf nur zugewiesene Verbände bewegen. staff_officer, faction_admin und admiralty dürfen alle Verbände bewegen.'}</p>
+        <p class="muted">${radioCommandAdminState.loading ? 'Lade Daten...' : 'Der FunkRelay-Webhook spiegelt nur Nachrichten. Berechtigungen werden über Ingame-Name + Website-Login geprüft. Republic Navy Admin und Admin werden automatisch als Admiralität behandelt, alle anderen als Flottenoffizier mit zugewiesenen GAR-Verbänden.'}</p>
         <table class="data-table">
           <thead><tr><th>Ingame-Name</th><th>Website-Login</th><th>Rolle</th><th>Verknüpfte Verbände</th><th>Aktionen</th></tr></thead>
           <tbody>${permissionRows}</tbody>
@@ -9302,7 +9342,9 @@ window.saveLoginManagerUser = saveLoginManagerUser;
 window.deleteLoginManagerUser = deleteLoginManagerUser;
 window.fetchRadioCommandCenterData = fetchRadioCommandCenterData;
 window.createRadioPermissionDraft = createRadioPermissionDraft;
-window.toggleRadioPermissionFleet = toggleRadioPermissionFleet;
+window.setRadioPermissionFleetSearch = setRadioPermissionFleetSearch;
+window.addRadioPermissionFleet = addRadioPermissionFleet;
+window.removeRadioPermissionFleet = removeRadioPermissionFleet;
 window.saveRadioPermission = saveRadioPermission;
 window.deleteRadioPermission = deleteRadioPermission;
 window.pollDiscordRadioCommands = pollDiscordRadioCommands;
