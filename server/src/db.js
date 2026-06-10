@@ -4,6 +4,36 @@ import Database from 'better-sqlite3';
 import bcrypt from 'bcryptjs';
 import { extractDefaultData } from './extractDefaultData.js';
 
+function pointInPolygon(point, polygon) {
+  if (!point || !Array.isArray(polygon) || polygon.length < 3) return false;
+  let inside = false;
+  for (let index = 0, previous = polygon.length - 1; index < polygon.length; previous = index, index += 1) {
+    const currentPoint = polygon[index];
+    const previousPoint = polygon[previous];
+    if (!currentPoint || !previousPoint) continue;
+    const intersects = ((currentPoint.y > point.y) !== (previousPoint.y > point.y))
+      && (point.x < ((previousPoint.x - currentPoint.x) * (point.y - currentPoint.y)) / ((previousPoint.y - currentPoint.y) || Number.EPSILON) + currentPoint.x);
+    if (intersects) inside = !inside;
+  }
+  return inside;
+}
+
+function resolveManualSectorName(planet, manualSectors) {
+  if (!planet || !Array.isArray(manualSectors) || !manualSectors.length) return '';
+  const point = {
+    x: Number(planet.x),
+    y: Number(planet.y)
+  };
+  if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) return '';
+  for (const sector of manualSectors) {
+    const name = String(sector?.name || '').trim();
+    const polygon = Array.isArray(sector?.points) ? sector.points : [];
+    if (!name || polygon.length < 3) continue;
+    if (pointInPolygon(point, polygon)) return name;
+  }
+  return '';
+}
+
 export function createDb(projectRoot) {
   // 🔥 FIX: benutze process.cwd() statt projectRoot
   const dbPath = path.join(process.cwd(), 'server', 'data.sqlite');
@@ -246,10 +276,23 @@ export function createDb(projectRoot) {
 
   const campaignStateRow = db.prepare("SELECT state_json FROM app_state WHERE id = 'main'").get();
   const campaignState = JSON.parse(campaignStateRow?.state_json || '{}');
+  const manualSectors = (campaignState.meta?.manualSectors || [])
+    .map((sector) => ({
+      ...sector,
+      name: String(sector?.name || '').trim()
+    }))
+    .filter((sector) => sector.name);
   const sectorOwners = new Map();
   const sectorNames = new Set();
+  let campaignStateChanged = false;
   for (const planet of campaignState.planets || []) {
-    const sector = String(planet?.sector || '').trim();
+    const sector = manualSectors.length
+      ? resolveManualSectorName(planet, manualSectors)
+      : String(planet?.sector || '').trim();
+    if (String(planet?.sector || '').trim() !== sector) {
+      planet.sector = sector;
+      campaignStateChanged = true;
+    }
     if (!sector) continue;
     sectorNames.add(sector);
     const owner = String(planet?.owner || 'NEUTRAL').trim() || 'NEUTRAL';
@@ -257,9 +300,19 @@ export function createDb(projectRoot) {
     const ownerCounts = sectorOwners.get(sector);
     ownerCounts.set(owner, (ownerCounts.get(owner) || 0) + 1);
   }
-  for (const manualSector of campaignState.meta?.manualSectors || []) {
-    const sector = String(manualSector?.name || '').trim();
-    if (sector) sectorNames.add(sector);
+  for (const manualSector of manualSectors) {
+    sectorNames.add(manualSector.name);
+  }
+
+  if (campaignStateChanged) {
+    db.prepare(`
+      UPDATE app_state
+      SET state_json = ?, updated_at = ?
+      WHERE id = 'main'
+    `).run(
+      JSON.stringify(campaignState),
+      new Date().toISOString()
+    );
   }
 
   const sectorHoldingResources = [
@@ -280,15 +333,25 @@ export function createDb(projectRoot) {
     VALUES (?, ?, ?, ?)
   `);
   const existingHistory = db.prepare('SELECT 1 FROM market_history WHERE company_id = ? LIMIT 1');
+  const deleteCompanyHistory = db.prepare('DELETE FROM market_history WHERE company_id = ?');
+  const deleteCompanyHoldings = db.prepare('DELETE FROM market_holdings WHERE company_id = ?');
+  const deleteCompany = db.prepare('DELETE FROM market_companies WHERE id = ?');
+  const existingSectorCompanies = db.prepare(`
+    SELECT id FROM market_companies
+    WHERE id LIKE 'sector_holding_%'
+  `);
 
   db.transaction(() => {
-    [...sectorNames].sort((a, b) => a.localeCompare(b, 'de')).forEach((sector) => {
+    const canonicalSectorNames = [...sectorNames].sort((a, b) => a.localeCompare(b, 'de', { numeric: true }));
+    const validCompanyIds = new Set();
+    canonicalSectorNames.forEach((sector) => {
       const ownerCounts = sectorOwners.get(sector) || new Map();
       const faction = [...ownerCounts.entries()]
         .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))[0]?.[0] || 'NEUTRAL';
       sectorHoldingResources.forEach(([resourceKey, holdingLabel, price]) => {
         const digest = crypto.createHash('sha1').update(`${sector}:${resourceKey}`).digest('hex');
         const companyId = `sector_holding_${digest.slice(0, 16)}`;
+        validCompanyIds.add(companyId);
         const symbol = `S${digest.slice(0, 7).toUpperCase()}`;
         insertSectorHolding.run(
           companyId,
@@ -306,6 +369,12 @@ export function createDb(projectRoot) {
           initialHistory.run(`seed_${companyId}`, companyId, price, migrationTime);
         }
       });
+    });
+    existingSectorCompanies.all().forEach(({ id }) => {
+      if (validCompanyIds.has(id)) return;
+      deleteCompanyHistory.run(id);
+      deleteCompanyHoldings.run(id);
+      deleteCompany.run(id);
     });
   })();
 
