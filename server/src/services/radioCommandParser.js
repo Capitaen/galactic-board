@@ -54,7 +54,19 @@ function buildFleetMatchers(fleets = []) {
 
 function extractActorName(content) {
   const prefixless = stripRadioPrefix(content);
-  const directNameBeforeColon = prefixless.match(/([A-ZÄÖÜ][\p{L}'’-]+(?:\s+[A-ZÄÖÜ][\p{L}'’-]+){1,2})\s*:/u);
+  const colonIndex = prefixless.indexOf(':');
+  const leftSide = colonIndex >= 0 ? compactWhitespace(prefixless.slice(0, colonIndex)) : '';
+  const sanitizedLeftSide = compactWhitespace(
+    leftSide
+      .replace(/[_*`~|>()[\]{}]/g, ' ')
+      .replace(/\b[A-Z]{1,8}(?:\/[A-Z]{1,8})+\b/g, ' ')
+      .replace(/\b[A-Z]{2,8}\b/g, ' ')
+      .replace(/\b\d+(?:th|st|nd|rd)?\b/gi, ' ')
+  );
+
+  const directNameBeforeColon = sanitizedLeftSide.match(
+    /([A-ZÄÖÜ][\p{L}'’-]+(?:\s+[A-ZÄÖÜ][\p{L}'’-]+){1,3})$/u
+  );
   if (directNameBeforeColon?.[1]) return compactWhitespace(directNameBeforeColon[1]);
 
   const labeledPatterns = [
@@ -69,11 +81,9 @@ function extractActorName(content) {
     if (candidate) return candidate;
   }
 
-  const colonIndex = prefixless.indexOf(':');
   if (colonIndex < 0) return '';
-  const left = compactWhitespace(prefixless.slice(0, colonIndex));
   const leftWithoutCallsigns = compactWhitespace(
-    left
+    leftSide
       .replace(/\b[A-Z]{1,6}(?:\/[A-Z]{1,6})+\b/g, ' ')
       .replace(/\b[A-Z]{2,6}\b/g, ' ')
       .replace(/\b\d+(?:th|st|nd|rd)?\b/gi, ' ')
