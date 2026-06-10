@@ -898,6 +898,10 @@ const economyViewState = {
   purchaseOrders: [],
   leaderboard: [],
   events: [],
+  acp: { current: [], history: {} },
+  intelligenceReports: [],
+  institutionalTrades: [],
+  sectorDemand: [],
   policy: { taxRate: 0.05, subsidy: 'none' },
   inflationRate: 0,
   nextPurchaseAt: null,
@@ -8943,6 +8947,39 @@ function renderMarketOrderList(company) {
   </div>`;
 }
 
+function renderAcpChart(resourceKey) {
+  const rangeKey = economyViewState.marketRange || 'today';
+  const cutoff = getMarketRangeCutoff(rangeKey);
+  const label = RESOURCE_LABELS[resourceKey] || resourceKey;
+  const points = (economyViewState.acp?.history?.[resourceKey] || [])
+    .map((point) => ({
+      price: Number(point.price || 0),
+      recordedAt: point.recordedAt,
+      time: Date.parse(point.recordedAt)
+    }))
+    .filter((point) => Number.isFinite(point.price) && Number.isFinite(point.time) && point.time >= cutoff);
+  if (points.length < 2) return `<div class="muted-box">Noch nicht genügend ACP-Daten für ${escapeLoginManagerText(label)}.</div>`;
+  const values = points.map((point) => point.price);
+  const min = Math.min(...values), max = Math.max(...values), span = Math.max(1, max - min);
+  const minTime = Math.min(...points.map((point) => point.time));
+  const maxTime = Math.max(...points.map((point) => point.time));
+  const timeSpan = Math.max(1, maxTime - minTime);
+  const coords = points.map((point) => `${(70 + (((point.time - minTime) / timeSpan) * 790)).toFixed(1)},${(268 - (((point.price - min) / span) * 222)).toFixed(1)}`).join(' ');
+  const rising = values[values.length - 1] >= values[0];
+  return `<div class="market-detail-chart"><svg viewBox="0 0 900 320" preserveAspectRatio="none" aria-label="ACP Verlauf">
+    <line x1="70" y1="46" x2="860" y2="46" stroke="rgba(255,255,255,.08)"/><line x1="70" y1="157" x2="860" y2="157" stroke="rgba(255,255,255,.08)"/><line x1="70" y1="268" x2="860" y2="268" stroke="rgba(255,255,255,.08)"/>
+    <line x1="70" y1="46" x2="70" y2="268" stroke="rgba(255,255,255,.18)"/><line x1="70" y1="268" x2="860" y2="268" stroke="rgba(255,255,255,.18)"/>
+    <text x="18" y="168" class="market-axis-label" transform="rotate(-90 18 168)">Ø Preis (Credits)</text>
+    <text x="442" y="314" text-anchor="middle" class="market-axis-label">Zeit</text>
+    <text x="62" y="50" text-anchor="end" class="market-axis-tick">${formatCredits(max)}</text>
+    <text x="62" y="161" text-anchor="end" class="market-axis-tick">${formatCredits(min + (span / 2))}</text>
+    <text x="62" y="272" text-anchor="end" class="market-axis-tick">${formatCredits(min)}</text>
+    <text x="70" y="292" text-anchor="middle" class="market-axis-tick">${formatMarketAxisDate(minTime, rangeKey)}</text>
+    <text x="860" y="292" text-anchor="middle" class="market-axis-tick">${formatMarketAxisDate(maxTime, rangeKey)}</text>
+    <polyline fill="none" stroke="${rising ? '#55d68b' : '#ff6b6b'}" stroke-width="4" points="${coords}"/>
+  </svg></div>`;
+}
+
 function updateMarketQuantity(kind, companyId, value) {
   const range = document.getElementById(`${kind}Quantity_${companyId}`);
   const output = document.getElementById(`${kind}QuantityOutput_${companyId}`);
@@ -9018,7 +9055,7 @@ async function sellMarketShare(companyId) {
 }
 
 function setEconomySection(section) {
-  economyViewState.activeSection = ['trade', 'detail'].includes(section) ? section : 'overview';
+  economyViewState.activeSection = ['trade', 'detail', 'acp'].includes(section) ? section : 'overview';
   renderEconomyView();
 }
 
@@ -9078,6 +9115,7 @@ function renderEconomyView() {
   });
   const visibleCompanies = filteredCompanies.slice(0, 60);
   const topLastHour = (economyViewState.topLastHour || []).slice(0, 50);
+  const acpRows = economyViewState.acp?.current || [];
   if (economyViewState.activeSection === 'detail') {
     const company = economyViewState.companies.find((entry) => entry.id === economyViewState.selectedCompanyId);
     if (!company) {
@@ -9098,7 +9136,7 @@ function renderEconomyView() {
       <div class="workspace-head">
         <div><h2>${escapeLoginManagerText(company.name)} <span class="badge">${escapeLoginManagerText(company.symbol)}</span></h2>
         <p>${escapeLoginManagerText(company.sector || company.faction)} • ${escapeLoginManagerText(RESOURCE_LABELS[company.resourceKey] || company.faction)}</p></div>
-        <div class="toolbar-row end"><button class="mini-btn" onclick="setEconomySection('trade')">Zurück zum Handel</button><button class="mini-btn" onclick="fetchEconomyView()">Aktualisieren</button></div>
+        <div class="toolbar-row end"><button class="mini-btn" onclick="setEconomySection('trade')">Zurück zum Handel</button><button class="mini-btn" onclick="setEconomySection('acp')">ACP</button><button class="mini-btn" onclick="fetchEconomyView()">Aktualisieren</button></div>
       </div>
       <div class="workspace-grid">
         <div class="stat-card"><strong>Aktueller Kurs</strong><span>${formatCredits(company.currentPrice)}</span></div>
@@ -9131,6 +9169,7 @@ function renderEconomyView() {
         </div>
         <div class="toolbar-row end">
           <button class="mini-btn" onclick="setEconomySection('overview')">Zur Übersicht</button>
+          <button class="mini-btn" onclick="setEconomySection('acp')">ACP</button>
           <button class="mini-btn" onclick="fetchEconomyView()">Aktualisieren</button>
         </div>
       </div>
@@ -9182,6 +9221,56 @@ function renderEconomyView() {
     `;
     return;
   }
+  if (economyViewState.activeSection === 'acp') {
+    const selectedResource = economyViewState.resourceFilter !== 'all'
+      ? economyViewState.resourceFilter
+      : (acpRows[0]?.resourceKey || 'quadraniumErz');
+    workspacePanel.innerHTML = `
+      <div class="workspace-head">
+        <div>
+          <h2>ACP Übersicht</h2>
+          <p>Average Commodity Price: Durchschnittskurse aller Rohstoff-Holdings je Ressourcentyp.</p>
+        </div>
+        <div class="toolbar-row end">
+          <button class="mini-btn" onclick="setEconomySection('overview')">Zur Übersicht</button>
+          <button class="mini-btn" onclick="setEconomySection('trade')">Aktienhandel</button>
+          <button class="mini-btn" onclick="fetchEconomyView()">Aktualisieren</button>
+        </div>
+      </div>
+      <div class="workspace-grid">
+        ${acpRows.map((entry) => {
+          const changeFromBase = Number(entry.averagePrice || 0) - Number(entry.averageBasePrice || 0);
+          return `<div class="stat-card">
+            <strong>${escapeLoginManagerText(entry.label)}</strong>
+            <span>${formatCredits(entry.averagePrice)}</span>
+            <small style="color:${changeFromBase >= 0 ? '#55d68b' : '#ff6b6b'}">${changeFromBase >= 0 ? '+' : ''}${formatCredits(changeFromBase)} zu Basis</small>
+          </div>`;
+        }).join('')}
+      </div>
+      <div class="workspace-section">
+        <h3>ACP Verlauf</h3>
+        ${renderMarketRangeControls()}
+        <div class="toolbar-row" style="margin:12px 0 8px 0;">
+          ${acpRows.map((entry) => `<button class="mini-btn ${selectedResource === entry.resourceKey ? 'active' : ''}" onclick="economyViewState.resourceFilter='${entry.resourceKey}'; renderEconomyView()">${escapeLoginManagerText(entry.label)}</button>`).join('')}
+        </div>
+        ${renderAcpChart(selectedResource)}
+      </div>
+      <div class="workspace-section workspace-columns">
+        <div class="workspace-card">
+          <h3>Aktuelle ACP-Werte</h3>
+          <table class="data-table">
+            <thead><tr><th>Rohstoff</th><th>Ø Preis</th><th>Basis</th><th>Holdings</th></tr></thead>
+            <tbody>${acpRows.map((entry) => `<tr><td>${escapeLoginManagerText(entry.label)}</td><td>${formatCredits(entry.averagePrice)}</td><td>${formatCredits(entry.averageBasePrice)}</td><td>${entry.companyCount}</td></tr>`).join('')}</tbody>
+          </table>
+        </div>
+        <div class="workspace-card">
+          <h3>Marktberichte</h3>
+          ${(economyViewState.intelligenceReports || []).slice(0, 8).map((report) => `<div class="project-card"><h4>${escapeLoginManagerText(RESOURCE_LABELS[report.resourceType] || report.resourceType)}</h4><p>${escapeLoginManagerText(report.message)}</p><small>${formatMarketDateTime(report.createdAt)}</small></div>`).join('') || '<div class="muted-box">Noch keine Marktberichte.</div>'}
+        </div>
+      </div>
+    `;
+    return;
+  }
   workspacePanel.innerHTML = `
     <div class="workspace-head">
       <div>
@@ -9190,6 +9279,7 @@ function renderEconomyView() {
       </div>
       <div class="toolbar-row end">
         <button class="mini-btn primary" onclick="setEconomySection('trade')">Aktienhandel</button>
+        <button class="mini-btn" onclick="setEconomySection('acp')">ACP</button>
         <button class="mini-btn" onclick="fetchEconomyView()">Aktualisieren</button>
       </div>
     </div>
@@ -9232,6 +9322,19 @@ function renderEconomyView() {
     </div>
     <div class="workspace-section workspace-columns">
       <div class="workspace-card">
+        <h3>ACP Schnellübersicht</h3>
+        <table class="data-table">
+          <thead><tr><th>Rohstoff</th><th>Ø Preis</th><th>Basis</th></tr></thead>
+          <tbody>${acpRows.map((entry) => `<tr><td>${escapeLoginManagerText(entry.label)}</td><td>${formatCredits(entry.averagePrice)}</td><td>${formatCredits(entry.averageBasePrice)}</td></tr>`).join('') || '<tr><td colspan="3">Noch keine ACP-Daten.</td></tr>'}</tbody>
+        </table>
+      </div>
+      <div class="workspace-card">
+        <h3>Marktintelligenz</h3>
+        ${(economyViewState.intelligenceReports || []).slice(0, 6).map((report) => `<div class="project-card"><h4>${escapeLoginManagerText(RESOURCE_LABELS[report.resourceType] || report.resourceType)}</h4><p>${escapeLoginManagerText(report.message)}</p><small>${formatMarketDateTime(report.createdAt)}</small></div>`).join('') || '<div class="muted-box">Noch keine Marktberichte.</div>'}
+      </div>
+    </div>
+    <div class="workspace-section workspace-columns">
+      <div class="workspace-card">
         <h3>Wirtschaftsbericht</h3>
         <p>Zivile Produktionsgebäude erwirtschaften Bruttoumsätze. Nur der vom Senat festgelegte Steueranteil fließt als Credits in den GAR-Haushalt. Entwicklungszentren erhöhen den Bruttoumsatz auf demselben Planeten.</p>
         <p><strong>Aktuelle Steuer:</strong> ${(Number(economyViewState.policy?.taxRate || 0) * 100).toFixed(0)} %</p>
@@ -9250,6 +9353,15 @@ function renderEconomyView() {
         </select></div>
         <button class="primary" onclick="saveEconomyPolicy()">Politik speichern</button>
       </div>` : ''}
+    </div>
+    <div class="workspace-section">
+      <h3>Institutionelle Aktivität</h3>
+      <div class="workspace-card">
+        <table class="data-table">
+          <thead><tr><th>Zeit</th><th>Investor</th><th>Aktion</th><th>Holding</th><th>Menge</th><th>Preis</th></tr></thead>
+          <tbody>${(economyViewState.institutionalTrades || []).slice(0, 12).map((trade) => `<tr><td>${formatMarketDateTime(trade.createdAt)}</td><td>${escapeLoginManagerText(trade.investorName || 'Institution')}</td><td>${escapeLoginManagerText(trade.action)}</td><td>${escapeLoginManagerText(economyViewState.companies.find((company) => company.id === trade.companyId)?.name || trade.companyId)}</td><td>${trade.quantity}</td><td>${formatCredits(trade.price)}</td></tr>`).join('') || '<tr><td colspan="6">Noch keine institutionellen Aktivitäten.</td></tr>'}</tbody>
+        </table>
+      </div>
     </div>
   `;
 }
