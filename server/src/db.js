@@ -648,6 +648,25 @@ export function readMarketSnapshot(db, investorId = '', userId = '') {
     if (!history[row.companyId]) history[row.companyId] = [];
     history[row.companyId].push({ price: row.price, recordedAt: row.recordedAt });
   });
+  const hourCutoff = Date.now() - (60 * 60 * 1000);
+  const topLastHour = companies.map((company) => {
+    const points = history[company.id] || [];
+    const referencePoint = [...points].reverse().find((point) => Date.parse(point.recordedAt) <= hourCutoff)
+      || points.find((point) => Date.parse(point.recordedAt) >= hourCutoff);
+    const referencePrice = Number(referencePoint?.price || company.previousPrice || company.currentPrice || 0);
+    const currentPrice = Number(company.currentPrice || 0);
+    const change = currentPrice - referencePrice;
+    const changePercent = referencePrice > 0 ? (change / referencePrice) * 100 : 0;
+    return {
+      ...company,
+      referencePrice,
+      change,
+      changePercent
+    };
+  }).sort((left, right) => (
+    right.changePercent - left.changePercent
+    || right.currentPrice - left.currentPrice
+  )).slice(0, 50);
   const holdings = investorId ? db.prepare(`
     SELECT company_id AS companyId, shares
     FROM market_holdings WHERE investor_id = ?
@@ -680,7 +699,7 @@ export function readMarketSnapshot(db, investorId = '', userId = '') {
     SELECT faction, credits, updated_at AS updatedAt
     FROM faction_accounts ORDER BY faction
   `).all().map((account) => [account.faction, account]));
-  return { companies, history, holdings, investor, leaderboard, events, policy, factionAccounts };
+  return { companies, history, topLastHour, holdings, investor, leaderboard, events, policy, factionAccounts };
 }
 
 export function purchaseMarketShare(db, investorId, companyId, now = Date.now()) {
@@ -800,6 +819,63 @@ export function getConsumerNextPurchaseAt(db, consumerKey) {
   return activity?.last_purchase_at
     ? new Date(Date.parse(activity.last_purchase_at) + (60 * 60 * 1000)).toISOString()
     : null;
+}
+
+export function sellMarketShare(db, { investorId, companyId }, now = Date.now()) {
+  return db.transaction(() => {
+    const company = db.prepare('SELECT * FROM market_companies WHERE id = ?').get(companyId);
+    if (!company) {
+      const error = new Error('Unternehmen nicht gefunden.');
+      error.status = 404;
+      throw error;
+    }
+    const holding = db.prepare(`
+      SELECT shares FROM market_holdings
+      WHERE investor_id = ? AND company_id = ?
+    `).get(investorId, companyId);
+    if (!holding || Number(holding.shares || 0) < 1) {
+      const error = new Error('Du besitzt keine Aktie dieser Holding.');
+      error.status = 409;
+      throw error;
+    }
+
+    const soldAt = new Date(now).toISOString();
+    if (holding.shares === 1) {
+      db.prepare(`
+        DELETE FROM market_holdings
+        WHERE investor_id = ? AND company_id = ?
+      `).run(investorId, companyId);
+    } else {
+      db.prepare(`
+        UPDATE market_holdings
+        SET shares = shares - 1
+        WHERE investor_id = ? AND company_id = ?
+      `).run(investorId, companyId);
+    }
+    db.prepare(`
+      UPDATE market_investors
+      SET balance = balance + ?
+      WHERE id = ?
+    `).run(company.current_price, investorId);
+
+    const nextPrice = Math.max(25, Math.round(company.current_price * 0.9875 * 100) / 100);
+    db.prepare(`
+      UPDATE market_companies
+      SET previous_price = current_price, current_price = ?, updated_at = ?
+      WHERE id = ?
+    `).run(nextPrice, soldAt, companyId);
+    db.prepare(`
+      INSERT INTO market_history (id, company_id, price, recorded_at)
+      VALUES (?, ?, ?, ?)
+    `).run(crypto.randomUUID(), companyId, nextPrice, soldAt);
+
+    return {
+      companyId,
+      price: company.current_price,
+      soldAt,
+      credited: company.current_price
+    };
+  })();
 }
 
 export function updateEconomyPolicy(db, { taxRate, subsidy }) {

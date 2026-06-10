@@ -872,6 +872,7 @@ const economyViewState = {
   loading: false,
   loaded: false,
   companies: [],
+  topLastHour: [],
   history: {},
   holdings: [],
   leaderboard: [],
@@ -885,6 +886,7 @@ const economyViewState = {
   portfolioEnabled: false,
   consumerMode: true,
   canPurchase: true,
+  activeSection: 'overview',
   sectorQuery: '',
   resourceFilter: 'all',
   error: ''
@@ -8641,6 +8643,29 @@ async function buyMarketShare(companyId) {
   }
 }
 
+async function sellMarketShare(companyId) {
+  try {
+    const response = await fetch('/api/economy/market/sell', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ companyId })
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || 'Aktienverkauf fehlgeschlagen.');
+    setStatus(`Aktie verkauft. ${formatCredits(payload.sale?.credited || 0)} wurden dem persönlichen Portfolio gutgeschrieben.`);
+    await fetchEconomyView();
+  } catch (error) {
+    setStatus(error.message);
+    renderEconomyView();
+  }
+}
+
+function setEconomySection(section) {
+  economyViewState.activeSection = section === 'trade' ? 'trade' : 'overview';
+  renderEconomyView();
+}
+
 async function saveEconomyPolicy() {
   if (!canManageEconomyPolicy()) return;
   const taxRate = Number(document.getElementById('economyTaxRate')?.value || 0) / 100;
@@ -8690,13 +8715,74 @@ function renderEconomyView() {
     return matchesResource && (!marketQuery || searchable.includes(marketQuery));
   });
   const visibleCompanies = filteredCompanies.slice(0, 60);
+  const topLastHour = (economyViewState.topLastHour || []).slice(0, 50);
+  if (economyViewState.activeSection === 'trade') {
+    workspacePanel.innerHTML = `
+      <div class="workspace-head">
+        <div>
+          <h2>Aktienhandel</h2>
+          <p>Kaufen und Verkaufen über das persönliche Portfolio. Viewer erzeugen ausschließlich Marktnachfrage.</p>
+        </div>
+        <div class="toolbar-row end">
+          <button class="mini-btn" onclick="setEconomySection('overview')">Zur Übersicht</button>
+          <button class="mini-btn" onclick="fetchEconomyView()">Aktualisieren</button>
+        </div>
+      </div>
+      ${economyViewState.error ? `<div class="muted-box">${escapeLoginManagerText(economyViewState.error)}</div>` : ''}
+      <div class="workspace-grid">
+        <div class="stat-card"><strong>Verfügbare Credits</strong><span>${economyViewState.portfolioEnabled ? formatCredits(portfolioBalance) : 'Kein Portfolio'}</span></div>
+        <div class="stat-card"><strong>Aktienwert</strong><span>${economyViewState.portfolioEnabled ? formatCredits(securitiesValue) : '0 Cr'}</span></div>
+        <div class="stat-card"><strong>Gesamtwert</strong><span>${economyViewState.portfolioEnabled ? formatCredits(portfolioValue) : 'Kein Portfolio'}</span></div>
+        <div class="stat-card"><strong>${economyViewState.consumerMode ? 'Nächste Nachfrage' : 'Handel'}</strong><span>${cooldownText}</span></div>
+      </div>
+      <div class="workspace-section">
+        <p class="muted">${economyViewState.consumerMode
+          ? 'Pro IP-Adresse kann alle 60 Minuten eine Nachfrageaktion ausgelöst werden. Viewer erhalten keine Aktie und keinen Gewinn.'
+          : (economyViewState.portfolioEnabled
+            ? 'Beim Kauf wird der aktuelle Aktienkurs direkt von deinen persönlichen Credits abgezogen. Beim Verkauf wird der aktuelle Kurs gutgeschrieben.'
+            : 'Diese Admin-Rolle besitzt kein persönliches Portfolio und kann nicht handeln.')}</p>
+        <div class="form-grid">
+          <div class="form-row"><label>Sektor oder Holding suchen</label><input id="economySectorSearch" type="search" value="${escapeLoginManagerText(economyViewState.sectorQuery || '')}" placeholder="z. B. Corellian" oninput="updateEconomySectorQuery(this)"></div>
+          <div class="form-row"><label>Ressource</label><select onchange="economyViewState.resourceFilter=this.value; renderEconomyView()">
+            <option value="all" ${resourceFilter === 'all' ? 'selected' : ''}>Alle Ressourcen</option>
+            <option value="quadraniumErz" ${resourceFilter === 'quadraniumErz' ? 'selected' : ''}>Metalle</option>
+            <option value="agrinium" ${resourceFilter === 'agrinium' ? 'selected' : ''}>Technologien</option>
+            <option value="tibannaGas" ${resourceFilter === 'tibannaGas' ? 'selected' : ''}>Treibstoffe</option>
+            <option value="baradium" ${resourceFilter === 'baradium' ? 'selected' : ''}>Chemikalien</option>
+            <option value="kavamSalz" ${resourceFilter === 'kavamSalz' ? 'selected' : ''}>Versorgungsgüter</option>
+          </select></div>
+        </div>
+        <p class="muted">${filteredCompanies.length} Aktien gefunden${filteredCompanies.length > visibleCompanies.length ? `, die ersten ${visibleCompanies.length} werden angezeigt` : ''}.</p>
+        <div class="project-grid">
+          ${visibleCompanies.map((company) => {
+            const shares = holdings.get(company.id) || 0;
+            const change = Number(company.currentPrice || 0) - Number(company.previousPrice || 0);
+            return `<div class="project-card">
+              <h4>${escapeLoginManagerText(company.name)} <span class="badge">${company.symbol}</span></h4>
+              <p><strong>${formatCredits(company.currentPrice)}</strong> <span style="color:${change >= 0 ? '#55d68b' : '#ff6b6b'}">${change >= 0 ? '+' : ''}${change.toFixed(2)}</span></p>
+              ${renderMarketSparkline(company.id)}
+              <p class="project-meta">${economyViewState.portfolioEnabled ? `Eigener Bestand: ${shares} Aktie(n) • ` : ''}${escapeLoginManagerText(company.sector || company.faction)}</p>
+              <div class="toolbar-row">
+                <button class="mini-btn primary" onclick="buyMarketShare('${company.id}')" ${!economyViewState.canPurchase || (economyViewState.consumerMode && cooldown > 0) || (economyViewState.portfolioEnabled && portfolioBalance < Number(company.currentPrice || 0)) || economyViewState.loading ? 'disabled' : ''}>${economyViewState.consumerMode ? 'Nachfrage erzeugen' : 'Kaufen'}</button>
+                ${economyViewState.portfolioEnabled ? `<button class="mini-btn danger" onclick="sellMarketShare('${company.id}')" ${shares < 1 || economyViewState.loading ? 'disabled' : ''}>Verkaufen</button>` : ''}
+              </div>
+            </div>`;
+          }).join('') || '<div class="muted-box">Keine passende Aktie gefunden.</div>'}
+        </div>
+      </div>
+    `;
+    return;
+  }
   workspacePanel.innerHTML = `
     <div class="workspace-head">
       <div>
         <h2>Galaktische Wirtschaft & Börse</h2>
         <p>Fraktionshaushalt, öffentlicher Aktienmarkt, Wirtschaftsberichte und Senatspolitik.</p>
       </div>
-      <button class="mini-btn" onclick="fetchEconomyView()">Aktualisieren</button>
+      <div class="toolbar-row end">
+        <button class="mini-btn primary" onclick="setEconomySection('trade')">Aktienhandel</button>
+        <button class="mini-btn" onclick="fetchEconomyView()">Aktualisieren</button>
+      </div>
     </div>
     ${economyViewState.error ? `<div class="muted-box">${escapeLoginManagerText(economyViewState.error)}</div>` : ''}
     <div class="workspace-grid">
@@ -8706,35 +8792,20 @@ function renderEconomyView() {
       <div class="stat-card"><strong>${economyViewState.consumerMode ? 'Nächste Nachfrage' : 'Aktienkauf'}</strong><span>${cooldownText}</span></div>
     </div>
     <div class="workspace-section">
-      <h3>Aktienmarkt</h3>
-      <p class="muted">${economyViewState.consumerMode
-        ? 'Viewer können pro IP-Adresse alle 60 Minuten Nachfrage für eine Aktie erzeugen. Dabei entsteht kein Portfolio und kein Gewinn.'
-        : (economyViewState.portfolioEnabled
-          ? `Dein Portfolio startete einmalig mit 5.000 Credits. Verfügbares Kapital: ${formatCredits(portfolioBalance)}. Es werden keine stündlichen Credits gutgeschrieben.`
-          : 'Diese Admin-Rolle verwaltet Fraktionsaufgaben und besitzt kein persönliches Portfolio.')}</p>
-      <div class="form-grid">
-        <div class="form-row"><label>Sektor oder Holding suchen</label><input id="economySectorSearch" type="search" value="${escapeLoginManagerText(economyViewState.sectorQuery || '')}" placeholder="z. B. Corellian" oninput="updateEconomySectorQuery(this)"></div>
-        <div class="form-row"><label>Ressource</label><select onchange="economyViewState.resourceFilter=this.value; renderEconomyView()">
-          <option value="all" ${resourceFilter === 'all' ? 'selected' : ''}>Alle Ressourcen</option>
-          <option value="quadraniumErz" ${resourceFilter === 'quadraniumErz' ? 'selected' : ''}>Metalle</option>
-          <option value="agrinium" ${resourceFilter === 'agrinium' ? 'selected' : ''}>Technologien</option>
-          <option value="tibannaGas" ${resourceFilter === 'tibannaGas' ? 'selected' : ''}>Treibstoffe</option>
-          <option value="baradium" ${resourceFilter === 'baradium' ? 'selected' : ''}>Chemikalien</option>
-          <option value="kavamSalz" ${resourceFilter === 'kavamSalz' ? 'selected' : ''}>Versorgungsgüter</option>
-        </select></div>
-      </div>
-      <p class="muted">${filteredCompanies.length} Holdings gefunden${filteredCompanies.length > visibleCompanies.length ? `, die ersten ${visibleCompanies.length} werden angezeigt` : ''}.</p>
-      <div class="project-grid">
-        ${visibleCompanies.map((company) => {
-          const change = Number(company.currentPrice || 0) - Number(company.previousPrice || 0);
-          return `<div class="project-card">
-            <h4>${escapeLoginManagerText(company.name)} <span class="badge">${company.symbol}</span></h4>
-            <p><strong>${formatCredits(company.currentPrice)}</strong> <span style="color:${change >= 0 ? '#55d68b' : '#ff6b6b'}">${change >= 0 ? '+' : ''}${change.toFixed(2)}</span></p>
-            ${renderMarketSparkline(company.id)}
-            <p class="project-meta">${economyViewState.portfolioEnabled ? `Eigener Bestand: ${holdings.get(company.id) || 0} Aktie(n) • ` : ''}${escapeLoginManagerText(company.sector || company.faction)}</p>
-            <button class="mini-btn primary" onclick="buyMarketShare('${company.id}')" ${!economyViewState.canPurchase || (economyViewState.consumerMode && cooldown > 0) || (economyViewState.portfolioEnabled && portfolioBalance < Number(company.currentPrice || 0)) || economyViewState.loading ? 'disabled' : ''}>${economyViewState.consumerMode ? 'Nachfrage erzeugen' : 'Aktie kaufen'}</button>
-          </div>`;
-        }).join('') || '<div class="muted-box">Keine passende Holding gefunden.</div>'}
+      <h3>Top 50 der letzten Stunde</h3>
+      <p class="muted">Sortiert nach der prozentualen Kursentwicklung gegenüber dem Stand vor einer Stunde.</p>
+      <div class="workspace-card">
+        <table class="data-table">
+          <thead><tr><th>Rang</th><th>Aktie</th><th>Sektor</th><th>Kurs vor 1h</th><th>Aktuell</th><th>Entwicklung</th></tr></thead>
+          <tbody>${topLastHour.map((company, index) => `<tr>
+            <td>${index + 1}</td>
+            <td><strong>${escapeLoginManagerText(company.name)}</strong><br><small>${escapeLoginManagerText(company.symbol)}</small></td>
+            <td>${escapeLoginManagerText(company.sector || company.faction)}</td>
+            <td>${formatCredits(company.referencePrice)}</td>
+            <td>${formatCredits(company.currentPrice)}</td>
+            <td style="color:${Number(company.changePercent || 0) >= 0 ? '#55d68b' : '#ff6b6b'}">${Number(company.changePercent || 0) >= 0 ? '+' : ''}${Number(company.changePercent || 0).toFixed(2).replace('.', ',')} %</td>
+          </tr>`).join('') || '<tr><td colspan="6">Noch keine Kursdaten der letzten Stunde vorhanden.</td></tr>'}</tbody>
+        </table>
       </div>
     </div>
     <div class="workspace-section workspace-columns">
@@ -9592,6 +9663,8 @@ window.pollDiscordRadioCommands = pollDiscordRadioCommands;
 window.setMainTab = setMainTab;
 window.fetchEconomyView = fetchEconomyView;
 window.buyMarketShare = buyMarketShare;
+window.sellMarketShare = sellMarketShare;
+window.setEconomySection = setEconomySection;
 window.updateEconomySectorQuery = updateEconomySectorQuery;
 window.saveEconomyPolicy = saveEconomyPolicy;
 

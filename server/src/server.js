@@ -21,6 +21,7 @@ import {
   readCampaignState,
   readMarketSnapshot,
   runMarketTick,
+  sellMarketShare,
   updateEconomyPolicy,
   updateRadioCommandPermission,
   updateUser,
@@ -941,6 +942,29 @@ app.post('/api/economy/market/buy', (req, res) => {
     res.status(error.status || 500).json({
       error: error.message || 'Aktienkauf fehlgeschlagen.',
       nextPurchaseAt: error.nextPurchaseAt || null
+    });
+  }
+});
+
+app.post('/api/economy/market/sell', requireAuth, (req, res) => {
+  const session = req.user;
+  if (!hasPersonalMarketPortfolio(session)) {
+    return res.status(403).json({ error: 'Diese Rolle besitzt kein persönliches Portfolio.' });
+  }
+  const investorId = `user_${session.id}`;
+  try {
+    const sale = sellMarketShare(db, {
+      investorId,
+      companyId: String(req.body?.companyId || '')
+    });
+    res.json({
+      ok: true,
+      sale,
+      market: readMarketSnapshot(db, investorId, session.id)
+    });
+  } catch (error) {
+    res.status(error.status || 500).json({
+      error: error.message || 'Aktienverkauf fehlgeschlagen.'
     });
   }
 });
