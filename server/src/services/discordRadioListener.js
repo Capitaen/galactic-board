@@ -544,6 +544,15 @@ function buildProcessedDebug(message, parsed, status, reason) {
   const content = extractRadioMessageText(message);
   const recoveredActorName = recoverActorNameFromContent(content);
   const authorFallbackNames = buildAuthorFallbackNames(message);
+  const rawContent = String(message?.content || '');
+  const embedSummaries = Array.isArray(message?.embeds)
+    ? message.embeds.map((embed, index) => ({
+        index,
+        title: String(embed?.title || ''),
+        description: String(embed?.description || ''),
+        fieldCount: Array.isArray(embed?.fields) ? embed.fields.length : 0
+      }))
+    : [];
   return {
     messageId: String(message?.id || ''),
     matched: true,
@@ -556,7 +565,12 @@ function buildProcessedDebug(message, parsed, status, reason) {
     fleetNames: parsed.fleets.map((fleet) => fleet.name),
     planetName: parsed.planet?.name || '',
     preview: buildMessagePreview(parsed.originalMessage),
-    contentPreview: buildMessagePreview(content)
+    contentPreview: buildMessagePreview(content),
+    rawContentPreview: buildMessagePreview(rawContent),
+    rawContentLength: rawContent.length,
+    contentLength: content.length,
+    lineCount: String(content || '').split(/\r?\n/).filter(Boolean).length,
+    embedSummaries
   };
 }
 

@@ -8506,7 +8506,13 @@ async function pollDiscordRadioCommands() {
     const recoveredActorInfo = firstDebug?.recoveredActorName ? ` Fallback-Actor: ${firstDebug.recoveredActorName}.` : '';
     const authorInfo = firstDebug?.authorFallbackNames?.length ? ` Discord-Autor: ${firstDebug.authorFallbackNames.join(' / ')}.` : '';
     const contentInfo = firstDebug?.contentPreview ? ` Text: ${firstDebug.contentPreview}.` : '';
-    setStatus(`Discord-Funk ausgewertet: ${fetched} geladen, ${relevant} erkannt, ${processed} verarbeitet, ${accepted} akzeptiert, ${rejected} abgelehnt.${channelInfo}${debugSuffix}${parserActorInfo}${recoveredActorInfo}${authorInfo}${contentInfo}`);
+    const rawContentInfo = typeof firstDebug?.rawContentLength === 'number' ? ` RawContent: ${firstDebug.rawContentLength} Zeichen.` : '';
+    const mergedContentInfo = typeof firstDebug?.contentLength === 'number' ? ` Gesamttext: ${firstDebug.contentLength} Zeichen in ${firstDebug.lineCount || 0} Zeilen.` : '';
+    const embedInfo = Array.isArray(firstDebug?.embedSummaries) && firstDebug.embedSummaries.length
+      ? ` Embeds: ${firstDebug.embedSummaries.map((embed) => `#${embed.index}(${embed.fieldCount} Felder)`).join(', ')}.`
+      : '';
+    const rawPreviewInfo = firstDebug?.rawContentPreview ? ` Raw-Preview: ${firstDebug.rawContentPreview}.` : '';
+    setStatus(`Discord-Funk ausgewertet: ${fetched} geladen, ${relevant} erkannt, ${processed} verarbeitet, ${accepted} akzeptiert, ${rejected} abgelehnt.${channelInfo}${debugSuffix}${parserActorInfo}${recoveredActorInfo}${authorInfo}${contentInfo}${rawContentInfo}${mergedContentInfo}${embedInfo}${rawPreviewInfo}`);
   } catch (error) {
     setStatus(`Discord-Funk Poll fehlgeschlagen: ${error.message}`);
   }
