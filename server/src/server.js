@@ -6,11 +6,28 @@ import cookieParser from 'cookie-parser';
 import bcrypt from 'bcryptjs';
 import { createServer } from 'node:https';
 import { Server as SocketServer } from 'socket.io';
-import { createDb, createUser, deleteUser, findUserByNormalizedUsername, listUsers, readCampaignState, updateUser, writeCampaignState } from './db.js';
+import {
+  createDb,
+  createRadioCommandPermission,
+  createUser,
+  deleteRadioCommandPermission,
+  deleteUser,
+  findUserByNormalizedUsername,
+  listRadioCommandLogs,
+  listRadioCommandPermissions,
+  listUsers,
+  readCampaignState,
+  updateRadioCommandPermission,
+  updateUser,
+  writeCampaignState
+} from './db.js';
 import { getFleetMotionArrivalIso, getFleetMotionByFleetId, getFleetMotionStartedAtIso, getFleetPlanetId, getPlanetNameById, writeAuditLog } from './audit.js';
+import { applyEnvFiles } from './env.js';
+import { createDiscordRadioListener } from './services/discordRadioListener.js';
 import { validateNextCampaignState } from './stateValidation.js';
 
 const projectRoot = process.cwd();
+applyEnvFiles(projectRoot);
 const db = createDb(projectRoot);
 const PLANET_OWNERSHIP_REFERENCE_PATH = path.join(projectRoot, 'server', 'data', 'planetOwnershipReference.json');
 const HIDDEN_PLANET_OWNER_FALLBACK_PATH = path.join(projectRoot, 'server', 'data', 'hiddenPlanetOwnerFallback.json');
@@ -25,6 +42,10 @@ const sslOptions = {
 const server = createServer(sslOptions, app);
 const io = new SocketServer(server, {
   cors: { origin: true, credentials: true }
+});
+const discordRadioListener = createDiscordRadioListener({
+  db,
+  getIo: () => io
 });
 
 const sessions = new Map();
@@ -46,6 +67,7 @@ const LOGIN_ROLE_DEFINITIONS = {
   Viewer: { faction: 'system', level: 'viewer' }
 };
 const LOGIN_ROLES = Object.keys(LOGIN_ROLE_DEFINITIONS);
+const RADIO_PERMISSION_ROLES = ['fleet_officer', 'staff_officer', 'faction_admin', 'admiralty'];
 function normalizeOwnershipReferenceName(text) {
   return String(text || '')
     .toLowerCase()
@@ -233,12 +255,46 @@ function canManageLogins(role) {
   return ['global', 'admin'].includes(LOGIN_ROLE_DEFINITIONS[role]?.level);
 }
 
+function canManageRadioPermissions(role) {
+  if (role === 'Admin') return true;
+  return role === 'Republic Navy Admin';
+}
+
 function listUsersForActor(actor) {
   const users = listUsers(db);
   const actorDefinition = LOGIN_ROLE_DEFINITIONS[actor?.role];
   if (actorDefinition?.level === 'global') return users;
   if (!canManageLogins(actor?.role)) return [];
   return users.filter((user) => LOGIN_ROLE_DEFINITIONS[user.role]?.faction === actorDefinition.faction);
+}
+
+function listRadioPermissionsForActor(actor) {
+  if (!canManageRadioPermissions(actor?.role)) return [];
+  return listRadioCommandPermissions(db);
+}
+
+function listRadioAuditForActor(actor, limit = 200) {
+  if (!canManageRadioPermissions(actor?.role)) return [];
+  return listRadioCommandLogs(db, limit);
+}
+
+function buildRadioCommandAdminPayload(actor) {
+  const { state } = readCampaignState(db);
+  const users = listUsersForActor(actor);
+  const fleets = (Array.isArray(state?.fleets) ? state.fleets : [])
+    .filter((fleet) => String(fleet?.faction || '').trim().toUpperCase() === 'GAR')
+    .map((fleet) => ({
+      id: fleet.id,
+      name: fleet.name || fleet.id,
+      faction: fleet.faction || ''
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name, 'de'));
+  return {
+    permissions: listRadioPermissionsForActor(actor),
+    audit: listRadioAuditForActor(actor),
+    users,
+    fleets
+  };
 }
 
 function sanitizeStateForRole(state, actor) {
@@ -431,6 +487,13 @@ function requireLoginManager(req, res, next) {
   next();
 }
 
+function requireRadioPermissionManager(req, res, next) {
+  if (!req.user || !canManageRadioPermissions(req.user.role)) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+  next();
+}
+
 function sanitizeAdminRole(rawRole) {
   const role = String(rawRole || '').trim();
   return LOGIN_ROLES.includes(role) ? role : 'Viewer';
@@ -467,6 +530,45 @@ function validateAdminUserInput(body) {
   }
 
   return { username, password, role };
+}
+
+function validateRadioPermissionInput(body) {
+  const ingameName = String(body?.ingameName || '').trim();
+  const linkedUserId = String(body?.linkedUserId || '').trim();
+  const permissionRole = String(body?.permissionRole || '').trim();
+  const fleets = Array.isArray(body?.fleets)
+    ? body.fleets.map((fleet) => ({
+      fleetId: String(fleet?.fleetId || '').trim(),
+      fleetName: String(fleet?.fleetName || '').trim()
+    })).filter((fleet) => fleet.fleetId && fleet.fleetName)
+    : [];
+
+  if (!ingameName) {
+    const error = new Error('Ingame-Name darf nicht leer sein.');
+    error.status = 400;
+    throw error;
+  }
+
+  if (!RADIO_PERMISSION_ROLES.includes(permissionRole)) {
+    const error = new Error('Ungültige Befehlsrolle.');
+    error.status = 400;
+    throw error;
+  }
+
+  const linkedUser = linkedUserId ? listUsers(db).find((user) => user.id === linkedUserId) : null;
+  if (linkedUserId && !linkedUser) {
+    const error = new Error('Verknüpfter Website-Login wurde nicht gefunden.');
+    error.status = 400;
+    throw error;
+  }
+
+  return {
+    ingameName,
+    linkedUserId: linkedUser?.id || null,
+    linkedUsername: linkedUser?.username || null,
+    permissionRole,
+    fleets
+  };
 }
 
 function detectChangedCampaignKeys(previousState, nextState) {
@@ -742,6 +844,64 @@ app.delete('/api/admin/users/:id', requireAuth, requireLoginManager, (req, res) 
   res.json({ ok: true, users: listUsersForActor(req.user) });
 });
 
+app.get('/api/admin/radio-command-center', requireAuth, requireRadioPermissionManager, (req, res) => {
+  res.json({
+    ok: true,
+    ...buildRadioCommandAdminPayload(req.user)
+  });
+});
+
+app.post('/api/admin/radio-command-permissions', requireAuth, requireRadioPermissionManager, (req, res) => {
+  try {
+    const input = validateRadioPermissionInput(req.body);
+    createRadioCommandPermission(db, input);
+    res.json({ ok: true, ...buildRadioCommandAdminPayload(req.user) });
+  } catch (error) {
+    res.status(error.status || 500).json({
+      error: error.message || 'Befehlsberechtigung konnte nicht erstellt werden.',
+      ...buildRadioCommandAdminPayload(req.user)
+    });
+  }
+});
+
+app.patch('/api/admin/radio-command-permissions/:id', requireAuth, requireRadioPermissionManager, (req, res) => {
+  const id = String(req.params.id || '').trim();
+  if (!id) {
+    return res.status(400).json({ error: 'Ungültige Berechtigungs-ID.', ...buildRadioCommandAdminPayload(req.user) });
+  }
+  try {
+    const input = validateRadioPermissionInput(req.body);
+    updateRadioCommandPermission(db, id, input);
+    res.json({ ok: true, ...buildRadioCommandAdminPayload(req.user) });
+  } catch (error) {
+    res.status(error.status || 500).json({
+      error: error.message || 'Befehlsberechtigung konnte nicht gespeichert werden.',
+      ...buildRadioCommandAdminPayload(req.user)
+    });
+  }
+});
+
+app.delete('/api/admin/radio-command-permissions/:id', requireAuth, requireRadioPermissionManager, (req, res) => {
+  const id = String(req.params.id || '').trim();
+  if (!id) {
+    return res.status(400).json({ error: 'Ungültige Berechtigungs-ID.', ...buildRadioCommandAdminPayload(req.user) });
+  }
+  deleteRadioCommandPermission(db, id);
+  res.json({ ok: true, ...buildRadioCommandAdminPayload(req.user) });
+});
+
+app.post('/api/admin/radio-command-center/poll', requireAuth, requireRadioPermissionManager, async (req, res) => {
+  try {
+    const result = await discordRadioListener.pollOnce();
+    res.json({ ok: true, result, ...buildRadioCommandAdminPayload(req.user) });
+  } catch (error) {
+    res.status(500).json({
+      error: error.message || 'Discord-Funk konnte nicht ausgewertet werden.',
+      ...buildRadioCommandAdminPayload(req.user)
+    });
+  }
+});
+
 app.put('/api/campaign/state', requireAuth, (req, res) => {
   const nextState = sanitizeIncomingCampaignPayload(req.body?.campaign);
   const expectedRevision = Number(req.body?.expectedRevision || 0);
@@ -895,7 +1055,11 @@ setInterval(() => {
   }
 }, 60000);
 
+process.on('SIGINT', () => discordRadioListener.stop());
+process.on('SIGTERM', () => discordRadioListener.stop());
+
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Galactic Campaign Board server listening on http://0.0.0.0:${PORT}`);
   console.log('Default admin login: admin / admin');
+  discordRadioListener.start();
 });

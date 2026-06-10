@@ -509,6 +509,7 @@ a { color:#8bc7ff; }
     <button class="main-tab-btn" data-main-tab="shipyard">Schiffbau</button>
     <button class="main-tab-btn" id="buildProjectsTabBtn" data-main-tab="buildProjects">Bauprojekte</button>
     <button class="main-tab-btn hidden" id="loginManagerTabBtn" data-main-tab="loginManager">Login Manager</button>
+    <button class="main-tab-btn hidden" id="radioCommandTabBtn" data-main-tab="radioCommandCenter">Befehlsberechtigungen</button>
   </div>
 
   <div id="statusbar">
@@ -767,6 +768,7 @@ const orientationLockBtn = document.getElementById('orientationLockBtn');
 const orientationDismissBtn = document.getElementById('orientationDismissBtn');
 const buildProjectsTabBtn = document.getElementById('buildProjectsTabBtn');
 const loginManagerTabBtn = document.getElementById('loginManagerTabBtn');
+const radioCommandTabBtn = document.getElementById('radioCommandTabBtn');
 const LOGIN_ROLE_DEFINITIONS = {
   Admin: { label: 'Globaler Admin', baseRole: 'Admin', faction: 'system', level: 'global' },
   'Republic Navy Admin': { label: 'Republic Navy Admin', baseRole: 'Republic Navy / GAR', faction: 'navy', level: 'admin' },
@@ -823,6 +825,13 @@ let activePlanetSearchHighlightId = '';
 let activePlanetSearchHighlightTimer = 0;
 let draggedFleetManagementFleetId = '';
 let draggedFleetCategoryId = '';
+let radioCommandAdminState = {
+  permissions: [],
+  audit: [],
+  users: [],
+  fleets: [],
+  loading: false
+};
 let currentAuthenticatedUsername = '';
 let mobileOrientationDismissed = false;
 let audioMuted = false;
@@ -3392,6 +3401,9 @@ function setMainTab(tabId) {
     renderBuildProjectsView();
   } else if (tabId === 'loginManager') {
     renderLoginManagerView();
+  } else if (tabId === 'radioCommandCenter') {
+    renderRadioCommandCenterView();
+    void fetchRadioCommandCenterData();
   }
 }
 
@@ -4538,6 +4550,10 @@ function canManageLogins() {
   return ['global', 'admin'].includes(LOGIN_ROLE_DEFINITIONS[currentAssignedRole()]?.level);
 }
 
+function canManageRadioCommands() {
+  return currentAssignedRole() === 'Admin' || currentAssignedRole() === 'Republic Navy Admin';
+}
+
 function getManageableLoginRoles() {
   const actor = LOGIN_ROLE_DEFINITIONS[currentAssignedRole()];
   if (actor?.level === 'global') return LOGIN_ROLES;
@@ -4586,6 +4602,7 @@ async function attemptLogin() {
     if (activeMainTab === 'shipyard') renderShipyardView();
     if (activeMainTab === 'buildProjects') renderBuildProjectsView();
     if (activeMainTab === 'loginManager') renderLoginManagerView();
+    if (activeMainTab === 'radioCommandCenter') renderRadioCommandCenterView();
     setStatus(`Login erfolgreich: ${payload.user.username} (${payload.user.role})`);
   } catch (error) {
     currentAuthenticatedUsername = '';
@@ -4615,12 +4632,14 @@ function getRoleFaction(role = currentRole()) {
 function refreshRoleChrome() {
   saveBtn.classList.toggle('hidden', !isAdminRole());
   loginManagerTabBtn.classList.toggle('hidden', !canManageLogins());
+  radioCommandTabBtn.classList.toggle('hidden', !canManageRadioCommands());
   buildProjectsTabBtn.classList.remove('hidden');
   updateSectorDrawButton();
   document.querySelector('[data-main-tab="fleetManagement"]')?.classList.toggle('hidden', currentRole() === 'Senat');
   document.querySelector('[data-main-tab="shipyard"]')?.classList.toggle('hidden', currentRole() === 'Senat');
   roleSelect.disabled = true;
   if (!canManageLogins() && activeMainTab === 'loginManager') setMainTab('map');
+  if (!canManageRadioCommands() && activeMainTab === 'radioCommandCenter') setMainTab('map');
   if (currentRole() === 'Senat' && (activeMainTab === 'fleetManagement' || activeMainTab === 'shipyard')) setMainTab('buildProjects');
   const faction = getRoleFaction();
   if (!faction) {
@@ -8031,6 +8050,242 @@ function renderLoginManagerView() {
   `;
 }
 
+function escapeRadioCommandText(value) {
+  return escapeLoginManagerText(value);
+}
+
+async function fetchRadioCommandCenterData() {
+  if (!canManageRadioCommands()) return;
+  radioCommandAdminState.loading = true;
+  renderRadioCommandCenterView();
+  try {
+    const response = await fetch('/api/admin/radio-command-center', {
+      credentials: 'include'
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || 'Befehlsberechtigungen konnten nicht geladen werden.');
+    radioCommandAdminState = {
+      permissions: payload.permissions || [],
+      audit: payload.audit || [],
+      users: payload.users || [],
+      fleets: payload.fleets || [],
+      loading: false
+    };
+    if (activeMainTab === 'radioCommandCenter') renderRadioCommandCenterView();
+  } catch (error) {
+    radioCommandAdminState.loading = false;
+    setStatus(`Befehlsberechtigungen laden fehlgeschlagen: ${error.message}`);
+    if (activeMainTab === 'radioCommandCenter') renderRadioCommandCenterView();
+  }
+}
+
+function createRadioPermissionDraft() {
+  if (!canManageRadioCommands()) return;
+  radioCommandAdminState.permissions.unshift({
+    id: `radio_perm_${Math.random().toString(36).slice(2, 10)}`,
+    ingameName: '',
+    linkedUserId: '',
+    linkedUsername: '',
+    permissionRole: 'fleet_officer',
+    fleets: [],
+    isDraft: true
+  });
+  renderRadioCommandCenterView();
+}
+
+function toggleRadioPermissionFleet(permissionId, fleetId) {
+  const permission = radioCommandAdminState.permissions.find((entry) => entry.id === permissionId);
+  const fleet = radioCommandAdminState.fleets.find((entry) => entry.id === fleetId);
+  if (!permission || !fleet) return;
+  const existing = Array.isArray(permission.fleets) ? permission.fleets : [];
+  if (existing.some((entry) => entry.fleetId === fleetId)) {
+    permission.fleets = existing.filter((entry) => entry.fleetId !== fleetId);
+  } else {
+    permission.fleets = [...existing, { fleetId: fleet.id, fleetName: fleet.name }];
+  }
+  renderRadioCommandCenterView();
+}
+
+async function saveRadioPermission(id) {
+  if (!canManageRadioCommands()) return;
+  const permission = radioCommandAdminState.permissions.find((entry) => entry.id === id);
+  if (!permission) return;
+  const ingameName = document.getElementById(`radioIngame_${id}`)?.value.trim() || '';
+  const linkedUserId = document.getElementById(`radioLinkedUser_${id}`)?.value || '';
+  const permissionRole = document.getElementById(`radioPermissionRole_${id}`)?.value || 'fleet_officer';
+  const fleets = Array.isArray(permission.fleets) ? permission.fleets : [];
+  try {
+    const response = await fetch(permission.isDraft ? '/api/admin/radio-command-permissions' : `/api/admin/radio-command-permissions/${id}`, {
+      method: permission.isDraft ? 'POST' : 'PATCH',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ingameName,
+        linkedUserId,
+        permissionRole,
+        fleets
+      })
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || 'Befehlsberechtigung konnte nicht gespeichert werden.');
+    radioCommandAdminState = {
+      permissions: payload.permissions || [],
+      audit: payload.audit || [],
+      users: payload.users || [],
+      fleets: payload.fleets || [],
+      loading: false
+    };
+    renderRadioCommandCenterView();
+    setStatus(`Befehlsberechtigung gespeichert: ${ingameName}`);
+  } catch (error) {
+    setStatus(`Befehlsberechtigung speichern fehlgeschlagen: ${error.message}`);
+  }
+}
+
+async function deleteRadioPermission(id) {
+  if (!canManageRadioCommands()) return;
+  const permission = radioCommandAdminState.permissions.find((entry) => entry.id === id);
+  if (permission?.isDraft) {
+    radioCommandAdminState.permissions = radioCommandAdminState.permissions.filter((entry) => entry.id !== id);
+    renderRadioCommandCenterView();
+    setStatus('Entwurf entfernt.');
+    return;
+  }
+  try {
+    const response = await fetch(`/api/admin/radio-command-permissions/${id}`, {
+      method: 'DELETE',
+      credentials: 'include'
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || 'Befehlsberechtigung konnte nicht gelöscht werden.');
+    radioCommandAdminState = {
+      permissions: payload.permissions || [],
+      audit: payload.audit || [],
+      users: payload.users || [],
+      fleets: payload.fleets || [],
+      loading: false
+    };
+    renderRadioCommandCenterView();
+    setStatus(permission ? `Berechtigung gelöscht: ${permission.ingameName}` : 'Berechtigung gelöscht.');
+  } catch (error) {
+    setStatus(`Befehlsberechtigung löschen fehlgeschlagen: ${error.message}`);
+  }
+}
+
+async function pollDiscordRadioCommands() {
+  if (!canManageRadioCommands()) return;
+  try {
+    const response = await fetch('/api/admin/radio-command-center/poll', {
+      method: 'POST',
+      credentials: 'include'
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || 'Discord-Funk konnte nicht ausgewertet werden.');
+    radioCommandAdminState = {
+      permissions: payload.permissions || [],
+      audit: payload.audit || [],
+      users: payload.users || [],
+      fleets: payload.fleets || [],
+      loading: false
+    };
+    renderRadioCommandCenterView();
+    const processed = payload.result?.processed || 0;
+    const accepted = payload.result?.accepted || 0;
+    const rejected = payload.result?.rejected || 0;
+    setStatus(`Discord-Funk ausgewertet: ${processed} Nachricht(en), ${accepted} akzeptiert, ${rejected} abgelehnt.`);
+  } catch (error) {
+    setStatus(`Discord-Funk Poll fehlgeschlagen: ${error.message}`);
+  }
+}
+
+function renderRadioCommandCenterView() {
+  if (!canManageRadioCommands()) {
+    setMainTab('map');
+    return;
+  }
+  const users = radioCommandAdminState.users || [];
+  const fleets = radioCommandAdminState.fleets || [];
+  const permissions = radioCommandAdminState.permissions || [];
+  const audit = radioCommandAdminState.audit || [];
+  const permissionRows = permissions.length ? permissions.map((permission) => {
+    const selectedFleetIds = new Set((permission.fleets || []).map((fleet) => fleet.fleetId));
+    return `
+      <tr>
+        <td><input id="radioIngame_${permission.id}" value="${escapeRadioCommandText(permission.ingameName || '')}" placeholder="z.B. Kendal Ozzel"></td>
+        <td>
+          <select id="radioLinkedUser_${permission.id}">
+            <option value="">Nicht verknüpft</option>
+            ${users.map((user) => `<option value="${user.id}" ${permission.linkedUserId === user.id ? 'selected' : ''}>${escapeRadioCommandText(user.username)} (${escapeRadioCommandText(user.role)})</option>`).join('')}
+          </select>
+        </td>
+        <td>
+          <select id="radioPermissionRole_${permission.id}">
+            <option value="fleet_officer" ${permission.permissionRole === 'fleet_officer' ? 'selected' : ''}>fleet_officer</option>
+            <option value="staff_officer" ${permission.permissionRole === 'staff_officer' ? 'selected' : ''}>staff_officer</option>
+            <option value="faction_admin" ${permission.permissionRole === 'faction_admin' ? 'selected' : ''}>faction_admin</option>
+            <option value="admiralty" ${permission.permissionRole === 'admiralty' ? 'selected' : ''}>admiralty</option>
+          </select>
+        </td>
+        <td>
+          <div class="resource-pill-list">
+            ${fleets.map((fleet) => `
+              <label class="resource-pill">
+                <input type="checkbox" ${selectedFleetIds.has(fleet.id) ? 'checked' : ''} onchange="toggleRadioPermissionFleet('${permission.id}','${fleet.id}')">
+                <span>${escapeRadioCommandText(fleet.name)}</span>
+              </label>
+            `).join('')}
+          </div>
+        </td>
+        <td class="actions">
+          <button class="mini-btn primary" onclick="saveRadioPermission('${permission.id}')">Speichern</button>
+          <button class="mini-btn danger" onclick="deleteRadioPermission('${permission.id}')">Löschen</button>
+        </td>
+      </tr>
+    `;
+  }).join('') : '<tr><td colspan="5"><div class="muted-box">Noch keine Befehlsberechtigungen angelegt.</div></td></tr>';
+  const auditRows = audit.length ? audit.map((entry) => `
+    <tr>
+      <td>${entry.createdAt ? new Date(entry.createdAt).toLocaleString('de-DE') : '—'}</td>
+      <td>${escapeRadioCommandText(entry.actorIngameName || '—')}</td>
+      <td>${escapeRadioCommandText(entry.targetFleetName || '—')}</td>
+      <td>${escapeRadioCommandText(entry.targetPlanetName || '—')}</td>
+      <td>${escapeRadioCommandText(entry.commandType || '—')}</td>
+      <td>${escapeRadioCommandText(entry.status || '—')}</td>
+      <td>${escapeRadioCommandText(entry.reason || '—')}</td>
+    </tr>
+  `).join('') : '<tr><td colspan="7"><div class="muted-box">Noch keine automatisch erkannten Funkbefehle.</div></td></tr>';
+  workspacePanel.innerHTML = `
+    <div class="workspace-head">
+      <div>
+        <h2>Befehlsberechtigungen</h2>
+        <p>Verknüpfe Ingame-Namen mit Website-Logins, weise bewegliche GAR-Verbände zu und prüfe das Audit-Log der automatisch erkannten Langstreckenfunk-Befehle.</p>
+      </div>
+      <div class="toolbar-row end">
+        <button class="mini-btn" onclick="fetchRadioCommandCenterData()">Aktualisieren</button>
+        <button class="mini-btn" onclick="pollDiscordRadioCommands()">Discord jetzt prüfen</button>
+        <button class="mini-btn primary" onclick="createRadioPermissionDraft()">Eintrag anlegen</button>
+      </div>
+    </div>
+    <div class="workspace-section">
+      <div class="workspace-card">
+        <h3>Berechtigungen</h3>
+        <p class="muted">${radioCommandAdminState.loading ? 'Lade Daten...' : 'fleet_officer darf nur zugewiesene Verbände bewegen. staff_officer, faction_admin und admiralty dürfen alle Verbände bewegen.'}</p>
+        <table class="data-table">
+          <thead><tr><th>Ingame-Name</th><th>Website-Login</th><th>Rolle</th><th>Verknüpfte Verbände</th><th>Aktionen</th></tr></thead>
+          <tbody>${permissionRows}</tbody>
+        </table>
+      </div>
+      <div class="workspace-card">
+        <h3>Funk-Audit</h3>
+        <table class="data-table">
+          <thead><tr><th>Zeit</th><th>Befehlgeber</th><th>Verband</th><th>Zielplanet</th><th>Befehl</th><th>Status</th><th>Grund</th></tr></thead>
+          <tbody>${auditRows}</tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
 function renderShipyardView() {
   runCampaignMaintenance();
   const role = currentRole();
@@ -8632,6 +8887,7 @@ roleSelect.onchange = () => {
   if (activeMainTab === 'shipyard') renderShipyardView();
   if (activeMainTab === 'buildProjects') renderBuildProjectsView();
   if (activeMainTab === 'loginManager') renderLoginManagerView();
+  if (activeMainTab === 'radioCommandCenter') renderRadioCommandCenterView();
 };
 
 planetSearchInput.addEventListener('input', () => {
@@ -8796,6 +9052,12 @@ window.clearFleetManifestFilter = clearFleetManifestFilter;
 window.createLoginManagerUser = createLoginManagerUser;
 window.saveLoginManagerUser = saveLoginManagerUser;
 window.deleteLoginManagerUser = deleteLoginManagerUser;
+window.fetchRadioCommandCenterData = fetchRadioCommandCenterData;
+window.createRadioPermissionDraft = createRadioPermissionDraft;
+window.toggleRadioPermissionFleet = toggleRadioPermissionFleet;
+window.saveRadioPermission = saveRadioPermission;
+window.deleteRadioPermission = deleteRadioPermission;
+window.pollDiscordRadioCommands = pollDiscordRadioCommands;
 window.setMainTab = setMainTab;
 
 ensureImportantCampaignPlanets();

@@ -1,0 +1,400 @@
+import {
+  findRadioCommandPermissionByNormalizedName,
+  hasRadioCommandLogEntry,
+  insertRadioCommandLog,
+  listUsers,
+  readCampaignState,
+  writeCampaignState
+} from '../db.js';
+import { getPlanetNameById, writeAuditLog } from '../audit.js';
+import { parseRadioCommandMessage } from './radioCommandParser.js';
+
+const DISCORD_API_BASE_URL = 'https://discord.com/api/v10';
+const SUPPORTED_PERMISSION_ROLES = new Set(['fleet_officer', 'staff_officer', 'faction_admin', 'admiralty']);
+
+export function createDiscordRadioListener({
+  db,
+  getIo,
+  getActorForSystem = () => ({ id: 'discord-radio', username: 'discord-radio', role: 'System' }),
+  onCampaignChanged = () => {}
+}) {
+  let timer = null;
+  let polling = false;
+
+  async function pollOnce() {
+    if (polling) return { ok: false, reason: 'busy' };
+    polling = true;
+    try {
+      return await processDiscordMessages({
+        db,
+        getIo,
+        actor: getActorForSystem(),
+        onCampaignChanged
+      });
+    } finally {
+      polling = false;
+    }
+  }
+
+  function start() {
+    const config = getDiscordRadioConfig();
+    if (!config.enabled) return false;
+    if (timer) clearInterval(timer);
+    console.log(`Discord radio listener running, polling every ${config.pollMs} ms`);
+    timer = setInterval(() => {
+      void pollOnce().catch((error) => console.error('Discord radio poll failed', error));
+    }, config.pollMs);
+    void pollOnce().catch((error) => console.error('Discord radio initial poll failed', error));
+    return true;
+  }
+
+  function stop() {
+    if (timer) clearInterval(timer);
+    timer = null;
+  }
+
+  return { start, stop, pollOnce };
+}
+
+function getDiscordRadioConfig() {
+  const botToken = String(process.env.DISCORD_BOT_TOKEN || '').trim();
+  const channelId = String(process.env.DISCORD_RADIO_CHANNEL_ID || '').trim();
+  const pollMs = Math.max(5000, Number(process.env.DISCORD_RADIO_POLL_MS || 15000) || 15000);
+  return {
+    enabled: Boolean(botToken && channelId),
+    botToken,
+    channelId,
+    pollMs
+  };
+}
+
+async function processDiscordMessages({ db, getIo, actor, onCampaignChanged }) {
+  const config = getDiscordRadioConfig();
+  if (!config.enabled) {
+    return { ok: false, error: 'Discord listener disabled. Set DISCORD_BOT_TOKEN and DISCORD_RADIO_CHANNEL_ID.' };
+  }
+
+  const messages = await fetchDiscordMessages(config);
+  const chronological = [...messages].reverse();
+  let processed = 0;
+  let accepted = 0;
+  let rejected = 0;
+
+  for (const message of chronological) {
+    const result = await processSingleDiscordMessage({ db, message, actor, getIo, onCampaignChanged });
+    if (!result.processed) continue;
+    processed += 1;
+    accepted += result.acceptedCount;
+    rejected += result.rejectedCount;
+  }
+
+  return { ok: true, processed, accepted, rejected };
+}
+
+async function processSingleDiscordMessage({ db, message, actor, getIo, onCampaignChanged }) {
+  const content = String(message?.content || '').trim();
+  const { state: currentState, revision } = readCampaignState(db);
+  const parsed = parseRadioCommandMessage(content, {
+    planets: currentState.planets || [],
+    fleets: currentState.fleets || []
+  });
+
+  if (!parsed.isRelevant) return { processed: false, acceptedCount: 0, rejectedCount: 0 };
+
+  const actorPermission = parsed.actorName ? findRadioCommandPermissionByNormalizedName(db, parsed.actorName) : null;
+  const linkedUserMatches = actorPermission?.linkedUserId
+    ? listUsers(db).find((user) => user.id === actorPermission.linkedUserId)
+    : null;
+
+  const commonPayload = {
+    discordMessageId: String(message.id || ''),
+    actorName: parsed.actorName,
+    commandType: parsed.commandType,
+    originalMessage: parsed.originalMessage,
+    fleets: parsed.fleets.map((fleet) => ({ id: fleet.id, name: fleet.name })),
+    planet: parsed.planet ? { id: parsed.planet.id, name: parsed.planet.name } : null
+  };
+
+  if (!parsed.actorName) {
+    if (!hasRadioCommandLogEntry(db, message.id, null, null, 'rejected')) {
+      persistRejectedRadioLog(db, actor, {
+        discordMessageId: message.id,
+        actorIngameName: '',
+        commandType: parsed.commandType,
+        originalMessage: parsed.originalMessage,
+        reason: 'Befehlgeber konnte nicht erkannt werden.',
+        payload: commonPayload
+      });
+    }
+    return { processed: true, acceptedCount: 0, rejectedCount: 1 };
+  }
+
+  if (!actorPermission || !SUPPORTED_PERMISSION_ROLES.has(actorPermission.permissionRole)) {
+    if (!hasRadioCommandLogEntry(db, message.id, null, null, 'rejected')) {
+      persistRejectedRadioLog(db, actor, {
+        discordMessageId: message.id,
+        actorIngameName: parsed.actorName,
+        commandType: parsed.commandType,
+        originalMessage: parsed.originalMessage,
+        reason: 'Keine Berechtigung für diesen Funkbefehl gefunden.',
+        payload: commonPayload
+      });
+    }
+    return { processed: true, acceptedCount: 0, rejectedCount: 1 };
+  }
+
+  if (!actorPermission.linkedUserId || !linkedUserMatches) {
+    if (!hasRadioCommandLogEntry(db, message.id, null, null, 'rejected')) {
+      persistRejectedRadioLog(db, actor, {
+        discordMessageId: message.id,
+        actorIngameName: parsed.actorName,
+        matchedUserId: actorPermission.linkedUserId || null,
+        matchedUsername: actorPermission.linkedUsername || null,
+        commandType: parsed.commandType,
+        originalMessage: parsed.originalMessage,
+        reason: 'Verknüpfter Website-Login fehlt oder ist ungültig.',
+        payload: commonPayload
+      });
+    }
+    return { processed: true, acceptedCount: 0, rejectedCount: 1 };
+  }
+
+  if (!parsed.fleets.length) {
+    if (!hasRadioCommandLogEntry(db, message.id, null, parsed.planet?.id || null, 'rejected')) {
+      persistRejectedRadioLog(db, actor, {
+        discordMessageId: message.id,
+        actorIngameName: parsed.actorName,
+        matchedUserId: actorPermission.linkedUserId,
+        matchedUsername: actorPermission.linkedUsername,
+        targetPlanetId: parsed.planet?.id || null,
+        targetPlanetName: parsed.planet?.name || null,
+        commandType: parsed.commandType,
+        originalMessage: parsed.originalMessage,
+        reason: 'Kein bekannter Flottenverband erkannt.',
+        payload: commonPayload
+      });
+    }
+    return { processed: true, acceptedCount: 0, rejectedCount: 1 };
+  }
+
+  if (!parsed.planet) {
+    let rejectedCount = 0;
+    parsed.fleets.forEach((fleet) => {
+      if (hasRadioCommandLogEntry(db, message.id, fleet.id, null, 'rejected')) return;
+      persistRejectedRadioLog(db, actor, {
+        discordMessageId: message.id,
+        actorIngameName: parsed.actorName,
+        matchedUserId: actorPermission.linkedUserId,
+        matchedUsername: actorPermission.linkedUsername,
+        targetFleetId: fleet.id,
+        targetFleetName: fleet.name,
+        commandType: parsed.commandType,
+        originalMessage: parsed.originalMessage,
+        reason: 'Zielplanet fehlt oder ist unklar.',
+        payload: commonPayload
+      });
+      rejectedCount += 1;
+    });
+    return { processed: true, acceptedCount: 0, rejectedCount };
+  }
+
+  const fleetPermissionIds = new Set((actorPermission.fleets || []).map((fleet) => String(fleet.fleetId || '')).filter(Boolean));
+  const acceptedFleetIds = [];
+  let acceptedCount = 0;
+  let rejectedCount = 0;
+  const nextState = JSON.parse(JSON.stringify(currentState));
+
+  for (const fleetMatch of parsed.fleets) {
+    const nextFleet = (nextState.fleets || []).find((fleet) => fleet.id === fleetMatch.id);
+    if (!nextFleet) {
+      if (!hasRadioCommandLogEntry(db, message.id, fleetMatch.id, parsed.planet.id, 'rejected')) {
+        persistRejectedRadioLog(db, actor, {
+          discordMessageId: message.id,
+          actorIngameName: parsed.actorName,
+          matchedUserId: actorPermission.linkedUserId,
+          matchedUsername: actorPermission.linkedUsername,
+          targetFleetId: fleetMatch.id,
+          targetFleetName: fleetMatch.name,
+          targetPlanetId: parsed.planet.id,
+          targetPlanetName: parsed.planet.name,
+          commandType: parsed.commandType,
+          originalMessage: parsed.originalMessage,
+          reason: 'Flottenverband nicht im aktuellen Kampagnenzustand vorhanden.',
+          payload: commonPayload
+        });
+      }
+      rejectedCount += 1;
+      continue;
+    }
+
+    const canMoveAnyFleet = actorPermission.permissionRole !== 'fleet_officer';
+    const canMoveFleet = canMoveAnyFleet || fleetPermissionIds.has(nextFleet.id);
+    if (!canMoveFleet) {
+      if (!hasRadioCommandLogEntry(db, message.id, nextFleet.id, parsed.planet.id, 'rejected')) {
+        persistRejectedRadioLog(db, actor, {
+          discordMessageId: message.id,
+          actorIngameName: parsed.actorName,
+          matchedUserId: actorPermission.linkedUserId,
+          matchedUsername: actorPermission.linkedUsername,
+          targetFleetId: nextFleet.id,
+          targetFleetName: nextFleet.name,
+          targetPlanetId: parsed.planet.id,
+          targetPlanetName: parsed.planet.name,
+          commandType: parsed.commandType,
+          originalMessage: parsed.originalMessage,
+          reason: 'Dieser Offizier darf den genannten Verband nicht bewegen.',
+          payload: commonPayload
+        });
+      }
+      rejectedCount += 1;
+      continue;
+    }
+
+    if (hasRadioCommandLogEntry(db, message.id, nextFleet.id, parsed.planet.id, 'accepted')) continue;
+
+    const previousPlanetId = String(nextFleet.locationPlanetId || nextFleet.planetId || '').trim();
+    nextFleet.locationPlanetId = parsed.planet.id;
+    nextFleet.planetId = parsed.planet.id;
+    nextFleet.lastMovedBy = actorPermission.linkedUsername || parsed.actorName;
+    nextFleet.lastMovedByUserId = actorPermission.linkedUserId;
+    nextFleet.lastMovedAt = new Date().toISOString();
+    nextFleet.lastMoveFromPlanetId = previousPlanetId || null;
+    nextFleet.lastMoveToPlanetId = parsed.planet.id;
+
+    insertRadioCommandLog(db, {
+      discordMessageId: message.id,
+      actorIngameName: parsed.actorName,
+      matchedUserId: actorPermission.linkedUserId,
+      matchedUsername: actorPermission.linkedUsername,
+      targetFleetId: nextFleet.id,
+      targetFleetName: nextFleet.name,
+      targetPlanetId: parsed.planet.id,
+      targetPlanetName: parsed.planet.name,
+      commandType: parsed.commandType,
+      status: 'accepted',
+      reason: '',
+      originalMessage: parsed.originalMessage,
+      payload: {
+        ...commonPayload,
+        selectedFleetId: nextFleet.id,
+        selectedFleetName: nextFleet.name
+      }
+    });
+
+    writeAuditLog(db, {
+      actorUserId: actorPermission.linkedUserId,
+      actorUsername: actorPermission.linkedUsername || parsed.actorName,
+      actorRole: actorPermission.permissionRole,
+      action: 'fleet.moved',
+      entityType: 'fleet',
+      entityId: nextFleet.id,
+      payload: {
+        fleetId: nextFleet.id,
+        fleetName: nextFleet.name || nextFleet.id,
+        faction: nextFleet.faction || '',
+        fromPlanetId: previousPlanetId || null,
+        fromPlanetName: getPlanetNameById(nextState, previousPlanetId || null),
+        toPlanetId: parsed.planet.id,
+        toPlanetName: parsed.planet.name,
+        startedAt: nextFleet.lastMovedAt,
+        arrivesAt: null,
+        routePlanetIds: [],
+        source: 'discord_radio',
+        actorUsername: actorPermission.linkedUsername || parsed.actorName,
+        actorUserId: actorPermission.linkedUserId,
+        discordMessageId: String(message.id || '')
+      }
+    });
+
+    writeAuditLog(db, {
+      actorUserId: actorPermission.linkedUserId,
+      actorUsername: actorPermission.linkedUsername || parsed.actorName,
+      actorRole: actorPermission.permissionRole,
+      action: 'radio.command.accepted',
+      entityType: 'fleet',
+      entityId: nextFleet.id,
+      payload: {
+        source: 'discord_radio',
+        discordMessageId: String(message.id || ''),
+        actorIngameName: parsed.actorName,
+        targetFleetId: nextFleet.id,
+        targetFleetName: nextFleet.name,
+        targetPlanetId: parsed.planet.id,
+        targetPlanetName: parsed.planet.name,
+        commandType: parsed.commandType,
+        originalMessage: parsed.originalMessage,
+        status: 'accepted'
+      }
+    });
+
+    acceptedCount += 1;
+    acceptedFleetIds.push(nextFleet.id);
+  }
+
+  if (acceptedFleetIds.length) {
+    const nextRevision = revision + 1;
+    const updatedAt = writeCampaignState(db, nextState, nextRevision);
+    const io = typeof getIo === 'function' ? getIo() : null;
+    io?.emit?.('campaign:state-changed', {
+      revision: nextRevision,
+      updatedAt,
+      changedKeys: ['fleets'],
+      actor: {
+        id: actorPermission.linkedUserId,
+        username: actorPermission.linkedUsername || parsed.actorName,
+        role: actorPermission.permissionRole
+      }
+    });
+    onCampaignChanged({
+      revision: nextRevision,
+      updatedAt,
+      acceptedFleetIds
+    });
+  }
+
+  return { processed: true, acceptedCount, rejectedCount };
+}
+
+function persistRejectedRadioLog(db, actor, input) {
+  insertRadioCommandLog(db, {
+    ...input,
+    status: 'rejected'
+  });
+  writeAuditLog(db, {
+    actorUserId: input.matchedUserId || actor.id,
+    actorUsername: input.matchedUsername || input.actorIngameName || actor.username,
+    actorRole: 'radio_command',
+    action: 'radio.command.rejected',
+    entityType: 'fleet',
+    entityId: input.targetFleetId || null,
+    payload: {
+      source: 'discord_radio',
+      discordMessageId: input.discordMessageId,
+      actorIngameName: input.actorIngameName,
+      targetFleetId: input.targetFleetId || null,
+      targetFleetName: input.targetFleetName || null,
+      targetPlanetId: input.targetPlanetId || null,
+      targetPlanetName: input.targetPlanetName || null,
+      commandType: input.commandType || null,
+      originalMessage: input.originalMessage,
+      status: 'rejected',
+      reason: input.reason || ''
+    }
+  });
+}
+
+async function fetchDiscordMessages(config) {
+  const response = await fetch(`${DISCORD_API_BASE_URL}/channels/${config.channelId}/messages?limit=25`, {
+    headers: {
+      Authorization: `Bot ${config.botToken}`
+    }
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`Discord API failed (${response.status}): ${body}`);
+  }
+
+  const payload = await response.json();
+  return Array.isArray(payload) ? payload : [];
+}
