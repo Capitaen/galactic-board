@@ -73,6 +73,57 @@ export function createDb(projectRoot) {
       created_at TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS market_companies (
+      id TEXT PRIMARY KEY,
+      symbol TEXT NOT NULL UNIQUE,
+      name TEXT NOT NULL,
+      faction TEXT NOT NULL,
+      sector TEXT NOT NULL DEFAULT '',
+      resource_key TEXT NOT NULL DEFAULT '',
+      base_price REAL NOT NULL,
+      current_price REAL NOT NULL,
+      previous_price REAL NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS market_investors (
+      id TEXT PRIMARY KEY,
+      alias TEXT NOT NULL,
+      last_purchase_at TEXT,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS market_holdings (
+      investor_id TEXT NOT NULL,
+      company_id TEXT NOT NULL,
+      shares INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (investor_id, company_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS market_history (
+      id TEXT PRIMARY KEY,
+      company_id TEXT NOT NULL,
+      price REAL NOT NULL,
+      recorded_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS market_events (
+      id TEXT PRIMARY KEY,
+      event_type TEXT NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT NOT NULL,
+      impact REAL NOT NULL,
+      started_at TEXT NOT NULL,
+      ends_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS economy_policy (
+      faction TEXT PRIMARY KEY,
+      tax_rate REAL NOT NULL DEFAULT 0.05,
+      subsidy TEXT NOT NULL DEFAULT 'none',
+      updated_at TEXT NOT NULL
+    );
+
     CREATE UNIQUE INDEX IF NOT EXISTS idx_radio_command_log_unique_target
       ON radio_command_log (discord_message_id, target_fleet_id, target_planet_id, status);
 
@@ -87,6 +138,13 @@ export function createDb(projectRoot) {
   if (!userColumns.has('senate_position')) {
     db.exec("ALTER TABLE users ADD COLUMN senate_position TEXT NOT NULL DEFAULT ''");
   }
+  const marketCompanyColumns = new Set(db.prepare('PRAGMA table_info(market_companies)').all().map((column) => column.name));
+  if (!marketCompanyColumns.has('sector')) {
+    db.exec("ALTER TABLE market_companies ADD COLUMN sector TEXT NOT NULL DEFAULT ''");
+  }
+  if (!marketCompanyColumns.has('resource_key')) {
+    db.exec("ALTER TABLE market_companies ADD COLUMN resource_key TEXT NOT NULL DEFAULT ''");
+  }
 
   const legacyFactionAdminRoles = [
     ['Republic Navy Main-Admin', 'Republic Navy Admin'],
@@ -98,6 +156,29 @@ export function createDb(projectRoot) {
   legacyFactionAdminRoles.forEach(([legacyRole, nextRole]) => {
     migrateFactionAdminRole.run(nextRole, migrationTime, legacyRole);
   });
+
+  const marketCompanies = [
+    ['kuat', 'KDY', 'Kuat-Triebwerkswerften', 'GAR', 1250],
+    ['rothana', 'RHE', 'Rothana Heavy Engineering', 'GAR', 980],
+    ['trade_guild', 'HGL', 'Galaktische Handelsgilde', 'NEUTRAL', 620],
+    ['banking_clan', 'IGBC', 'InterGalactic Banking Clan', 'KUS', 840],
+    ['pyke_logistics', 'PYKE', 'Pyke Spice Logistics', 'PYKE', 510],
+    ['black_sun', 'BSH', 'Black Sun Holdings', 'BLACK_SUN', 460],
+    ['hutt_trading', 'HUTT', 'Hutt Space Trading Company', 'HUTT', 700]
+  ];
+  const insertMarketCompany = db.prepare(`
+    INSERT OR IGNORE INTO market_companies (
+      id, symbol, name, faction, sector, resource_key,
+      base_price, current_price, previous_price, updated_at
+    ) VALUES (?, ?, ?, ?, '', '', ?, ?, ?, ?)
+  `);
+  marketCompanies.forEach(([id, symbol, name, faction, price]) => {
+    insertMarketCompany.run(id, symbol, name, faction, price, price, price, migrationTime);
+  });
+  db.prepare(`
+    INSERT OR IGNORE INTO economy_policy (faction, tax_rate, subsidy, updated_at)
+    VALUES ('GAR', 0.05, 'none', ?)
+  `).run(migrationTime);
 
   const stateRow = db.prepare('SELECT id FROM app_state WHERE id = ?').get('main');
 
@@ -118,6 +199,71 @@ export function createDb(projectRoot) {
       new Date().toISOString()
     );
   }
+
+  const campaignStateRow = db.prepare("SELECT state_json FROM app_state WHERE id = 'main'").get();
+  const campaignState = JSON.parse(campaignStateRow?.state_json || '{}');
+  const sectorOwners = new Map();
+  const sectorNames = new Set();
+  for (const planet of campaignState.planets || []) {
+    const sector = String(planet?.sector || '').trim();
+    if (!sector) continue;
+    sectorNames.add(sector);
+    const owner = String(planet?.owner || 'NEUTRAL').trim() || 'NEUTRAL';
+    if (!sectorOwners.has(sector)) sectorOwners.set(sector, new Map());
+    const ownerCounts = sectorOwners.get(sector);
+    ownerCounts.set(owner, (ownerCounts.get(owner) || 0) + 1);
+  }
+  for (const manualSector of campaignState.meta?.manualSectors || []) {
+    const sector = String(manualSector?.name || '').trim();
+    if (sector) sectorNames.add(sector);
+  }
+
+  const sectorHoldingResources = [
+    ['quadraniumErz', 'Metall-Holding', 420],
+    ['agrinium', 'Technologie-Holding', 560],
+    ['tibannaGas', 'Treibstoff-Holding', 480],
+    ['baradium', 'Chemikalien-Holding', 450],
+    ['kavamSalz', 'Versorgungsgueter-Holding', 360]
+  ];
+  const insertSectorHolding = db.prepare(`
+    INSERT OR IGNORE INTO market_companies (
+      id, symbol, name, faction, sector, resource_key,
+      base_price, current_price, previous_price, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const initialHistory = db.prepare(`
+    INSERT OR IGNORE INTO market_history (id, company_id, price, recorded_at)
+    VALUES (?, ?, ?, ?)
+  `);
+  const existingHistory = db.prepare('SELECT 1 FROM market_history WHERE company_id = ? LIMIT 1');
+
+  db.transaction(() => {
+    [...sectorNames].sort((a, b) => a.localeCompare(b, 'de')).forEach((sector) => {
+      const ownerCounts = sectorOwners.get(sector) || new Map();
+      const faction = [...ownerCounts.entries()]
+        .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))[0]?.[0] || 'NEUTRAL';
+      sectorHoldingResources.forEach(([resourceKey, holdingLabel, price]) => {
+        const digest = crypto.createHash('sha1').update(`${sector}:${resourceKey}`).digest('hex');
+        const companyId = `sector_holding_${digest.slice(0, 16)}`;
+        const symbol = `S${digest.slice(0, 7).toUpperCase()}`;
+        insertSectorHolding.run(
+          companyId,
+          symbol,
+          `${sector} ${holdingLabel}`,
+          faction,
+          sector,
+          resourceKey,
+          price,
+          price,
+          price,
+          migrationTime
+        );
+        if (!existingHistory.get(companyId)) {
+          initialHistory.run(`seed_${companyId}`, companyId, price, migrationTime);
+        }
+      });
+    });
+  })();
 
   const now = new Date().toISOString();
   const defaultAdmin = db.prepare('SELECT id FROM users WHERE lower(username) = lower(?)').get('admin');
@@ -436,4 +582,159 @@ export function insertRadioCommandLog(db, input) {
     createdAt
   );
   return { id, createdAt };
+}
+
+export function getOrCreateMarketInvestor(db, investorId) {
+  const existing = db.prepare('SELECT * FROM market_investors WHERE id = ?').get(investorId);
+  if (existing) return existing;
+  const suffix = investorId.replace(/-/g, '').slice(0, 6).toUpperCase();
+  const createdAt = new Date().toISOString();
+  db.prepare(`
+    INSERT INTO market_investors (id, alias, created_at)
+    VALUES (?, ?, ?)
+  `).run(investorId, `Investor-${suffix}`, createdAt);
+  return db.prepare('SELECT * FROM market_investors WHERE id = ?').get(investorId);
+}
+
+export function readMarketSnapshot(db, investorId = '') {
+  const companies = db.prepare(`
+    SELECT id, symbol, name, faction, base_price AS basePrice,
+      sector, resource_key AS resourceKey,
+      current_price AS currentPrice, previous_price AS previousPrice, updated_at AS updatedAt
+    FROM market_companies ORDER BY symbol
+  `).all();
+  const historyRows = db.prepare(`
+    SELECT company_id AS companyId, price, recorded_at AS recordedAt
+    FROM market_history
+    WHERE recorded_at >= datetime('now', '-48 hours')
+    ORDER BY recorded_at
+  `).all();
+  const history = {};
+  historyRows.forEach((row) => {
+    if (!history[row.companyId]) history[row.companyId] = [];
+    history[row.companyId].push({ price: row.price, recordedAt: row.recordedAt });
+  });
+  const holdings = investorId ? db.prepare(`
+    SELECT company_id AS companyId, shares
+    FROM market_holdings WHERE investor_id = ?
+  `).all(investorId) : [];
+  const investor = investorId ? getOrCreateMarketInvestor(db, investorId) : null;
+  const leaderboard = db.prepare(`
+    SELECT i.alias,
+      ROUND(COALESCE(SUM(h.shares * c.current_price), 0), 2) AS portfolioValue,
+      COALESCE(SUM(h.shares), 0) AS totalShares
+    FROM market_investors i
+    LEFT JOIN market_holdings h ON h.investor_id = i.id
+    LEFT JOIN market_companies c ON c.id = h.company_id
+    GROUP BY i.id
+    HAVING totalShares > 0
+    ORDER BY portfolioValue DESC
+    LIMIT 20
+  `).all();
+  const events = db.prepare(`
+    SELECT id, event_type AS eventType, title, description, impact,
+      started_at AS startedAt, ends_at AS endsAt
+    FROM market_events
+    ORDER BY started_at DESC LIMIT 15
+  `).all();
+  const policy = db.prepare(`
+    SELECT faction, tax_rate AS taxRate, subsidy, updated_at AS updatedAt
+    FROM economy_policy WHERE faction = 'GAR'
+  `).get() || { faction: 'GAR', taxRate: 0.05, subsidy: 'none' };
+  return { companies, history, holdings, investor, leaderboard, events, policy };
+}
+
+export function purchaseMarketShare(db, investorId, companyId, now = Date.now()) {
+  return db.transaction(() => {
+    const investor = getOrCreateMarketInvestor(db, investorId);
+    const lastPurchaseAt = investor.last_purchase_at ? Date.parse(investor.last_purchase_at) : 0;
+    const cooldownMs = 60 * 60 * 1000;
+    if (lastPurchaseAt && now - lastPurchaseAt < cooldownMs) {
+      const error = new Error('Der nächste Aktienkauf ist erst nach Ablauf der 60 Minuten möglich.');
+      error.status = 429;
+      error.nextPurchaseAt = new Date(lastPurchaseAt + cooldownMs).toISOString();
+      throw error;
+    }
+    const company = db.prepare('SELECT * FROM market_companies WHERE id = ?').get(companyId);
+    if (!company) {
+      const error = new Error('Unternehmen nicht gefunden.');
+      error.status = 404;
+      throw error;
+    }
+    db.prepare(`
+      INSERT INTO market_holdings (investor_id, company_id, shares)
+      VALUES (?, ?, 1)
+      ON CONFLICT(investor_id, company_id) DO UPDATE SET shares = shares + 1
+    `).run(investorId, companyId);
+    const purchasedAt = new Date(now).toISOString();
+    db.prepare('UPDATE market_investors SET last_purchase_at = ? WHERE id = ?').run(purchasedAt, investorId);
+    const nextPrice = Math.round(company.current_price * 1.0125 * 100) / 100;
+    db.prepare(`
+      UPDATE market_companies
+      SET previous_price = current_price, current_price = ?, updated_at = ?
+      WHERE id = ?
+    `).run(nextPrice, purchasedAt, companyId);
+    db.prepare(`
+      INSERT INTO market_history (id, company_id, price, recorded_at)
+      VALUES (?, ?, ?, ?)
+    `).run(crypto.randomUUID(), companyId, nextPrice, purchasedAt);
+    return { companyId, price: company.current_price, purchasedAt, nextPurchaseAt: new Date(now + cooldownMs).toISOString() };
+  })();
+}
+
+export function updateEconomyPolicy(db, { taxRate, subsidy }) {
+  const updatedAt = new Date().toISOString();
+  db.prepare(`
+    INSERT INTO economy_policy (faction, tax_rate, subsidy, updated_at)
+    VALUES ('GAR', ?, ?, ?)
+    ON CONFLICT(faction) DO UPDATE SET tax_rate = excluded.tax_rate,
+      subsidy = excluded.subsidy, updated_at = excluded.updated_at
+  `).run(taxRate, subsidy, updatedAt);
+  return db.prepare(`
+    SELECT faction, tax_rate AS taxRate, subsidy, updated_at AS updatedAt
+    FROM economy_policy WHERE faction = 'GAR'
+  `).get();
+}
+
+export function runMarketTick(db, inflationRate = 0, now = Date.now()) {
+  const companies = db.prepare('SELECT * FROM market_companies').all();
+  if (!companies.length) return false;
+  const latestUpdate = Math.max(...companies.map((company) => Date.parse(company.updated_at) || 0));
+  if (now - latestUpdate < 15 * 60 * 1000) return false;
+  const activeEvent = db.prepare(`
+    SELECT * FROM market_events WHERE ends_at > ? ORDER BY started_at DESC LIMIT 1
+  `).get(new Date(now).toISOString());
+  const recordedAt = new Date(now).toISOString();
+  const updateCompany = db.prepare(`
+    UPDATE market_companies SET previous_price = current_price, current_price = ?, updated_at = ? WHERE id = ?
+  `);
+  const insertHistory = db.prepare(`
+    INSERT INTO market_history (id, company_id, price, recorded_at) VALUES (?, ?, ?, ?)
+  `);
+  db.transaction(() => {
+    companies.forEach((company) => {
+      const pullToBase = (company.base_price - company.current_price) / company.base_price * 0.04;
+      const noise = (Math.random() - 0.5) * 0.04;
+      const eventImpact = Number(activeEvent?.impact || 0);
+      const inflationImpact = Math.min(0.08, Math.max(0, inflationRate)) * 0.25;
+      const nextPrice = Math.max(25, Math.round(company.current_price * (1 + pullToBase + noise + eventImpact + inflationImpact) * 100) / 100);
+      updateCompany.run(nextPrice, recordedAt, company.id);
+      insertHistory.run(crypto.randomUUID(), company.id, nextPrice, recordedAt);
+    });
+    const latestEvent = db.prepare('SELECT started_at FROM market_events ORDER BY started_at DESC LIMIT 1').get();
+    if (!latestEvent || now - Date.parse(latestEvent.started_at) >= 6 * 60 * 60 * 1000) {
+      const templates = [
+        ['trade_boom', 'Galaktischer Handelsboom', 'Steigende Nachfrage belebt die Märkte.', 0.035],
+        ['market_crash', 'Börsenkorrektur', 'Unsicherheit sorgt für deutliche Kursverluste.', -0.05],
+        ['fuel_shortage', 'Treibstoffknappheit', 'Lieferketten geraten durch knappe Treibstoffe unter Druck.', -0.025],
+        ['industrial_order', 'Großauftrag der Republik', 'Neue öffentliche Aufträge stärken Industrieunternehmen.', 0.025]
+      ];
+      const [eventType, title, description, impact] = templates[Math.floor(Math.random() * templates.length)];
+      db.prepare(`
+        INSERT INTO market_events (id, event_type, title, description, impact, started_at, ends_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(crypto.randomUUID(), eventType, title, description, impact, recordedAt, new Date(now + 3 * 60 * 60 * 1000).toISOString());
+    }
+  })();
+  return true;
 }

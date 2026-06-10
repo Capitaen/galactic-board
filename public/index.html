@@ -514,6 +514,7 @@ a { color:#8bc7ff; }
     <button class="main-tab-btn" data-main-tab="fleetManagement">Flottenmanagement</button>
     <button class="main-tab-btn" data-main-tab="shipyard">Schiffbau</button>
     <button class="main-tab-btn" id="buildProjectsTabBtn" data-main-tab="buildProjects">Bauprojekte</button>
+    <button class="main-tab-btn" data-main-tab="economy">Wirtschaft & Börse</button>
     <button class="main-tab-btn hidden" id="loginManagerTabBtn" data-main-tab="loginManager">Login Manager</button>
     <button class="main-tab-btn hidden" id="radioCommandTabBtn" data-main-tab="radioCommandCenter">Befehlsberechtigungen</button>
   </div>
@@ -599,7 +600,8 @@ const RESOURCE_DEFS = [
   { key: 'agrinium', label: 'TECHNOLOGIEN' },
   { key: 'tibannaGas', label: 'TREIBSTOFFE' },
   { key: 'baradium', label: 'CHEMIKALIEN' },
-  { key: 'kavamSalz', label: 'VERSORGUNGSGÜTER' }
+  { key: 'kavamSalz', label: 'VERSORGUNGSGÜTER' },
+  { key: 'credits', label: 'CREDITS' }
 ];
 const RESOURCE_KEYS = RESOURCE_DEFS.map((entry) => entry.key);
 const RESOURCE_LABELS = Object.fromEntries(RESOURCE_DEFS.map((entry) => [entry.key, entry.label]));
@@ -608,6 +610,13 @@ const RESOURCE_RESET_VERSION = 'resource_reset_2026_05_01';
 const CAPTURE_REWARD_PER_SLOT = 20;
 const MINE_BUILD_DURATION_HOURS = 30;
 const MAX_CIVILIAN_PRODUCTION_BONUS = 0.30;
+const CIVILIAN_CREDIT_YIELDS = {
+  civilian_quadraniumErz: { resource: 'quadraniumErz', credits: 220 },
+  civilian_agrinium: { resource: 'agrinium', credits: 320 },
+  civilian_tibannaGas: { resource: 'tibannaGas', credits: 260 },
+  civilian_baradium: { resource: 'baradium', credits: 240 },
+  civilian_kavamSalz: { resource: 'kavamSalz', credits: 180 }
+};
 const DEFAULT_SHIPYARD_PLANET_KEYS = ['anaxes', 'kuat', 'rothana'];
 const KUS_SHIPYARD_PLANET_KEYS = ['geonosis', 'muunilinst', 'serenno', 'raxus'];
 const RESOURCE_FACTIONS = ['GAR', 'KUS'];
@@ -765,6 +774,7 @@ Object.values(SHIP_CLASS_POOL).forEach((shipMeta) => {
   shipMeta.cost = Object.fromEntries(
     Object.entries(shipMeta.cost).map(([resourceKey, amount]) => [resourceKey, Math.round((Number(amount) || 0) * GAR_SHIP_COST_MULTIPLIER)])
   );
+  shipMeta.cost.credits = Object.values(shipMeta.cost).reduce((sum, amount) => sum + Number(amount || 0), 0) * 2;
 });
 const SHIP_CLASS_IMPORT_PATTERNS = [
   { classId: 'venator', patterns: ['venator'] },
@@ -852,6 +862,22 @@ const orientationDismissBtn = document.getElementById('orientationDismissBtn');
 const buildProjectsTabBtn = document.getElementById('buildProjectsTabBtn');
 const loginManagerTabBtn = document.getElementById('loginManagerTabBtn');
 const radioCommandTabBtn = document.getElementById('radioCommandTabBtn');
+const economyViewState = {
+  loading: false,
+  loaded: false,
+  companies: [],
+  history: {},
+  holdings: [],
+  leaderboard: [],
+  events: [],
+  policy: { taxRate: 0.05, subsidy: 'none' },
+  inflationRate: 0,
+  nextPurchaseAt: null,
+  investor: null,
+  sectorQuery: '',
+  resourceFilter: 'all',
+  error: ''
+};
 const LOGIN_ROLE_DEFINITIONS = {
   Admin: { label: 'Globaler Admin', baseRole: 'Admin', faction: 'system', level: 'global' },
   'Republic Navy Admin': { label: 'Republic Navy Admin', baseRole: 'Republic Navy / GAR', faction: 'navy', level: 'admin' },
@@ -2883,7 +2909,8 @@ function addFactionResources(faction, delta) {
 function getCaptureRewardForPlanet(planetId) {
   const reward = createEmptyFactionResources();
   getPlanetResourceSlots(planetId).forEach((slot) => {
-    const resourceKey = getMineProjectMeta(slot)?.productionResource;
+    const building = getMineProjectMeta(slot);
+    const resourceKey = building?.category === 'military' ? building.productionResource : '';
     if (resourceKey) reward[resourceKey] += CAPTURE_REWARD_PER_SLOT;
   });
   return reward;
@@ -2895,11 +2922,19 @@ function getPlanetProductionRate(planetId) {
   getPlanetResourceSlots(planetId).forEach((slot) => {
     const building = getMineProjectMeta(slot);
     if (!building) return;
-    if (building.productionResource) base[building.productionResource] += 1;
+    if (building.category === 'military' && building.productionResource) {
+      base[building.productionResource] += 1;
+    }
+    const civilianYield = CIVILIAN_CREDIT_YIELDS[slot];
+    if (civilianYield) {
+      base.credits += civilianYield.credits * (1 + Math.min(MAX_CIVILIAN_PRODUCTION_BONUS, bonuses[civilianYield.resource] || 0));
+    }
   });
   const rate = createEmptyFactionResources();
   RESOURCE_KEYS.forEach((key) => {
-    rate[key] = Math.round(base[key] * (1 + Math.min(MAX_CIVILIAN_PRODUCTION_BONUS, bonuses[key])) * 100) / 100;
+    rate[key] = key === 'credits'
+      ? Math.round(base[key] * 100) / 100
+      : Math.round(base[key] * (1 + Math.min(MAX_CIVILIAN_PRODUCTION_BONUS, bonuses[key])) * 100) / 100;
   });
   return rate;
 }
@@ -2938,13 +2973,29 @@ function getFactionProductionRate(faction = 'GAR') {
   return totals;
 }
 
+function getEffectiveFactionProductionRate(faction = 'GAR') {
+  const rate = getFactionProductionRate(faction);
+  if (faction !== 'GAR') return rate;
+  const taxRate = Math.min(0.25, Math.max(0, Number(state.meta?.economy?.taxRate ?? 0.05)));
+  const inflationRate = Math.min(0.25, Number(getFactionResourcePool('GAR').credits || 0) / 2000000);
+  const subsidy = state.meta?.economy?.subsidy || 'none';
+  if (subsidy === 'civilian') rate.credits *= 1.10;
+  if (subsidy === 'logistics') rate.credits *= 1.05;
+  if (subsidy === 'research') rate.agrinium *= 1.10;
+  rate.credits *= taxRate * (1 - (inflationRate * 0.5));
+  RESOURCE_KEYS.forEach((key) => {
+    rate[key] = Math.round(Number(rate[key] || 0) * 100) / 100;
+  });
+  return rate;
+}
+
 function applyProductionTicks(now = Date.now()) {
   const lastTick = Number(state.lastResourceTickAt) || now;
   const elapsed = Math.max(0, now - lastTick);
   const ticks = Math.floor(elapsed / RESOURCE_PRODUCTION_TICK_MS);
   if (ticks <= 0) return 0;
   RESOURCE_FACTIONS.forEach((faction) => {
-    const rate = getFactionProductionRate(faction);
+    const rate = getEffectiveFactionProductionRate(faction);
     const delta = createEmptyFactionResources();
     RESOURCE_KEYS.forEach((key) => {
       delta[key] = rate[key] * ticks;
@@ -3554,6 +3605,9 @@ function setMainTab(tabId) {
     renderShipyardView();
   } else if (tabId === 'buildProjects') {
     renderBuildProjectsView();
+  } else if (tabId === 'economy') {
+    renderEconomyView();
+    void fetchEconomyView();
   } else if (tabId === 'loginManager') {
     renderLoginManagerView();
   } else if (tabId === 'radioCommandCenter') {
@@ -4767,6 +4821,7 @@ async function attemptLogin() {
     if (activeMainTab === 'fleetManagement') renderFleetManagementView();
     if (activeMainTab === 'shipyard') renderShipyardView();
     if (activeMainTab === 'buildProjects') renderBuildProjectsView();
+    if (activeMainTab === 'economy') renderEconomyView();
     if (activeMainTab === 'loginManager') renderLoginManagerView();
     if (activeMainTab === 'radioCommandCenter') renderRadioCommandCenterView();
     setStatus(`Login erfolgreich: ${payload.user.username} (${payload.user.role})`);
@@ -8494,6 +8549,203 @@ function renderRadioCommandCenterView() {
   `;
 }
 
+function canManageEconomyPolicy() {
+  return currentRole() === 'Admin' || currentRole() === 'Senat';
+}
+
+function formatCredits(value) {
+  return `${new Intl.NumberFormat('de-DE', { maximumFractionDigits: 2 }).format(Number(value || 0))} Cr`;
+}
+
+function getMarketCooldownRemaining() {
+  const next = economyViewState.nextPurchaseAt ? Date.parse(economyViewState.nextPurchaseAt) : 0;
+  return Math.max(0, next - Date.now());
+}
+
+function updateEconomySectorQuery(input) {
+  const cursor = input.selectionStart ?? input.value.length;
+  economyViewState.sectorQuery = input.value;
+  renderEconomyView();
+  const nextInput = document.getElementById('economySectorSearch');
+  if (!nextInput) return;
+  nextInput.focus();
+  nextInput.setSelectionRange(cursor, cursor);
+}
+
+function renderMarketSparkline(companyId) {
+  const points = (economyViewState.history?.[companyId] || []).slice(-24);
+  if (points.length < 2) return '<span class="muted">Noch keine Kursreihe</span>';
+  const values = points.map((point) => Number(point.price || 0));
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = Math.max(1, max - min);
+  const coords = values.map((value, index) => {
+    const x = (index / Math.max(1, values.length - 1)) * 220;
+    const y = 54 - (((value - min) / span) * 48);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+  const rising = values[values.length - 1] >= values[0];
+  return `<svg viewBox="0 0 220 60" style="width:220px;height:60px"><polyline fill="none" stroke="${rising ? '#55d68b' : '#ff6b6b'}" stroke-width="3" points="${coords}"/></svg>`;
+}
+
+async function fetchEconomyView() {
+  if (economyViewState.loading) return;
+  economyViewState.loading = true;
+  economyViewState.error = '';
+  if (activeMainTab === 'economy') renderEconomyView();
+  try {
+    const response = await fetch('/api/economy/market', { credentials: 'include' });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || 'Wirtschaftsdaten konnten nicht geladen werden.');
+    Object.assign(economyViewState, payload, { loaded: true });
+  } catch (error) {
+    economyViewState.error = error.message;
+  } finally {
+    economyViewState.loading = false;
+    if (activeMainTab === 'economy') renderEconomyView();
+  }
+}
+
+async function buyMarketShare(companyId) {
+  if (getMarketCooldownRemaining() > 0) return;
+  try {
+    const response = await fetch('/api/economy/market/buy', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ companyId })
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      if (payload.nextPurchaseAt) economyViewState.nextPurchaseAt = payload.nextPurchaseAt;
+      throw new Error(payload.error || 'Aktienkauf fehlgeschlagen.');
+    }
+    economyViewState.nextPurchaseAt = payload.purchase?.nextPurchaseAt || null;
+    setStatus('Eine Aktie wurde dem anonymen Portfolio hinzugefügt.');
+    await fetchEconomyView();
+  } catch (error) {
+    setStatus(error.message);
+    renderEconomyView();
+  }
+}
+
+async function saveEconomyPolicy() {
+  if (!canManageEconomyPolicy()) return;
+  const taxRate = Number(document.getElementById('economyTaxRate')?.value || 0) / 100;
+  const subsidy = document.getElementById('economySubsidy')?.value || 'none';
+  try {
+    const response = await fetch('/api/economy/policy', {
+      method: 'PUT',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ taxRate, subsidy })
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || 'Wirtschaftspolitik konnte nicht gespeichert werden.');
+    economyViewState.policy = payload.policy;
+    setStatus('Wirtschaftspolitik des Senats gespeichert.');
+    renderEconomyView();
+  } catch (error) {
+    setStatus(error.message);
+  }
+}
+
+function renderEconomyView() {
+  const pool = getFactionResourcePool('GAR');
+  const cooldown = getMarketCooldownRemaining();
+  const holdings = new Map((economyViewState.holdings || []).map((holding) => [holding.companyId, Number(holding.shares || 0)]));
+  const portfolioValue = (economyViewState.companies || []).reduce((sum, company) => (
+    sum + ((holdings.get(company.id) || 0) * Number(company.currentPrice || 0))
+  ), 0);
+  const cooldownText = cooldown > 0 ? formatDuration(cooldown) : 'Kauf verfügbar';
+  const marketQuery = String(economyViewState.sectorQuery || '').trim().toLocaleLowerCase('de');
+  const resourceFilter = economyViewState.resourceFilter || 'all';
+  const filteredCompanies = (economyViewState.companies || []).filter((company) => {
+    const matchesResource = resourceFilter === 'all' || company.resourceKey === resourceFilter;
+    const searchable = `${company.sector || ''} ${company.name || ''} ${company.symbol || ''}`.toLocaleLowerCase('de');
+    return matchesResource && (!marketQuery || searchable.includes(marketQuery));
+  });
+  const visibleCompanies = filteredCompanies.slice(0, 60);
+  workspacePanel.innerHTML = `
+    <div class="workspace-head">
+      <div>
+        <h2>Galaktische Wirtschaft & Börse</h2>
+        <p>Fraktionshaushalt, öffentlicher Aktienmarkt, Wirtschaftsberichte und Senatspolitik.</p>
+      </div>
+      <button class="mini-btn" onclick="fetchEconomyView()">Aktualisieren</button>
+    </div>
+    ${economyViewState.error ? `<div class="muted-box">${escapeLoginManagerText(economyViewState.error)}</div>` : ''}
+    <div class="workspace-grid">
+      <div class="stat-card"><strong>GAR-Haushalt</strong><span>${formatCredits(pool.credits)}</span></div>
+      <div class="stat-card"><strong>Inflation</strong><span>${(Number(economyViewState.inflationRate || 0) * 100).toFixed(1).replace('.', ',')} %</span></div>
+      <div class="stat-card"><strong>Portfolio</strong><span>${formatCredits(portfolioValue)}</span></div>
+      <div class="stat-card"><strong>Nächster Kauf</strong><span>${cooldownText}</span></div>
+    </div>
+    <div class="workspace-section">
+      <h3>Aktienmarkt</h3>
+      <p class="muted">Jeder Browser kann alle 60 Minuten genau eine Aktie erwerben. Der Kauf erhöht den Kurs leicht.</p>
+      <div class="form-grid">
+        <div class="form-row"><label>Sektor oder Holding suchen</label><input id="economySectorSearch" type="search" value="${escapeLoginManagerText(economyViewState.sectorQuery || '')}" placeholder="z. B. Corellian" oninput="updateEconomySectorQuery(this)"></div>
+        <div class="form-row"><label>Ressource</label><select onchange="economyViewState.resourceFilter=this.value; renderEconomyView()">
+          <option value="all" ${resourceFilter === 'all' ? 'selected' : ''}>Alle Ressourcen</option>
+          <option value="quadraniumErz" ${resourceFilter === 'quadraniumErz' ? 'selected' : ''}>Metalle</option>
+          <option value="agrinium" ${resourceFilter === 'agrinium' ? 'selected' : ''}>Technologien</option>
+          <option value="tibannaGas" ${resourceFilter === 'tibannaGas' ? 'selected' : ''}>Treibstoffe</option>
+          <option value="baradium" ${resourceFilter === 'baradium' ? 'selected' : ''}>Chemikalien</option>
+          <option value="kavamSalz" ${resourceFilter === 'kavamSalz' ? 'selected' : ''}>Versorgungsgüter</option>
+        </select></div>
+      </div>
+      <p class="muted">${filteredCompanies.length} Holdings gefunden${filteredCompanies.length > visibleCompanies.length ? `, die ersten ${visibleCompanies.length} werden angezeigt` : ''}.</p>
+      <div class="project-grid">
+        ${visibleCompanies.map((company) => {
+          const change = Number(company.currentPrice || 0) - Number(company.previousPrice || 0);
+          return `<div class="project-card">
+            <h4>${escapeLoginManagerText(company.name)} <span class="badge">${company.symbol}</span></h4>
+            <p><strong>${formatCredits(company.currentPrice)}</strong> <span style="color:${change >= 0 ? '#55d68b' : '#ff6b6b'}">${change >= 0 ? '+' : ''}${change.toFixed(2)}</span></p>
+            ${renderMarketSparkline(company.id)}
+            <p class="project-meta">Eigener Bestand: ${holdings.get(company.id) || 0} Aktie(n) • ${escapeLoginManagerText(company.sector || company.faction)}</p>
+            <button class="mini-btn primary" onclick="buyMarketShare('${company.id}')" ${cooldown > 0 || economyViewState.loading ? 'disabled' : ''}>Aktie kaufen</button>
+          </div>`;
+        }).join('') || '<div class="muted-box">Keine passende Holding gefunden.</div>'}
+      </div>
+    </div>
+    <div class="workspace-section workspace-columns">
+      <div class="workspace-card">
+        <h3>Öffentliche Portfolio-Rangliste</h3>
+        <table class="data-table">
+          <thead><tr><th>Rang</th><th>Anonymes Portfolio</th><th>Aktien</th><th>Wert</th></tr></thead>
+          <tbody>${(economyViewState.leaderboard || []).map((entry, index) => `<tr><td>${index + 1}</td><td>${escapeLoginManagerText(entry.alias)}</td><td>${entry.totalShares}</td><td>${formatCredits(entry.portfolioValue)}</td></tr>`).join('') || '<tr><td colspan="4">Noch keine Portfolios.</td></tr>'}</tbody>
+        </table>
+      </div>
+      <div class="workspace-card">
+        <h3>Letzte galaktische Ereignisse</h3>
+        ${(economyViewState.events || []).map((event) => `<div class="project-card"><h4>${escapeLoginManagerText(event.title)}</h4><p>${escapeLoginManagerText(event.description)}</p><small>${new Date(event.startedAt).toLocaleString('de-DE')}</small></div>`).join('') || '<div class="muted-box">Noch keine Wirtschaftsereignisse.</div>'}
+      </div>
+    </div>
+    <div class="workspace-section workspace-columns">
+      <div class="workspace-card">
+        <h3>Wirtschaftsbericht</h3>
+        <p>Zivile Produktionsgebäude erwirtschaften Bruttoumsätze. Nur der vom Senat festgelegte Steueranteil fließt als Credits in den GAR-Haushalt. Entwicklungszentren erhöhen den Bruttoumsatz auf demselben Planeten.</p>
+        <p><strong>Aktuelle Steuer:</strong> ${(Number(economyViewState.policy?.taxRate || 0) * 100).toFixed(0)} %</p>
+        <p><strong>Förderung:</strong> ${escapeLoginManagerText(economyViewState.policy?.subsidy || 'none')}</p>
+        <p class="muted">Hohe Creditbestände erhöhen die Inflation und schwächen neue Creditproduktion.</p>
+      </div>
+      ${canManageEconomyPolicy() ? `<div class="workspace-card">
+        <h3>Senatspolitik</h3>
+        <div class="form-row"><label>Wirtschaftssteuer (0–25 %)</label><input id="economyTaxRate" type="number" min="0" max="25" value="${Math.round(Number(economyViewState.policy?.taxRate || 0) * 100)}"></div>
+        <div class="form-row"><label>Wirtschaftsförderung</label><select id="economySubsidy">
+          <option value="none" ${economyViewState.policy?.subsidy === 'none' ? 'selected' : ''}>Keine Förderung</option>
+          <option value="civilian" ${economyViewState.policy?.subsidy === 'civilian' ? 'selected' : ''}>Zivile Wirtschaft</option>
+          <option value="shipbuilding" ${economyViewState.policy?.subsidy === 'shipbuilding' ? 'selected' : ''}>Schiffbau</option>
+          <option value="logistics" ${economyViewState.policy?.subsidy === 'logistics' ? 'selected' : ''}>Logistik</option>
+          <option value="research" ${economyViewState.policy?.subsidy === 'research' ? 'selected' : ''}>Forschung</option>
+        </select></div>
+        <button class="primary" onclick="saveEconomyPolicy()">Politik speichern</button>
+      </div>` : ''}
+    </div>
+  `;
+}
+
 function renderShipyardView() {
   runCampaignMaintenance();
   const role = currentRole();
@@ -8518,7 +8770,7 @@ function renderShipyardView() {
   const locations = locationChoices.filter((planet) => planet.enabled);
   const selectedLocationId = document.getElementById('shipyardLocation')?.value || locations[0]?.id || locationChoices[0]?.id || '';
   const faction = getActiveShipyardFaction();
-  const production = getFactionProductionRate(faction);
+  const production = getEffectiveFactionProductionRate(faction);
   const pool = getFactionResourcePool(faction);
   const canBuildAnything = role !== 'Viewer' && (
     role === 'Admin'
@@ -8588,7 +8840,7 @@ function renderShipyardView() {
         <button class="primary" onclick="startBuildOrder()" ${canBuildAnything && locations.length && (faction === 'KUS' || DEBUG_DISABLE_GAR_BUILD_LIMITS || canAffordCost(selectedMeta?.cost)) ? '' : 'disabled'}>${faction === 'KUS' || DEBUG_DISABLE_GAR_BUILD_LIMITS ? `${faction}-Schiff sofort erzeugen` : 'Bau starten'}</button>
       </div>
       <div class="workspace-card">
-        <h3>Stündliche Produktion</h3>
+        <h3>Stündliche Produktion / Staatseinnahmen</h3>
         <table class="data-table">
           <thead><tr><th>Rohstoff</th><th>Pro Stunde</th></tr></thead>
           <tbody>
@@ -8709,7 +8961,9 @@ function renderBuildProjectsView() {
           <strong>${selectedMineMeta?.label || 'Gebäude'}</strong>
           <p>${selectedMineMeta?.category === 'development'
             ? selectedMineMeta.description
-            : `Produziert +1 ${RESOURCE_LABELS[selectedMineMeta?.productionResource] || 'Ressource'} pro Stunde.`}</p>
+            : (selectedMineMeta?.category === 'civilian'
+              ? `Erwirtschaftet etwa ${formatCredits(CIVILIAN_CREDIT_YIELDS[selectedBuildingKey]?.credits || 0)} Bruttoumsatz pro Stunde. Nur der festgelegte Steuersatz fließt in den GAR-Haushalt.`
+              : `Produziert +1 ${RESOURCE_LABELS[selectedMineMeta?.productionResource] || 'Ressource'} pro Stunde.`)}</p>
           <strong>Kosten</strong>
           <p>${RESOURCE_KEYS.map((key) => `${RESOURCE_LABELS[key]}: ${selectedMineMeta?.cost?.[key] || 0}`).join(' • ')}</p>
           <p><strong>Bauzeit:</strong> ${MINE_BUILD_DURATION_HOURS}h</p>
@@ -9134,6 +9388,7 @@ roleSelect.onchange = () => {
   if (activeMainTab === 'fleetManagement') renderFleetManagementView();
   if (activeMainTab === 'shipyard') renderShipyardView();
   if (activeMainTab === 'buildProjects') renderBuildProjectsView();
+  if (activeMainTab === 'economy') renderEconomyView();
   if (activeMainTab === 'loginManager') renderLoginManagerView();
   if (activeMainTab === 'radioCommandCenter') renderRadioCommandCenterView();
 };
@@ -9307,6 +9562,10 @@ window.saveRadioPermission = saveRadioPermission;
 window.deleteRadioPermission = deleteRadioPermission;
 window.pollDiscordRadioCommands = pollDiscordRadioCommands;
 window.setMainTab = setMainTab;
+window.fetchEconomyView = fetchEconomyView;
+window.buyMarketShare = buyMarketShare;
+window.updateEconomySectorQuery = updateEconomySectorQuery;
+window.saveEconomyPolicy = saveEconomyPolicy;
 
 ensureImportantCampaignPlanets();
 rebuildIndexes();

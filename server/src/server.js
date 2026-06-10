@@ -16,7 +16,11 @@ import {
   listRadioCommandLogs,
   listRadioCommandPermissions,
   listUsers,
+  purchaseMarketShare,
   readCampaignState,
+  readMarketSnapshot,
+  runMarketTick,
+  updateEconomyPolicy,
   updateRadioCommandPermission,
   updateUser,
   writeCampaignState
@@ -51,18 +55,21 @@ const discordRadioListener = createDiscordRadioListener({
 const sessions = new Map();
 const COOKIE_NAME = 'gcb_session';
 const PORT = Number(process.env.PORT || 443);
-const RESOURCE_KEYS = ['quadraniumErz', 'agrinium', 'tibannaGas', 'baradium', 'kavamSalz'];
+const RAW_RESOURCE_KEYS = ['quadraniumErz', 'agrinium', 'tibannaGas', 'baradium', 'kavamSalz'];
+const RESOURCE_KEYS = [...RAW_RESOURCE_KEYS, 'credits'];
 const INFRASTRUCTURE_PRODUCTION_RESOURCES = {
   quadraniumErz: 'quadraniumErz',
   agrinium: 'agrinium',
   tibannaGas: 'tibannaGas',
   baradium: 'baradium',
-  kavamSalz: 'kavamSalz',
-  civilian_quadraniumErz: 'quadraniumErz',
-  civilian_agrinium: 'agrinium',
-  civilian_tibannaGas: 'tibannaGas',
-  civilian_baradium: 'baradium',
-  civilian_kavamSalz: 'kavamSalz'
+  kavamSalz: 'kavamSalz'
+};
+const CIVILIAN_CREDIT_YIELDS = {
+  civilian_quadraniumErz: { resource: 'quadraniumErz', credits: 220 },
+  civilian_agrinium: { resource: 'agrinium', credits: 320 },
+  civilian_tibannaGas: { resource: 'tibannaGas', credits: 260 },
+  civilian_baradium: { resource: 'baradium', credits: 240 },
+  civilian_kavamSalz: { resource: 'kavamSalz', credits: 180 }
 };
 const CIVILIAN_INFRASTRUCTURE_BONUSES = {
   civil_trade_center: { quadraniumErz: 0.03, agrinium: 0.03, tibannaGas: 0.03, baradium: 0.03, kavamSalz: 0.03 },
@@ -73,6 +80,7 @@ const CIVILIAN_INFRASTRUCTURE_BONUSES = {
 };
 const INFRASTRUCTURE_KEYS = [
   ...Object.keys(INFRASTRUCTURE_PRODUCTION_RESOURCES),
+  ...Object.keys(CIVILIAN_CREDIT_YIELDS),
   ...Object.keys(CIVILIAN_INFRASTRUCTURE_BONUSES)
 ];
 const MAX_CIVILIAN_PRODUCTION_BONUS = 0.30;
@@ -383,17 +391,22 @@ function getFactionProductionRateFromState(state, faction = 'GAR') {
     if (planet?.owner !== faction) continue;
     const base = createEmptyFactionResources();
     const bonuses = createEmptyFactionResources();
+    const civilianProduction = [];
     for (const slot of getPlanetResourceSlotsFromState(state, planet.id)) {
       if (!slot) continue;
       const productionResource = INFRASTRUCTURE_PRODUCTION_RESOURCES[slot];
       if (productionResource) base[productionResource] += 1;
+      if (CIVILIAN_CREDIT_YIELDS[slot]) civilianProduction.push(CIVILIAN_CREDIT_YIELDS[slot]);
       for (const key of RESOURCE_KEYS) {
         bonuses[key] += Number(CIVILIAN_INFRASTRUCTURE_BONUSES[slot]?.[key] || 0);
       }
     }
-    for (const key of RESOURCE_KEYS) {
+    for (const key of RAW_RESOURCE_KEYS) {
       totals[key] += base[key] * (1 + Math.min(MAX_CIVILIAN_PRODUCTION_BONUS, bonuses[key]));
     }
+    totals.credits += civilianProduction.reduce((sum, entry) => (
+      sum + (entry.credits * (1 + Math.min(MAX_CIVILIAN_PRODUCTION_BONUS, bonuses[entry.resource] || 0)))
+    ), 0);
   }
   for (const key of RESOURCE_KEYS) {
     totals[key] = Math.round(totals[key] * 100) / 100;
@@ -441,6 +454,14 @@ function applyServerProductionTicks(previousState, now = Date.now()) {
   }
   RESOURCE_FACTIONS.forEach((faction) => {
     const rate = getFactionProductionRateFromState(nextState, faction);
+    const policy = readMarketSnapshot(db).policy;
+    const currentCredits = Number(nextState.resources[faction].credits || 0);
+    const inflationRate = faction === 'GAR' ? Math.min(0.25, currentCredits / 2000000) : 0;
+    const taxRate = faction === 'GAR' ? Math.min(0.25, Math.max(0, Number(policy.taxRate || 0))) : 1;
+    if (faction === 'GAR' && policy.subsidy === 'civilian') rate.credits *= 1.10;
+    if (faction === 'GAR' && policy.subsidy === 'logistics') rate.credits *= 1.05;
+    if (faction === 'GAR' && policy.subsidy === 'research') rate.agrinium *= 1.10;
+    rate.credits = rate.credits * taxRate * (1 - (inflationRate * 0.5));
     for (const key of RESOURCE_KEYS) {
       nextState.resources[faction][key] = Math.round((
         Number(nextState.resources[faction][key] || 0) + (Number(rate[key] || 0) * ticks)
@@ -448,6 +469,13 @@ function applyServerProductionTicks(previousState, now = Date.now()) {
     }
   });
   nextState.lastResourceTickAt = lastTick + (ticks * RESOURCE_PRODUCTION_TICK_MS);
+  nextState.meta = nextState.meta || {};
+  nextState.meta.economy = {
+    inflationRate: Math.min(0.25, Number(nextState.resources.GAR?.credits || 0) / 2000000),
+    taxRate: Number(readMarketSnapshot(db).policy.taxRate || 0),
+    subsidy: readMarketSnapshot(db).policy.subsidy || 'none',
+    updatedAt: new Date(now).toISOString()
+  };
   return { changed: true, ticks, state: nextState };
 }
 
@@ -566,6 +594,29 @@ function requireRadioPermissionManager(req, res, next) {
     return res.status(403).json({ error: 'Forbidden' });
   }
   next();
+}
+
+function requireSenateEconomyManager(req, res, next) {
+  if (!req.user || !['Admin', 'Senat', 'Galaktischer Senats Admin'].includes(req.user.role)) {
+    return res.status(403).json({ error: 'Nur Senat oder globaler Admin dürfen die Wirtschaftspolitik ändern.' });
+  }
+  next();
+}
+
+function getAnonymousInvestorId(req, res) {
+  const cookieName = 'gcb_market_investor';
+  const existing = String(req.cookies?.[cookieName] || '');
+  const investorId = /^[0-9a-f-]{36}$/i.test(existing) ? existing : crypto.randomUUID();
+  if (investorId !== existing) {
+    res.cookie(cookieName, investorId, {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: req.secure,
+      maxAge: 365 * 24 * 60 * 60 * 1000,
+      path: '/'
+    });
+  }
+  return investorId;
 }
 
 function sanitizeAdminRole(rawRole) {
@@ -808,6 +859,42 @@ app.get('/api/auth/me', (req, res) => {
   res.json({
     user: session || { id: null, username: '', role: 'Viewer', canCoordinate4thFleet: false, senatePosition: '' }
   });
+});
+
+app.get('/api/economy/market', (req, res) => {
+  const investorId = getAnonymousInvestorId(req, res);
+  const { state } = readCampaignState(db);
+  const inflationRate = Math.min(0.25, Number(state.resources?.GAR?.credits || 0) / 2000000);
+  runMarketTick(db, inflationRate);
+  const snapshot = readMarketSnapshot(db, investorId);
+  const lastPurchaseAt = snapshot.investor?.last_purchase_at || null;
+  res.json({
+    ...snapshot,
+    inflationRate,
+    nextPurchaseAt: lastPurchaseAt
+      ? new Date(Date.parse(lastPurchaseAt) + (60 * 60 * 1000)).toISOString()
+      : null
+  });
+});
+
+app.post('/api/economy/market/buy', (req, res) => {
+  const investorId = getAnonymousInvestorId(req, res);
+  try {
+    const purchase = purchaseMarketShare(db, investorId, String(req.body?.companyId || ''));
+    res.json({ ok: true, purchase, market: readMarketSnapshot(db, investorId) });
+  } catch (error) {
+    res.status(error.status || 500).json({
+      error: error.message || 'Aktienkauf fehlgeschlagen.',
+      nextPurchaseAt: error.nextPurchaseAt || null
+    });
+  }
+});
+
+app.put('/api/economy/policy', requireAuth, requireSenateEconomyManager, (req, res) => {
+  const taxRate = Math.min(0.25, Math.max(0, Number(req.body?.taxRate || 0)));
+  const allowedSubsidies = ['none', 'civilian', 'shipbuilding', 'logistics', 'research'];
+  const subsidy = allowedSubsidies.includes(req.body?.subsidy) ? req.body.subsidy : 'none';
+  res.json({ ok: true, policy: updateEconomyPolicy(db, { taxRate, subsidy }) });
 });
 
 app.post('/api/auth/login', async (req, res) => {
@@ -1121,6 +1208,8 @@ io.on('connection', (socket) => {
 
 function runServerCampaignMaintenance() {
   const { state, revision } = readCampaignState(db);
+  const inflationRate = Math.min(0.25, Number(state.resources?.GAR?.credits || 0) / 2000000);
+  runMarketTick(db, inflationRate);
   const resetResult = applyOneTimeResourceReset(state);
   const productionResult = applyServerProductionTicks(resetResult.state);
   if (!resetResult.changed && !productionResult.changed) return;
