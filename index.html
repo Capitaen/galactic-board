@@ -42,12 +42,12 @@ body { margin:0; background:#05070b; color:var(--text); font-family: Inter, Sego
 .schematic-ring { fill:none; stroke:rgba(123,143,165,.3); stroke-width:2.5; }
 .region-outline { fill:rgba(247,231,104,.06); stroke:rgba(255,232,92,.72); stroke-width:2.8; }
 .sector-outline { fill:rgba(121,163,212,.06); stroke:rgba(170,214,255,.78); stroke-width:2; }
-.manual-sector-shape { fill:rgba(188,48,57,.08); stroke:rgba(255,93,93,.9); stroke-width:2; }
-.manual-sector-shape.hovered { fill:rgba(214,78,90,.14); stroke:rgba(255,170,170,.98); stroke-width:2.4; }
-.manual-sector-label { fill:rgba(255,214,214,.96); font-size:15px; font-weight:700; text-anchor:middle; stroke:rgba(0,0,0,.55); stroke-width:3px; paint-order:stroke fill; pointer-events:none; }
-.manual-sector-draft-line { fill:none; stroke:rgba(255,74,74,.98); stroke-width:2.2; stroke-dasharray:8 6; }
-.manual-sector-ghost-line { fill:none; stroke:rgba(255,168,168,.92); stroke-width:1.8; stroke-dasharray:5 5; pointer-events:none; }
-.manual-sector-draft-point { fill:rgba(255,74,74,.98); stroke:rgba(255,231,231,.96); stroke-width:1.4; }
+.manual-sector-shape { fill:rgba(47,202,255,.08); stroke:rgba(85,218,255,.9); stroke-width:2; }
+.manual-sector-shape.hovered { fill:rgba(47,202,255,.16); stroke:rgba(146,237,255,.98); stroke-width:2.4; }
+.manual-sector-label { fill:rgba(204,247,255,.96); font-size:15px; font-weight:700; text-anchor:middle; stroke:rgba(0,0,0,.55); stroke-width:3px; paint-order:stroke fill; pointer-events:none; }
+.manual-sector-draft-line { fill:none; stroke:rgba(61,216,255,.98); stroke-width:2.2; stroke-dasharray:8 6; }
+.manual-sector-ghost-line { fill:none; stroke:rgba(146,237,255,.92); stroke-width:1.8; stroke-dasharray:5 5; pointer-events:none; }
+.manual-sector-draft-point { fill:rgba(61,216,255,.98); stroke:rgba(229,252,255,.96); stroke-width:1.4; }
 .tactical-hyperlane { stroke:rgba(255,145,32,.98); stroke-width:4; stroke-linecap:round; stroke-dasharray:10 8; fill:none; }
 .tactical-route-highlight { fill:none; stroke-linecap:round; stroke-linejoin:round; pointer-events:none; }
 .tactical-route-highlight.hover { stroke:rgba(120,220,255,.92); stroke-width:8; stroke-dasharray:10 8; }
@@ -176,6 +176,14 @@ textarea { min-height:82px; resize:vertical; }
 .trade-quantity output { min-width:42px; text-align:right; font-weight:700; }
 .market-detail-chart { width:100%; min-height:320px; border-radius:14px; background:rgba(7,11,18,.62); border:1px solid rgba(255,255,255,.08); padding:12px; }
 .market-detail-chart svg { display:block; width:100%; height:320px; }
+.market-range-controls { display:flex; flex-wrap:wrap; gap:8px; margin:0 0 10px; }
+.market-range-controls .mini-btn.active { background:#315dff; border-color:#73e0ff; color:#fff; }
+.market-axis-label { fill:rgba(225,237,255,.78); font-size:13px; font-weight:700; }
+.market-axis-tick { fill:rgba(185,196,214,.82); font-size:11px; }
+.market-order-list { margin-top:4px; }
+.market-order-list .data-table td:last-child { font-weight:700; }
+.market-change-positive { color:#55d68b; }
+.market-change-negative { color:#ff6b6b; }
 .project-progress { width:100%; height:10px; border-radius:999px; background:rgba(255,255,255,.08); overflow:hidden; margin:10px 0 6px; }
 .project-progress-fill { height:100%; border-radius:999px; background:linear-gradient(90deg, #4f86ff 0%, #73e0ff 100%); }
 .project-progress-fill.mine { background:linear-gradient(90deg, #f0d44b 0%, #f39a2d 100%); }
@@ -887,6 +895,7 @@ const economyViewState = {
   topLastHour: [],
   history: {},
   holdings: [],
+  purchaseOrders: [],
   leaderboard: [],
   events: [],
   policy: { taxRate: 0.05, subsidy: 'none' },
@@ -900,6 +909,7 @@ const economyViewState = {
   canPurchase: true,
   activeSection: 'overview',
   selectedCompanyId: '',
+  marketRange: 'today',
   sectorQuery: '',
   resourceFilter: 'all',
   error: ''
@@ -8775,6 +8785,62 @@ function formatCredits(value) {
   return `${new Intl.NumberFormat('de-DE', { maximumFractionDigits: 2 }).format(Number(value || 0))} Cr`;
 }
 
+function formatSignedCredits(value) {
+  const numeric = Number(value || 0);
+  return `${numeric >= 0 ? '+' : ''}${formatCredits(numeric)}`;
+}
+
+function formatSignedPercent(value) {
+  const numeric = Number(value || 0);
+  return `${numeric >= 0 ? '+' : ''}${numeric.toFixed(2).replace('.', ',')} %`;
+}
+
+function formatMarketDateTime(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '-';
+  return date.toLocaleString('de-DE', {
+    day: '2-digit',
+    month: '2-digit',
+    year: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+}
+
+const MARKET_RANGE_OPTIONS = {
+  today: { label: 'Heute', ms: 24 * 60 * 60 * 1000 },
+  week: { label: '1 Woche', ms: 7 * 24 * 60 * 60 * 1000 },
+  month: { label: '1 Monat', ms: 31 * 24 * 60 * 60 * 1000 },
+  sixMonths: { label: '6 Monate', ms: 183 * 24 * 60 * 60 * 1000 }
+};
+
+function getMarketRangeCutoff(rangeKey = economyViewState.marketRange) {
+  const option = MARKET_RANGE_OPTIONS[rangeKey] || MARKET_RANGE_OPTIONS.today;
+  return Date.now() - option.ms;
+}
+
+function formatMarketAxisDate(value, rangeKey = economyViewState.marketRange) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '-';
+  if (rangeKey === 'today') {
+    return date.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+  }
+  return date.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+}
+
+function setMarketRange(rangeKey) {
+  economyViewState.marketRange = MARKET_RANGE_OPTIONS[rangeKey] ? rangeKey : 'today';
+  renderEconomyView();
+}
+
+function renderMarketRangeControls() {
+  return `<div class="market-range-controls" role="group" aria-label="Zeitraum">
+    ${Object.entries(MARKET_RANGE_OPTIONS).map(([key, option]) => (
+      `<button class="mini-btn ${economyViewState.marketRange === key ? 'active' : ''}" onclick="setMarketRange('${key}')">${option.label}</button>`
+    )).join('')}
+  </div>`;
+}
+
 function getMarketCooldownRemaining() {
   const next = economyViewState.nextPurchaseAt ? Date.parse(economyViewState.nextPurchaseAt) : 0;
   return Math.max(0, next - Date.now());
@@ -8808,16 +8874,73 @@ function renderMarketSparkline(companyId) {
 
 function renderMarketDetailChart(companyId) {
   const company = economyViewState.companies.find((entry) => entry.id === companyId);
-  const values = (economyViewState.history?.[companyId] || []).slice(-192).map((point) => Number(point.price || 0)).filter(Number.isFinite);
-  if (company) values.push(Number(company.currentPrice || 0));
-  if (values.length < 2) return '<div class="muted-box">Noch nicht genügend Kursdaten für einen Verlauf.</div>';
+  const rangeKey = economyViewState.marketRange || 'today';
+  const cutoff = getMarketRangeCutoff(rangeKey);
+  const points = (economyViewState.history?.[companyId] || [])
+    .map((point) => ({
+      price: Number(point.price || 0),
+      recordedAt: point.recordedAt,
+      time: Date.parse(point.recordedAt)
+    }))
+    .filter((point) => Number.isFinite(point.price) && Number.isFinite(point.time) && point.time >= cutoff);
+  if (company) points.push({ price: Number(company.currentPrice || 0), recordedAt: new Date().toISOString(), time: Date.now() });
+  if (points.length < 2) return '<div class="muted-box">Noch nicht genügend Kursdaten für diesen Zeitraum.</div>';
+  const values = points.map((point) => point.price);
   const min = Math.min(...values), max = Math.max(...values), span = Math.max(1, max - min);
-  const coords = values.map((value, index) => `${(28 + ((index / Math.max(1, values.length - 1)) * 844)).toFixed(1)},${(286 - (((value - min) / span) * 250)).toFixed(1)}`).join(' ');
+  const minTime = Math.min(...points.map((point) => point.time));
+  const maxTime = Math.max(...points.map((point) => point.time));
+  const timeSpan = Math.max(1, maxTime - minTime);
+  const coords = points.map((point) => `${(70 + (((point.time - minTime) / timeSpan) * 790)).toFixed(1)},${(268 - (((point.price - min) / span) * 222)).toFixed(1)}`).join(' ');
   const rising = values[values.length - 1] >= values[0];
+  const lowLabel = formatCredits(min);
+  const midLabel = formatCredits(min + (span / 2));
+  const highLabel = formatCredits(max);
+  const startLabel = formatMarketAxisDate(minTime, rangeKey);
+  const endLabel = formatMarketAxisDate(maxTime, rangeKey);
   return `<div class="market-detail-chart"><svg viewBox="0 0 900 320" preserveAspectRatio="none" aria-label="Kursverlauf">
-    <line x1="28" y1="36" x2="872" y2="36" stroke="rgba(255,255,255,.08)"/><line x1="28" y1="161" x2="872" y2="161" stroke="rgba(255,255,255,.08)"/><line x1="28" y1="286" x2="872" y2="286" stroke="rgba(255,255,255,.08)"/>
+    <line x1="70" y1="46" x2="860" y2="46" stroke="rgba(255,255,255,.08)"/><line x1="70" y1="157" x2="860" y2="157" stroke="rgba(255,255,255,.08)"/><line x1="70" y1="268" x2="860" y2="268" stroke="rgba(255,255,255,.08)"/>
+    <line x1="70" y1="46" x2="70" y2="268" stroke="rgba(255,255,255,.18)"/><line x1="70" y1="268" x2="860" y2="268" stroke="rgba(255,255,255,.18)"/>
+    <text x="18" y="168" class="market-axis-label" transform="rotate(-90 18 168)">Kurs (Credits)</text>
+    <text x="442" y="314" text-anchor="middle" class="market-axis-label">Zeit</text>
+    <text x="62" y="50" text-anchor="end" class="market-axis-tick">${highLabel}</text>
+    <text x="62" y="161" text-anchor="end" class="market-axis-tick">${midLabel}</text>
+    <text x="62" y="272" text-anchor="end" class="market-axis-tick">${lowLabel}</text>
+    <text x="70" y="292" text-anchor="middle" class="market-axis-tick">${startLabel}</text>
+    <text x="860" y="292" text-anchor="middle" class="market-axis-tick">${endLabel}</text>
     <polyline fill="none" stroke="${rising ? '#55d68b' : '#ff6b6b'}" stroke-width="4" points="${coords}"/>
   </svg></div>`;
+}
+
+function renderMarketOrderList(company) {
+  if (!economyViewState.portfolioEnabled) return '';
+  const orders = (economyViewState.purchaseOrders || []).filter((order) => order.companyId === company.id);
+  if (!orders.length) {
+    return `<div class="workspace-section market-order-list">
+      <h3>Auftragsliste</h3>
+      <div class="muted-box">Noch keine Kaufaufträge für diese Aktie.</div>
+    </div>`;
+  }
+  const currentPrice = Number(company.currentPrice || 0);
+  return `<div class="workspace-section market-order-list">
+    <h3>Auftragsliste</h3>
+    <table class="data-table">
+      <thead><tr><th>Datum & Uhrzeit</th><th>Menge</th><th>Kaufwert</th><th>Veränderung</th></tr></thead>
+      <tbody>${orders.map((order) => {
+        const quantity = Number(order.quantity || 0);
+        const totalValue = Number(order.totalValue || 0);
+        const currentValue = currentPrice * quantity;
+        const changeCredits = Math.round((currentValue - totalValue) * 100) / 100;
+        const changePercent = totalValue > 0 ? (changeCredits / totalValue) * 100 : 0;
+        const changeClass = changeCredits >= 0 ? 'market-change-positive' : 'market-change-negative';
+        return `<tr>
+          <td>${formatMarketDateTime(order.createdAt)}</td>
+          <td>${quantity}</td>
+          <td>${formatCredits(totalValue)}</td>
+          <td class="${changeClass}">${formatSignedPercent(changePercent)} / ${formatSignedCredits(changeCredits)}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>
+  </div>`;
 }
 
 function updateMarketQuantity(kind, companyId, value) {
@@ -8828,11 +8951,12 @@ function updateMarketQuantity(kind, companyId, value) {
   if (output) output.value = range?.value || String(quantity);
 }
 
-async function fetchEconomyView() {
+async function fetchEconomyView(options = {}) {
   if (economyViewState.loading) return;
+  const renderLoading = options.renderLoading !== false;
   economyViewState.loading = true;
   economyViewState.error = '';
-  if (activeMainTab === 'economy') renderEconomyView();
+  if (renderLoading && activeMainTab === 'economy') renderEconomyView();
   try {
     const response = await fetch('/api/economy/market', { credentials: 'include' });
     const payload = await response.json();
@@ -8856,7 +8980,7 @@ async function buyMarketShare(companyId) {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ companyId })
+      body: JSON.stringify({ companyId, quantity })
     });
     const payload = await response.json();
     if (!response.ok) {
@@ -8962,9 +9086,14 @@ function renderEconomyView() {
       return;
     }
     const shares = holdings.get(company.id) || 0;
-    const prices = (economyViewState.history?.[company.id] || []).map((point) => Number(point.price || 0)).filter(Number.isFinite);
+    const rangeCutoff = getMarketRangeCutoff();
+    const prices = (economyViewState.history?.[company.id] || [])
+      .filter((point) => Date.parse(point.recordedAt) >= rangeCutoff)
+      .map((point) => Number(point.price || 0))
+      .filter(Number.isFinite);
     const buyMax = Math.min(10000, Math.floor(portfolioBalance / Math.max(0.01, Number(company.currentPrice || 0))));
     const change = Number(company.currentPrice || 0) - Number(company.previousPrice || 0);
+    const rangeLabel = MARKET_RANGE_OPTIONS[economyViewState.marketRange || 'today']?.label || 'Heute';
     workspacePanel.innerHTML = `
       <div class="workspace-head">
         <div><h2>${escapeLoginManagerText(company.name)} <span class="badge">${escapeLoginManagerText(company.symbol)}</span></h2>
@@ -8974,12 +9103,12 @@ function renderEconomyView() {
       <div class="workspace-grid">
         <div class="stat-card"><strong>Aktueller Kurs</strong><span>${formatCredits(company.currentPrice)}</span></div>
         <div class="stat-card"><strong>Letzte Änderung</strong><span style="color:${change >= 0 ? '#55d68b' : '#ff6b6b'}">${change >= 0 ? '+' : ''}${formatCredits(change)}</span></div>
-        <div class="stat-card"><strong>48h-Hoch</strong><span>${formatCredits(prices.length ? Math.max(...prices) : company.currentPrice)}</span></div>
-        <div class="stat-card"><strong>48h-Tief</strong><span>${formatCredits(prices.length ? Math.min(...prices) : company.currentPrice)}</span></div>
+        <div class="stat-card"><strong>${escapeLoginManagerText(rangeLabel)} Hoch</strong><span>${formatCredits(prices.length ? Math.max(...prices) : company.currentPrice)}</span></div>
+        <div class="stat-card"><strong>${escapeLoginManagerText(rangeLabel)} Tief</strong><span>${formatCredits(prices.length ? Math.min(...prices) : company.currentPrice)}</span></div>
         <div class="stat-card"><strong>Eigener Bestand</strong><span>${shares}</span></div>
         <div class="stat-card"><strong>Bestandswert</strong><span>${formatCredits(shares * Number(company.currentPrice || 0))}</span></div>
       </div>
-      <div class="workspace-section"><h3>Kursverlauf der letzten 48 Stunden</h3>${renderMarketDetailChart(company.id)}</div>
+      <div class="workspace-section"><h3>Kursverlauf</h3>${renderMarketRangeControls()}${renderMarketDetailChart(company.id)}</div>
       <div class="workspace-section workspace-columns">
         <div class="workspace-card"><h3>Kaufen</h3><p>Verfügbar: ${formatCredits(portfolioBalance)} • Maximal ${buyMax} Aktie(n)</p>
           ${economyViewState.portfolioEnabled && buyMax > 0 ? `<div class="trade-quantity"><input id="buyQuantity_${company.id}" type="range" min="1" max="${buyMax}" value="1" oninput="updateMarketQuantity('buy','${company.id}',this.value)"><output id="buyQuantityOutput_${company.id}">1</output></div>` : ''}
@@ -8989,7 +9118,8 @@ function renderEconomyView() {
           ${economyViewState.portfolioEnabled && shares > 0 ? `<div class="trade-quantity"><input id="sellQuantity_${company.id}" type="range" min="1" max="${shares}" value="1" oninput="updateMarketQuantity('sell','${company.id}',this.value)"><output id="sellQuantityOutput_${company.id}">1</output></div>` : ''}
           <button class="mini-btn danger" onclick="sellMarketShare('${company.id}')" ${!economyViewState.portfolioEnabled || shares < 1 ? 'disabled' : ''}>Ausgewählte Menge verkaufen</button>
         </div>
-      </div>`;
+      </div>
+      ${renderMarketOrderList(company)}`;
     return;
   }
   if (economyViewState.activeSection === 'trade') {
@@ -9899,6 +10029,10 @@ window.setInterval(() => {
   if (activeMainTab === 'shipyard') renderShipyardView();
   if (activeMainTab === 'fleetManagement') renderFleetManagementView();
 }, 60000);
+window.setInterval(() => {
+  if (document.hidden || activeMainTab !== 'economy') return;
+  void fetchEconomyView({ renderLoading: false });
+}, 15000);
 window.savePlanet = savePlanet;
 window.saveSector = saveSector;
 window.deleteManualSector = deleteManualSector;
@@ -9960,6 +10094,7 @@ window.buyMarketShare = buyMarketShare;
 window.sellMarketShare = sellMarketShare;
 window.setEconomySection = setEconomySection;
 window.openMarketCompanyOverview = openMarketCompanyOverview;
+window.setMarketRange = setMarketRange;
 window.updateMarketQuantity = updateMarketQuantity;
 window.updateEconomySectorQuery = updateEconomySectorQuery;
 window.saveEconomyPolicy = saveEconomyPolicy;

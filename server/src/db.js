@@ -103,6 +103,16 @@ export function createDb(projectRoot) {
       PRIMARY KEY (investor_id, company_id)
     );
 
+    CREATE TABLE IF NOT EXISTS market_orders (
+      id TEXT PRIMARY KEY,
+      investor_id TEXT NOT NULL,
+      company_id TEXT NOT NULL,
+      quantity INTEGER NOT NULL,
+      unit_price REAL NOT NULL,
+      total_value REAL NOT NULL,
+      created_at TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS market_history (
       id TEXT PRIMARY KEY,
       company_id TEXT NOT NULL,
@@ -637,12 +647,13 @@ export function readMarketSnapshot(db, investorId = '', userId = '') {
       current_price AS currentPrice, previous_price AS previousPrice, updated_at AS updatedAt
     FROM market_companies ORDER BY symbol
   `).all();
+  const historyCutoff = new Date(Date.now() - (183 * 24 * 60 * 60 * 1000)).toISOString();
   const historyRows = db.prepare(`
     SELECT company_id AS companyId, price, recorded_at AS recordedAt
     FROM market_history
-    WHERE recorded_at >= datetime('now', '-48 hours')
+    WHERE recorded_at >= ?
     ORDER BY recorded_at
-  `).all();
+  `).all(historyCutoff);
   const history = {};
   historyRows.forEach((row) => {
     if (!history[row.companyId]) history[row.companyId] = [];
@@ -672,6 +683,13 @@ export function readMarketSnapshot(db, investorId = '', userId = '') {
     FROM market_holdings WHERE investor_id = ?
   `).all(investorId) : [];
   const investor = investorId ? getOrCreateMarketInvestor(db, investorId, userId) : null;
+  const purchaseOrders = investorId ? db.prepare(`
+    SELECT id, company_id AS companyId, quantity, unit_price AS unitPrice,
+      total_value AS totalValue, created_at AS createdAt
+    FROM market_orders
+    WHERE investor_id = ?
+    ORDER BY created_at ASC
+  `).all(investorId) : [];
   const leaderboard = db.prepare(`
     SELECT i.alias,
       ROUND(i.balance + COALESCE(SUM(h.shares * c.current_price), 0), 2) AS portfolioValue,
@@ -699,7 +717,7 @@ export function readMarketSnapshot(db, investorId = '', userId = '') {
     SELECT faction, credits, updated_at AS updatedAt
     FROM faction_accounts ORDER BY faction
   `).all().map((account) => [account.faction, account]));
-  return { companies, history, topLastHour, holdings, investor, leaderboard, events, policy, factionAccounts };
+  return { companies, history, topLastHour, holdings, purchaseOrders, investor, leaderboard, events, policy, factionAccounts };
 }
 
 export function purchaseMarketShare(db, investorId, companyId, now = Date.now()) {
@@ -779,6 +797,10 @@ export function purchaseMarketDemand(db, { investorId, userId, consumerKey, comp
         SET balance = balance - ?, last_purchase_at = ?
         WHERE id = ?
       `).run(totalCost, purchasedAt, investorId);
+      db.prepare(`
+        INSERT INTO market_orders (id, investor_id, company_id, quantity, unit_price, total_value, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(crypto.randomUUID(), investorId, companyId, effectiveQuantity, company.current_price, totalCost, purchasedAt);
     } else {
       purchaseType = 'consumer';
       const activity = db.prepare(`
@@ -916,7 +938,7 @@ export function runMarketTick(db, inflationRate = 0, now = Date.now()) {
   const companies = db.prepare('SELECT * FROM market_companies').all();
   if (!companies.length) return false;
   const latestUpdate = Math.max(...companies.map((company) => Date.parse(company.updated_at) || 0));
-  if (now - latestUpdate < 15 * 60 * 1000) return false;
+  if (now - latestUpdate < 15 * 1000) return false;
   const activeEvent = db.prepare(`
     SELECT * FROM market_events WHERE ends_at > ? ORDER BY started_at DESC LIMIT 1
   `).get(new Date(now).toISOString());

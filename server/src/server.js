@@ -1314,7 +1314,7 @@ setInterval(() => {
   } catch (error) {
     console.warn('Server maintenance tick failed', error);
   }
-}, 60000);
+}, 15000);
 
 process.on('SIGINT', () => discordRadioListener.stop());
 process.on('SIGTERM', () => discordRadioListener.stop());
