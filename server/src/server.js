@@ -88,6 +88,12 @@ const LOGIN_ROLE_DEFINITIONS = {
   Senat: { faction: 'senate', level: 'member' },
   'Eventleiter / KUS Admin': { faction: 'event', level: 'admin' },
   'Eventleiter / KUS': { faction: 'event', level: 'member' },
+  'Black Sun Syndikat Admin': { faction: 'blackSun', level: 'faction-admin' },
+  'Black Sun Syndikat': { faction: 'blackSun', level: 'member' },
+  'Pyke-Syndikat Admin': { faction: 'pyke', level: 'faction-admin' },
+  'Pyke-Syndikat': { faction: 'pyke', level: 'member' },
+  'Huttenkartell Admin': { faction: 'hutts', level: 'faction-admin' },
+  Huttenkartell: { faction: 'hutts', level: 'member' },
   Viewer: { faction: 'system', level: 'viewer' }
 };
 const LOGIN_ROLES = Object.keys(LOGIN_ROLE_DEFINITIONS);
@@ -299,7 +305,7 @@ function getSession(req) {
 }
 
 function canManageLogins(role) {
-  return ['global', 'admin'].includes(LOGIN_ROLE_DEFINITIONS[role]?.level);
+  return ['global', 'admin', 'faction-admin'].includes(LOGIN_ROLE_DEFINITIONS[role]?.level);
 }
 
 function canManageRadioPermissions(role) {
@@ -573,7 +579,8 @@ function canActorAssignRole(actor, role) {
   if (!actorDefinition || !roleDefinition) return false;
   if (actorDefinition.level === 'global') return true;
   if (actorDefinition.faction !== roleDefinition.faction) return false;
-  return actorDefinition.level === 'admin' && ['admin', 'member'].includes(roleDefinition.level);
+  return ['admin', 'faction-admin'].includes(actorDefinition.level)
+    && ['admin', 'faction-admin', 'member'].includes(roleDefinition.level);
 }
 
 function canActorManageUser(actor, targetUser) {

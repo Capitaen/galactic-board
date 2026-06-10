@@ -467,6 +467,12 @@ a { color:#8bc7ff; }
       <option>Republic Navy / GAR</option>
       <option>Galaktischer Senats Admin</option>
       <option>Senat</option>
+      <option>Black Sun Syndikat Admin</option>
+      <option>Black Sun Syndikat</option>
+      <option>Pyke-Syndikat Admin</option>
+      <option>Pyke-Syndikat</option>
+      <option>Huttenkartell Admin</option>
+      <option>Huttenkartell</option>
       <option selected>Viewer</option>
     </select>
     <div class="topbar-auth">
@@ -854,13 +860,22 @@ const LOGIN_ROLE_DEFINITIONS = {
   Senat: { label: 'Galaktischer Senat', baseRole: 'Senat', faction: 'senate', level: 'member' },
   'Eventleiter / KUS Admin': { label: 'Eventleiter / KUS Admin', baseRole: 'Eventleiter / KUS', faction: 'event', level: 'admin' },
   'Eventleiter / KUS': { label: 'Eventleiter / KUS', baseRole: 'Eventleiter / KUS', faction: 'event', level: 'member' },
+  'Black Sun Syndikat Admin': { label: 'Black Sun Syndikat Fraktions-Admin', baseRole: 'Viewer', faction: 'blackSun', level: 'faction-admin' },
+  'Black Sun Syndikat': { label: 'Black Sun Syndikat', baseRole: 'Viewer', faction: 'blackSun', level: 'member' },
+  'Pyke-Syndikat Admin': { label: 'Pyke-Syndikat Fraktions-Admin', baseRole: 'Viewer', faction: 'pyke', level: 'faction-admin' },
+  'Pyke-Syndikat': { label: 'Pyke-Syndikat', baseRole: 'Viewer', faction: 'pyke', level: 'member' },
+  'Huttenkartell Admin': { label: 'Huttenkartell Fraktions-Admin', baseRole: 'Viewer', faction: 'hutts', level: 'faction-admin' },
+  Huttenkartell: { label: 'Huttenkartell', baseRole: 'Viewer', faction: 'hutts', level: 'member' },
   Viewer: { label: 'Viewer', baseRole: 'Viewer', faction: 'system', level: 'viewer' }
 };
 const LOGIN_ROLES = Object.keys(LOGIN_ROLE_DEFINITIONS);
 const LOGIN_FACTIONS = [
   { id: 'navy', label: 'Republic Navy', memberRole: 'Republic Navy / GAR', adminRole: 'Republic Navy Admin' },
   { id: 'senate', label: 'Galaktischer Senat', memberRole: 'Senat', adminRole: 'Galaktischer Senats Admin' },
-  { id: 'event', label: 'Eventleiter / KUS', memberRole: 'Eventleiter / KUS', adminRole: 'Eventleiter / KUS Admin' }
+  { id: 'event', label: 'Eventleiter / KUS', memberRole: 'Eventleiter / KUS', adminRole: 'Eventleiter / KUS Admin' },
+  { id: 'blackSun', label: 'Black Sun Syndikat', memberRole: 'Black Sun Syndikat', adminRole: 'Black Sun Syndikat Admin' },
+  { id: 'pyke', label: 'Pyke-Syndikat', memberRole: 'Pyke-Syndikat', adminRole: 'Pyke-Syndikat Admin' },
+  { id: 'hutts', label: 'Huttenkartell', memberRole: 'Huttenkartell', adminRole: 'Huttenkartell Admin' }
 ];
 const SENATE_POSITIONS = ['Vizekanzler', 'Regierungsdirektor', 'Minister', 'Vizeminister'];
 const sectorDrawBtn = document.getElementById('sectorDrawBtn');
@@ -4694,7 +4709,7 @@ function isAdminRole() {
 }
 
 function canManageLogins() {
-  return ['global', 'admin'].includes(LOGIN_ROLE_DEFINITIONS[currentAssignedRole()]?.level);
+  return ['global', 'admin', 'faction-admin'].includes(LOGIN_ROLE_DEFINITIONS[currentAssignedRole()]?.level);
 }
 
 function canManageRadioCommands() {
@@ -4706,7 +4721,7 @@ function getManageableLoginRoles() {
   if (actor?.level === 'global') return LOGIN_ROLES;
   const faction = LOGIN_FACTIONS.find((entry) => entry.id === actor?.faction);
   if (!faction) return [];
-  if (actor.level === 'admin') return [faction.adminRole, faction.memberRole];
+  if (actor.level === 'admin' || actor.level === 'faction-admin') return [faction.adminRole, faction.memberRole];
   return [];
 }
 

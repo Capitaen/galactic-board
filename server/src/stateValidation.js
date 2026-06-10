@@ -26,7 +26,13 @@ function cloneWithoutKeys(item, keys = []) {
 const ROLE_BASE_ROLES = {
   'Republic Navy Admin': 'Republic Navy / GAR',
   'Galaktischer Senats Admin': 'Senat',
-  'Eventleiter / KUS Admin': 'Eventleiter / KUS'
+  'Eventleiter / KUS Admin': 'Eventleiter / KUS',
+  'Black Sun Syndikat Admin': 'Viewer',
+  'Black Sun Syndikat': 'Viewer',
+  'Pyke-Syndikat Admin': 'Viewer',
+  'Pyke-Syndikat': 'Viewer',
+  'Huttenkartell Admin': 'Viewer',
+  Huttenkartell: 'Viewer'
 };
 const INFRASTRUCTURE_KEYS = new Set([
   'quadraniumErz',
