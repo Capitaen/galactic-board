@@ -8189,10 +8189,12 @@ async function pollDiscordRadioCommands() {
       loading: false
     };
     renderRadioCommandCenterView();
-    const processed = payload.result?.processed || 0;
-    const accepted = payload.result?.accepted || 0;
-    const rejected = payload.result?.rejected || 0;
-    setStatus(`Discord-Funk ausgewertet: ${processed} Nachricht(en), ${accepted} akzeptiert, ${rejected} abgelehnt.`);
+      const fetched = payload.result?.fetched || 0;
+      const relevant = payload.result?.relevant || 0;
+      const processed = payload.result?.processed || 0;
+      const accepted = payload.result?.accepted || 0;
+      const rejected = payload.result?.rejected || 0;
+      setStatus(`Discord-Funk ausgewertet: ${fetched} geladen, ${relevant} erkannt, ${processed} verarbeitet, ${accepted} akzeptiert, ${rejected} abgelehnt.`);
   } catch (error) {
     setStatus(`Discord-Funk Poll fehlgeschlagen: ${error.message}`);
   }

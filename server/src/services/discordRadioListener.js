@@ -79,27 +79,50 @@ async function processDiscordMessages({ db, getIo, actor, onCampaignChanged }) {
   let processed = 0;
   let accepted = 0;
   let rejected = 0;
+  let relevant = 0;
+  const debug = [];
 
   for (const message of chronological) {
     const result = await processSingleDiscordMessage({ db, message, actor, getIo, onCampaignChanged });
+    if (result.debug) debug.push(result.debug);
     if (!result.processed) continue;
+    relevant += 1;
     processed += 1;
     accepted += result.acceptedCount;
     rejected += result.rejectedCount;
   }
 
-  return { ok: true, processed, accepted, rejected };
+  return {
+    ok: true,
+    fetched: messages.length,
+    relevant,
+    processed,
+    accepted,
+    rejected,
+    debug: debug.slice(-10)
+  };
 }
 
 async function processSingleDiscordMessage({ db, message, actor, getIo, onCampaignChanged }) {
-  const content = String(message?.content || '').trim();
+  const content = extractRadioMessageText(message);
   const { state: currentState, revision } = readCampaignState(db);
   const parsed = parseRadioCommandMessage(content, {
     planets: currentState.planets || [],
     fleets: currentState.fleets || []
   });
 
-  if (!parsed.isRelevant) return { processed: false, acceptedCount: 0, rejectedCount: 0 };
+  if (!parsed.isRelevant) {
+    return {
+      processed: false,
+      acceptedCount: 0,
+      rejectedCount: 0,
+      debug: {
+        messageId: String(message?.id || ''),
+        matched: false,
+        preview: buildMessagePreview(content)
+      }
+    };
+  }
 
   const actorPermission = parsed.actorName ? findRadioCommandPermissionByNormalizedName(db, parsed.actorName) : null;
   const linkedUserMatches = actorPermission?.linkedUserId
@@ -126,7 +149,12 @@ async function processSingleDiscordMessage({ db, message, actor, getIo, onCampai
         payload: commonPayload
       });
     }
-    return { processed: true, acceptedCount: 0, rejectedCount: 1 };
+    return {
+      processed: true,
+      acceptedCount: 0,
+      rejectedCount: 1,
+      debug: buildProcessedDebug(message, parsed, 'rejected', 'actor_missing')
+    };
   }
 
   if (!actorPermission || !SUPPORTED_PERMISSION_ROLES.has(actorPermission.permissionRole)) {
@@ -140,7 +168,12 @@ async function processSingleDiscordMessage({ db, message, actor, getIo, onCampai
         payload: commonPayload
       });
     }
-    return { processed: true, acceptedCount: 0, rejectedCount: 1 };
+    return {
+      processed: true,
+      acceptedCount: 0,
+      rejectedCount: 1,
+      debug: buildProcessedDebug(message, parsed, 'rejected', 'permission_missing')
+    };
   }
 
   if (!actorPermission.linkedUserId || !linkedUserMatches) {
@@ -156,7 +189,12 @@ async function processSingleDiscordMessage({ db, message, actor, getIo, onCampai
         payload: commonPayload
       });
     }
-    return { processed: true, acceptedCount: 0, rejectedCount: 1 };
+    return {
+      processed: true,
+      acceptedCount: 0,
+      rejectedCount: 1,
+      debug: buildProcessedDebug(message, parsed, 'rejected', 'linked_user_missing')
+    };
   }
 
   if (!parsed.fleets.length) {
@@ -174,7 +212,12 @@ async function processSingleDiscordMessage({ db, message, actor, getIo, onCampai
         payload: commonPayload
       });
     }
-    return { processed: true, acceptedCount: 0, rejectedCount: 1 };
+    return {
+      processed: true,
+      acceptedCount: 0,
+      rejectedCount: 1,
+      debug: buildProcessedDebug(message, parsed, 'rejected', 'fleet_missing')
+    };
   }
 
   if (!parsed.planet) {
@@ -195,7 +238,12 @@ async function processSingleDiscordMessage({ db, message, actor, getIo, onCampai
       });
       rejectedCount += 1;
     });
-    return { processed: true, acceptedCount: 0, rejectedCount };
+    return {
+      processed: true,
+      acceptedCount: 0,
+      rejectedCount,
+      debug: buildProcessedDebug(message, parsed, 'rejected', 'planet_missing')
+    };
   }
 
   const fleetPermissionIds = new Set((actorPermission.fleets || []).map((fleet) => String(fleet.fleetId || '')).filter(Boolean));
@@ -352,7 +400,17 @@ async function processSingleDiscordMessage({ db, message, actor, getIo, onCampai
     });
   }
 
-  return { processed: true, acceptedCount, rejectedCount };
+  return {
+    processed: true,
+    acceptedCount,
+    rejectedCount,
+    debug: buildProcessedDebug(
+      message,
+      parsed,
+      acceptedCount > 0 ? 'accepted' : 'rejected',
+      acceptedCount > 0 ? 'fleet_moved' : 'no_changes'
+    )
+  };
 }
 
 function persistRejectedRadioLog(db, actor, input) {
@@ -397,4 +455,45 @@ async function fetchDiscordMessages(config) {
 
   const payload = await response.json();
   return Array.isArray(payload) ? payload : [];
+}
+
+function extractRadioMessageText(message) {
+  const textParts = [];
+  const pushText = (value) => {
+    const text = String(value || '').trim();
+    if (text) textParts.push(text);
+  };
+
+  pushText(message?.content);
+
+  for (const embed of Array.isArray(message?.embeds) ? message.embeds : []) {
+    pushText(embed?.title);
+    pushText(embed?.description);
+    for (const field of Array.isArray(embed?.fields) ? embed.fields : []) {
+      pushText(field?.name);
+      pushText(field?.value);
+    }
+  }
+
+  return textParts.join('\n').trim();
+}
+
+function buildMessagePreview(content) {
+  return String(content || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 160);
+}
+
+function buildProcessedDebug(message, parsed, status, reason) {
+  return {
+    messageId: String(message?.id || ''),
+    matched: true,
+    status,
+    reason,
+    actorName: parsed.actorName || '',
+    fleetNames: parsed.fleets.map((fleet) => fleet.name),
+    planetName: parsed.planet?.name || '',
+    preview: buildMessagePreview(parsed.originalMessage)
+  };
 }
