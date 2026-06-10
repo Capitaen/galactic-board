@@ -30,6 +30,7 @@ body { margin:0; background:#05070b; color:var(--text); font-family: Inter, Sego
 #planetLayer { position:absolute; inset:0; z-index:5; pointer-events:auto; }
 #markerLayer { position:absolute; inset:0; z-index:6; pointer-events:auto; }
 #fleetLayer { position:absolute; inset:0; z-index:8; }
+#fleetLayer > :not(.fleet) { display:none !important; }
 #fxLayer { position:absolute; inset:0; z-index:16; pointer-events:none; overflow:visible; }
 .grid-line { stroke:rgba(88,222,255,.6); stroke-width:1.15; }
 .grid-label { fill:rgba(133,240,255,.6); font-size:20px; font-weight:700; letter-spacing:1px; opacity:.6; }
@@ -4791,16 +4792,27 @@ function highlightPlanetSearchFocus(planetId) {
 function updateFleetElement(fleet) {
   const entry = fleetElements.get(fleet.id);
   if (!entry) return;
+  const isSelected = selected?.type === 'fleet' && selected.id === fleet.id;
+  const isMoving = isFleetTraveling(fleet);
+  entry.className = 'fleet ' + fleet.faction
+    + (activeInteraction?.mode === 'fleet-drag' && activeInteraction.id === fleet.id ? ' dragging' : '')
+    + (isSelected ? ' selected' : '')
+    + (isMoving ? ' moving' : '');
   const locationPlanetId = fleet.locationPlanetId || fleet.planetId;
   if (!locationPlanetId && !Number.isFinite(fleet.x) && !Number.isFinite(fleet.y)) {
     entry.classList.add('hidden');
+    entry.style.left = '';
+    entry.style.top = '';
     return;
   }
   const renderPos = getFleetDisplayPosition(fleet);
-  const isSelected = selected?.type === 'fleet' && selected.id === fleet.id;
-  const isMoving = isFleetTraveling(fleet);
+  if (!Number.isFinite(renderPos?.x) || !Number.isFinite(renderPos?.y)) {
+    entry.classList.add('hidden');
+    entry.style.left = '';
+    entry.style.top = '';
+    return;
+  }
   const isVisible = isFleetElementVisible(fleet);
-  entry.className = 'fleet ' + fleet.faction + (activeInteraction?.mode === 'fleet-drag' && activeInteraction.id === fleet.id ? ' dragging' : '') + (isSelected ? ' selected' : '') + (isMoving ? ' moving' : '');
   entry.style.left = renderPos.x + 'px';
   entry.style.top = renderPos.y + 'px';
   entry.title = fleet.name;
