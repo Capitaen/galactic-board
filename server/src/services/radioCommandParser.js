@@ -54,6 +54,9 @@ function buildFleetMatchers(fleets = []) {
 
 function extractActorName(content) {
   const prefixless = stripRadioPrefix(content);
+  const directNameBeforeColon = prefixless.match(/([A-ZÄÖÜ][\p{L}'’-]+(?:\s+[A-ZÄÖÜ][\p{L}'’-]+){1,2})\s*:/u);
+  if (directNameBeforeColon?.[1]) return compactWhitespace(directNameBeforeColon[1]);
+
   const labeledPatterns = [
     /\b(?:von|ausgelost von|ausgelöst von|befehlgeber|kommandant|sender)\s*[:\-]\s*([^\n|]+)/i,
     /\b(?:von|ausgelost von|ausgelöst von|befehlgeber|kommandant|sender)\s+([A-ZÄÖÜ][^\n|]{2,80})/i
