@@ -14,6 +14,7 @@ function compactWhitespace(value) {
   return String(value || '').replace(/\s+/g, ' ').trim();
 }
 
+<<<<<<< Updated upstream
 function stripLeadingDiscordFormatting(value) {
   return String(value || '')
     .replace(/^[\s\u200B-\u200D\uFEFF]+/g, '')
@@ -30,6 +31,8 @@ function looksLikeRadioPrefix(value) {
   return /^\[Langstreckenfunk\]\b/i.test(normalized) || /\blangstreckenfunk\b/i.test(normalized);
 }
 
+=======
+>>>>>>> Stashed changes
 function buildPlanetMatchers(planets = []) {
   return planets
     .map((planet) => ({
@@ -53,6 +56,7 @@ function buildFleetMatchers(fleets = []) {
 }
 
 function extractActorName(content) {
+<<<<<<< Updated upstream
   const prefixless = stripRadioPrefix(content);
   const labeledPatterns = [
     /\b(?:von|ausgelost von|ausgelöst von|befehlgeber|kommandant|sender)\s*[:\-]\s*([^\n|]+)/i,
@@ -66,6 +70,9 @@ function extractActorName(content) {
     if (candidate) return candidate;
   }
 
+=======
+  const prefixless = String(content || '').replace(/^\[Langstreckenfunk\]\s*/i, '');
+>>>>>>> Stashed changes
   const colonIndex = prefixless.indexOf(':');
   if (colonIndex < 0) return '';
   const left = compactWhitespace(prefixless.slice(0, colonIndex));
@@ -141,6 +148,7 @@ function findFleetMentions(message, fleets = []) {
   return results;
 }
 
+<<<<<<< Updated upstream
 export function parseRadioCommandMessage(content, context = {}, options = {}) {
   const rawMessage = String(content || '');
   const message = stripLeadingDiscordFormatting(rawMessage);
@@ -158,15 +166,37 @@ export function parseRadioCommandMessage(content, context = {}, options = {}) {
       commandType: 'unknown',
       fleets,
       planet
+=======
+export function parseRadioCommandMessage(content, context = {}) {
+  const message = String(content || '').trim();
+  if (!message.startsWith('[Langstreckenfunk]')) {
+    return {
+      isRelevant: false,
+      reason: 'missing_prefix',
+      originalMessage: message,
+      actorName: '',
+      commandType: 'unknown',
+      fleets: [],
+      planet: null
+>>>>>>> Stashed changes
     };
   }
 
   const actorName = extractActorName(message);
   const commandType = detectCommandType(message);
+<<<<<<< Updated upstream
 
   return {
     isRelevant: true,
     reason: hasPrefix ? '' : 'inferred_command',
+=======
+  const fleets = findFleetMentions(message, buildFleetMatchers(context.fleets || []));
+  const planet = findPlanetMention(message, buildPlanetMatchers(context.planets || []));
+
+  return {
+    isRelevant: true,
+    reason: '',
+>>>>>>> Stashed changes
     originalMessage: message,
     actorName,
     commandType,

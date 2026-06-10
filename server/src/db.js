@@ -160,6 +160,7 @@ function normalizeIngameName(name) {
     .trim();
 }
 
+<<<<<<< Updated upstream
 function safeJsonParse(rawJson, fallback) {
   try {
     return JSON.parse(rawJson || JSON.stringify(fallback));
@@ -168,6 +169,8 @@ function safeJsonParse(rawJson, fallback) {
   }
 }
 
+=======
+>>>>>>> Stashed changes
 export function readCampaignState(db) {
   const row = db.prepare(
     'SELECT state_json, revision, updated_at FROM app_state WHERE id = ?'
@@ -292,6 +295,10 @@ export function findRadioCommandPermissionByNormalizedName(db, ingameName) {
     WHERE normalized_ingame_name = ?
     LIMIT 1
   `).get(normalizeIngameName(ingameName));
+<<<<<<< Updated upstream
+=======
+
+>>>>>>> Stashed changes
   return row ? { ...row, fleets: safeJsonParse(row.fleetsJson, []) } : null;
 }
 
@@ -438,3 +445,14 @@ export function insertRadioCommandLog(db, input) {
   );
   return { id, createdAt };
 }
+<<<<<<< Updated upstream
+=======
+
+function safeJsonParse(rawJson, fallback) {
+  try {
+    return JSON.parse(rawJson || JSON.stringify(fallback));
+  } catch {
+    return fallback;
+  }
+}
+>>>>>>> Stashed changes

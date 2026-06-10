@@ -23,7 +23,11 @@ import {
 } from './db.js';
 import { getFleetMotionArrivalIso, getFleetMotionByFleetId, getFleetMotionStartedAtIso, getFleetPlanetId, getPlanetNameById, writeAuditLog } from './audit.js';
 import { applyEnvFiles } from './env.js';
+<<<<<<< Updated upstream
 import { createDiscordRadioListener, getDiscordRadioConfig } from './services/discordRadioListener.js';
+=======
+import { createDiscordRadioListener } from './services/discordRadioListener.js';
+>>>>>>> Stashed changes
 import { validateNextCampaignState } from './stateValidation.js';
 
 const projectRoot = process.cwd();
@@ -327,7 +331,10 @@ function listRadioAuditForActor(actor, limit = 200) {
 
 function buildRadioCommandAdminPayload(actor) {
   const { state } = readCampaignState(db);
+<<<<<<< Updated upstream
   const radioConfig = getDiscordRadioConfig();
+=======
+>>>>>>> Stashed changes
   const users = listUsersForActor(actor);
   const fleets = (Array.isArray(state?.fleets) ? state.fleets : [])
     .filter((fleet) => String(fleet?.faction || '').trim().toUpperCase() === 'GAR')
@@ -337,6 +344,7 @@ function buildRadioCommandAdminPayload(actor) {
       faction: fleet.faction || ''
     }))
     .sort((a, b) => a.name.localeCompare(b.name, 'de'));
+<<<<<<< Updated upstream
     return {
       permissions: listRadioPermissionsForActor(actor),
       audit: listRadioAuditForActor(actor),
@@ -350,6 +358,15 @@ function buildRadioCommandAdminPayload(actor) {
       }
     };
   }
+=======
+  return {
+    permissions: listRadioPermissionsForActor(actor),
+    audit: listRadioAuditForActor(actor),
+    users,
+    fleets
+  };
+}
+>>>>>>> Stashed changes
 
 function sanitizeStateForRole(state, actor) {
   return {
@@ -605,6 +622,45 @@ function validateAdminUserInput(body) {
   }
 
   return { username, password, role, canCoordinate4thFleet, senatePosition };
+}
+
+function validateRadioPermissionInput(body) {
+  const ingameName = String(body?.ingameName || '').trim();
+  const linkedUserId = String(body?.linkedUserId || '').trim();
+  const permissionRole = String(body?.permissionRole || '').trim();
+  const fleets = Array.isArray(body?.fleets)
+    ? body.fleets.map((fleet) => ({
+      fleetId: String(fleet?.fleetId || '').trim(),
+      fleetName: String(fleet?.fleetName || '').trim()
+    })).filter((fleet) => fleet.fleetId && fleet.fleetName)
+    : [];
+
+  if (!ingameName) {
+    const error = new Error('Ingame-Name darf nicht leer sein.');
+    error.status = 400;
+    throw error;
+  }
+
+  if (!RADIO_PERMISSION_ROLES.includes(permissionRole)) {
+    const error = new Error('Ungültige Befehlsrolle.');
+    error.status = 400;
+    throw error;
+  }
+
+  const linkedUser = linkedUserId ? listUsers(db).find((user) => user.id === linkedUserId) : null;
+  if (linkedUserId && !linkedUser) {
+    const error = new Error('Verknüpfter Website-Login wurde nicht gefunden.');
+    error.status = 400;
+    throw error;
+  }
+
+  return {
+    ingameName,
+    linkedUserId: linkedUser?.id || null,
+    linkedUsername: linkedUser?.username || null,
+    permissionRole,
+    fleets
+  };
 }
 
 function validateRadioPermissionInput(body) {

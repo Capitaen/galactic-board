@@ -36,7 +36,11 @@ export function loadEnvFiles(rootDir = process.cwd()) {
 export function applyEnvFiles(rootDir = process.cwd()) {
   const envValues = loadEnvFiles(rootDir);
   Object.entries(envValues).forEach(([key, value]) => {
+<<<<<<< Updated upstream
     process.env[key] = value;
+=======
+    if (!(key in process.env)) process.env[key] = value;
+>>>>>>> Stashed changes
   });
   return envValues;
 }

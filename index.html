@@ -908,7 +908,10 @@ let radioCommandAdminState = {
   audit: [],
   users: [],
   fleets: [],
+<<<<<<< Updated upstream
   radioConfig: null,
+=======
+>>>>>>> Stashed changes
   loading: false
 };
 let currentAuthenticatedUsername = '';
@@ -8249,7 +8252,10 @@ async function fetchRadioCommandCenterData() {
       audit: payload.audit || [],
       users: payload.users || [],
       fleets: payload.fleets || [],
+<<<<<<< Updated upstream
       radioConfig: payload.radioConfig || null,
+=======
+>>>>>>> Stashed changes
       loading: false
     };
     if (activeMainTab === 'radioCommandCenter') renderRadioCommandCenterView();
@@ -8314,7 +8320,10 @@ async function saveRadioPermission(id) {
       audit: payload.audit || [],
       users: payload.users || [],
       fleets: payload.fleets || [],
+<<<<<<< Updated upstream
       radioConfig: payload.radioConfig || null,
+=======
+>>>>>>> Stashed changes
       loading: false
     };
     renderRadioCommandCenterView();
@@ -8345,7 +8354,10 @@ async function deleteRadioPermission(id) {
       audit: payload.audit || [],
       users: payload.users || [],
       fleets: payload.fleets || [],
+<<<<<<< Updated upstream
       radioConfig: payload.radioConfig || null,
+=======
+>>>>>>> Stashed changes
       loading: false
     };
     renderRadioCommandCenterView();
@@ -8369,6 +8381,7 @@ async function pollDiscordRadioCommands() {
       audit: payload.audit || [],
       users: payload.users || [],
       fleets: payload.fleets || [],
+<<<<<<< Updated upstream
       radioConfig: payload.radioConfig || null,
       loading: false
     };
@@ -8382,6 +8395,15 @@ async function pollDiscordRadioCommands() {
     const debugSuffix = firstDebug?.reason ? ` Letzter Grund: ${firstDebug.reason}.` : '';
     const channelInfo = payload.radioConfig?.channelId ? ` Aktiver Channel: ${payload.radioConfig.channelId}.` : '';
     setStatus(`Discord-Funk ausgewertet: ${fetched} geladen, ${relevant} erkannt, ${processed} verarbeitet, ${accepted} akzeptiert, ${rejected} abgelehnt.${channelInfo}${debugSuffix}`);
+=======
+      loading: false
+    };
+    renderRadioCommandCenterView();
+    const processed = payload.result?.processed || 0;
+    const accepted = payload.result?.accepted || 0;
+    const rejected = payload.result?.rejected || 0;
+    setStatus(`Discord-Funk ausgewertet: ${processed} Nachricht(en), ${accepted} akzeptiert, ${rejected} abgelehnt.`);
+>>>>>>> Stashed changes
   } catch (error) {
     setStatus(`Discord-Funk Poll fehlgeschlagen: ${error.message}`);
   }
