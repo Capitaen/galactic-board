@@ -740,7 +740,7 @@ export function purchaseMarketShare(db, investorId, companyId, now = Date.now())
   })();
 }
 
-export function purchaseMarketDemand(db, { investorId, userId, consumerKey, companyId }, now = Date.now()) {
+export function purchaseMarketDemand(db, { investorId, userId, consumerKey, companyId, quantity = 1 }, now = Date.now()) {
   return db.transaction(() => {
     const company = db.prepare('SELECT * FROM market_companies WHERE id = ?').get(companyId);
     if (!company) {
@@ -753,24 +753,32 @@ export function purchaseMarketDemand(db, { investorId, userId, consumerKey, comp
     const cooldownMs = 60 * 60 * 1000;
     let purchaseType = 'portfolio';
     let nextPurchaseAt = null;
+    const requestedQuantity = Math.floor(Number(quantity || 1));
+    const effectiveQuantity = investorId ? requestedQuantity : 1;
+    if (!Number.isInteger(effectiveQuantity) || effectiveQuantity < 1 || effectiveQuantity > 10000) {
+      const error = new Error('Ungültige Aktienmenge.');
+      error.status = 400;
+      throw error;
+    }
 
     if (investorId) {
       const investor = getOrCreateMarketInvestor(db, investorId, userId);
-      if (Number(investor.balance || 0) < Number(company.current_price || 0)) {
+      const totalCost = Math.round(Number(company.current_price || 0) * effectiveQuantity * 100) / 100;
+      if (Number(investor.balance || 0) < totalCost) {
         const error = new Error('Nicht genug Credits im persönlichen Portfolio.');
         error.status = 409;
         throw error;
       }
       db.prepare(`
         INSERT INTO market_holdings (investor_id, company_id, shares)
-        VALUES (?, ?, 1)
-        ON CONFLICT(investor_id, company_id) DO UPDATE SET shares = shares + 1
-      `).run(investorId, companyId);
+        VALUES (?, ?, ?)
+        ON CONFLICT(investor_id, company_id) DO UPDATE SET shares = shares + excluded.shares
+      `).run(investorId, companyId, effectiveQuantity);
       db.prepare(`
         UPDATE market_investors
         SET balance = balance - ?, last_purchase_at = ?
         WHERE id = ?
-      `).run(company.current_price, purchasedAt, investorId);
+      `).run(totalCost, purchasedAt, investorId);
     } else {
       purchaseType = 'consumer';
       const activity = db.prepare(`
@@ -791,7 +799,8 @@ export function purchaseMarketDemand(db, { investorId, userId, consumerKey, comp
       nextPurchaseAt = new Date(now + cooldownMs).toISOString();
     }
 
-    const nextPrice = Math.round(company.current_price * 1.0125 * 100) / 100;
+    const priceImpact = 1 + (0.0125 * Math.sqrt(effectiveQuantity));
+    const nextPrice = Math.round(company.current_price * priceImpact * 100) / 100;
     db.prepare(`
       UPDATE market_companies
       SET previous_price = current_price, current_price = ?, updated_at = ?
@@ -805,6 +814,8 @@ export function purchaseMarketDemand(db, { investorId, userId, consumerKey, comp
     return {
       companyId,
       price: company.current_price,
+      quantity: effectiveQuantity,
+      totalCost: investorId ? Math.round(company.current_price * effectiveQuantity * 100) / 100 : 0,
       purchasedAt,
       purchaseType,
       nextPurchaseAt
@@ -821,7 +832,7 @@ export function getConsumerNextPurchaseAt(db, consumerKey) {
     : null;
 }
 
-export function sellMarketShare(db, { investorId, companyId }, now = Date.now()) {
+export function sellMarketShare(db, { investorId, companyId, quantity = 1 }, now = Date.now()) {
   return db.transaction(() => {
     const company = db.prepare('SELECT * FROM market_companies WHERE id = ?').get(companyId);
     if (!company) {
@@ -833,14 +844,20 @@ export function sellMarketShare(db, { investorId, companyId }, now = Date.now())
       SELECT shares FROM market_holdings
       WHERE investor_id = ? AND company_id = ?
     `).get(investorId, companyId);
-    if (!holding || Number(holding.shares || 0) < 1) {
+    const requestedQuantity = Math.floor(Number(quantity || 1));
+    if (!Number.isInteger(requestedQuantity) || requestedQuantity < 1 || requestedQuantity > 10000) {
+      const error = new Error('Ungültige Aktienmenge.');
+      error.status = 400;
+      throw error;
+    }
+    if (!holding || Number(holding.shares || 0) < requestedQuantity) {
       const error = new Error('Du besitzt keine Aktie dieser Holding.');
       error.status = 409;
       throw error;
     }
 
     const soldAt = new Date(now).toISOString();
-    if (holding.shares === 1) {
+    if (holding.shares === requestedQuantity) {
       db.prepare(`
         DELETE FROM market_holdings
         WHERE investor_id = ? AND company_id = ?
@@ -848,17 +865,19 @@ export function sellMarketShare(db, { investorId, companyId }, now = Date.now())
     } else {
       db.prepare(`
         UPDATE market_holdings
-        SET shares = shares - 1
+        SET shares = shares - ?
         WHERE investor_id = ? AND company_id = ?
-      `).run(investorId, companyId);
+      `).run(requestedQuantity, investorId, companyId);
     }
+    const totalCredit = Math.round(Number(company.current_price || 0) * requestedQuantity * 100) / 100;
     db.prepare(`
       UPDATE market_investors
       SET balance = balance + ?
       WHERE id = ?
-    `).run(company.current_price, investorId);
+    `).run(totalCredit, investorId);
 
-    const nextPrice = Math.max(25, Math.round(company.current_price * 0.9875 * 100) / 100);
+    const priceImpact = Math.max(0.75, 1 - (0.0125 * Math.sqrt(requestedQuantity)));
+    const nextPrice = Math.max(25, Math.round(company.current_price * priceImpact * 100) / 100);
     db.prepare(`
       UPDATE market_companies
       SET previous_price = current_price, current_price = ?, updated_at = ?
@@ -872,8 +891,9 @@ export function sellMarketShare(db, { investorId, companyId }, now = Date.now())
     return {
       companyId,
       price: company.current_price,
+      quantity: requestedQuantity,
       soldAt,
-      credited: company.current_price
+      credited: totalCredit
     };
   })();
 }

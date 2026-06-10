@@ -171,6 +171,11 @@ textarea { min-height:82px; resize:vertical; }
 .project-card h4 { margin:0 0 8px; font-size:16px; }
 .project-card p { margin:0 0 8px; }
 .project-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:14px; }
+.trade-quantity { display:grid; grid-template-columns:1fr auto; gap:8px; align-items:center; margin:10px 0; }
+.trade-quantity input[type="range"] { width:100%; }
+.trade-quantity output { min-width:42px; text-align:right; font-weight:700; }
+.market-detail-chart { width:100%; min-height:320px; border-radius:14px; background:rgba(7,11,18,.62); border:1px solid rgba(255,255,255,.08); padding:12px; }
+.market-detail-chart svg { display:block; width:100%; height:320px; }
 .project-progress { width:100%; height:10px; border-radius:999px; background:rgba(255,255,255,.08); overflow:hidden; margin:10px 0 6px; }
 .project-progress-fill { height:100%; border-radius:999px; background:linear-gradient(90deg, #4f86ff 0%, #73e0ff 100%); }
 .project-progress-fill.mine { background:linear-gradient(90deg, #f0d44b 0%, #f39a2d 100%); }
@@ -894,6 +899,7 @@ const economyViewState = {
   consumerMode: true,
   canPurchase: true,
   activeSection: 'overview',
+  selectedCompanyId: '',
   sectorQuery: '',
   resourceFilter: 'all',
   error: ''
@@ -8640,6 +8646,28 @@ function renderMarketSparkline(companyId) {
   return `<svg viewBox="0 0 220 60" style="width:220px;height:60px"><polyline fill="none" stroke="${rising ? '#55d68b' : '#ff6b6b'}" stroke-width="3" points="${coords}"/></svg>`;
 }
 
+function renderMarketDetailChart(companyId) {
+  const company = economyViewState.companies.find((entry) => entry.id === companyId);
+  const values = (economyViewState.history?.[companyId] || []).slice(-192).map((point) => Number(point.price || 0)).filter(Number.isFinite);
+  if (company) values.push(Number(company.currentPrice || 0));
+  if (values.length < 2) return '<div class="muted-box">Noch nicht genügend Kursdaten für einen Verlauf.</div>';
+  const min = Math.min(...values), max = Math.max(...values), span = Math.max(1, max - min);
+  const coords = values.map((value, index) => `${(28 + ((index / Math.max(1, values.length - 1)) * 844)).toFixed(1)},${(286 - (((value - min) / span) * 250)).toFixed(1)}`).join(' ');
+  const rising = values[values.length - 1] >= values[0];
+  return `<div class="market-detail-chart"><svg viewBox="0 0 900 320" preserveAspectRatio="none" aria-label="Kursverlauf">
+    <line x1="28" y1="36" x2="872" y2="36" stroke="rgba(255,255,255,.08)"/><line x1="28" y1="161" x2="872" y2="161" stroke="rgba(255,255,255,.08)"/><line x1="28" y1="286" x2="872" y2="286" stroke="rgba(255,255,255,.08)"/>
+    <polyline fill="none" stroke="${rising ? '#55d68b' : '#ff6b6b'}" stroke-width="4" points="${coords}"/>
+  </svg></div>`;
+}
+
+function updateMarketQuantity(kind, companyId, value) {
+  const range = document.getElementById(`${kind}Quantity_${companyId}`);
+  const output = document.getElementById(`${kind}QuantityOutput_${companyId}`);
+  const quantity = Math.max(1, Math.floor(Number(value || 1)));
+  if (range) range.value = String(Math.min(quantity, Number(range.max || quantity)));
+  if (output) output.value = range?.value || String(quantity);
+}
+
 async function fetchEconomyView() {
   if (economyViewState.loading) return;
   economyViewState.loading = true;
@@ -8660,6 +8688,9 @@ async function fetchEconomyView() {
 
 async function buyMarketShare(companyId) {
   if (getMarketCooldownRemaining() > 0) return;
+  const quantity = economyViewState.consumerMode
+    ? 1
+    : Math.max(1, Math.floor(Number(document.getElementById(`buyQuantity_${companyId}`)?.value || 1)));
   try {
     const response = await fetch('/api/economy/market/buy', {
       method: 'POST',
@@ -8675,7 +8706,7 @@ async function buyMarketShare(companyId) {
     economyViewState.nextPurchaseAt = payload.purchase?.nextPurchaseAt || null;
     setStatus(payload.purchase?.purchaseType === 'consumer'
       ? 'Die Nachfrage wurde am Markt registriert. Es entsteht kein persönlicher Besitz.'
-      : 'Eine Aktie wurde dem persönlichen Portfolio hinzugefügt.');
+      : `${payload.purchase?.quantity || quantity} Aktie(n) wurden dem persönlichen Portfolio hinzugefügt. Abgebucht: ${formatCredits(payload.purchase?.totalCost || 0)}.`);
     await fetchEconomyView();
   } catch (error) {
     setStatus(error.message);
@@ -8684,12 +8715,13 @@ async function buyMarketShare(companyId) {
 }
 
 async function sellMarketShare(companyId) {
+  const quantity = Math.max(1, Math.floor(Number(document.getElementById(`sellQuantity_${companyId}`)?.value || 1)));
   try {
     const response = await fetch('/api/economy/market/sell', {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ companyId })
+      body: JSON.stringify({ companyId, quantity })
     });
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.error || 'Aktienverkauf fehlgeschlagen.');
@@ -8702,7 +8734,13 @@ async function sellMarketShare(companyId) {
 }
 
 function setEconomySection(section) {
-  economyViewState.activeSection = section === 'trade' ? 'trade' : 'overview';
+  economyViewState.activeSection = ['trade', 'detail'].includes(section) ? section : 'overview';
+  renderEconomyView();
+}
+
+function openMarketCompanyOverview(companyId) {
+  economyViewState.selectedCompanyId = companyId;
+  economyViewState.activeSection = 'detail';
   renderEconomyView();
 }
 
@@ -8756,6 +8794,44 @@ function renderEconomyView() {
   });
   const visibleCompanies = filteredCompanies.slice(0, 60);
   const topLastHour = (economyViewState.topLastHour || []).slice(0, 50);
+  if (economyViewState.activeSection === 'detail') {
+    const company = economyViewState.companies.find((entry) => entry.id === economyViewState.selectedCompanyId);
+    if (!company) {
+      economyViewState.activeSection = 'trade';
+      renderEconomyView();
+      return;
+    }
+    const shares = holdings.get(company.id) || 0;
+    const prices = (economyViewState.history?.[company.id] || []).map((point) => Number(point.price || 0)).filter(Number.isFinite);
+    const buyMax = Math.min(10000, Math.floor(portfolioBalance / Math.max(0.01, Number(company.currentPrice || 0))));
+    const change = Number(company.currentPrice || 0) - Number(company.previousPrice || 0);
+    workspacePanel.innerHTML = `
+      <div class="workspace-head">
+        <div><h2>${escapeLoginManagerText(company.name)} <span class="badge">${escapeLoginManagerText(company.symbol)}</span></h2>
+        <p>${escapeLoginManagerText(company.sector || company.faction)} • ${escapeLoginManagerText(RESOURCE_LABELS[company.resourceKey] || company.faction)}</p></div>
+        <div class="toolbar-row end"><button class="mini-btn" onclick="setEconomySection('trade')">Zurück zum Handel</button><button class="mini-btn" onclick="fetchEconomyView()">Aktualisieren</button></div>
+      </div>
+      <div class="workspace-grid">
+        <div class="stat-card"><strong>Aktueller Kurs</strong><span>${formatCredits(company.currentPrice)}</span></div>
+        <div class="stat-card"><strong>Letzte Änderung</strong><span style="color:${change >= 0 ? '#55d68b' : '#ff6b6b'}">${change >= 0 ? '+' : ''}${formatCredits(change)}</span></div>
+        <div class="stat-card"><strong>48h-Hoch</strong><span>${formatCredits(prices.length ? Math.max(...prices) : company.currentPrice)}</span></div>
+        <div class="stat-card"><strong>48h-Tief</strong><span>${formatCredits(prices.length ? Math.min(...prices) : company.currentPrice)}</span></div>
+        <div class="stat-card"><strong>Eigener Bestand</strong><span>${shares}</span></div>
+        <div class="stat-card"><strong>Bestandswert</strong><span>${formatCredits(shares * Number(company.currentPrice || 0))}</span></div>
+      </div>
+      <div class="workspace-section"><h3>Kursverlauf der letzten 48 Stunden</h3>${renderMarketDetailChart(company.id)}</div>
+      <div class="workspace-section workspace-columns">
+        <div class="workspace-card"><h3>Kaufen</h3><p>Verfügbar: ${formatCredits(portfolioBalance)} • Maximal ${buyMax} Aktie(n)</p>
+          ${economyViewState.portfolioEnabled && buyMax > 0 ? `<div class="trade-quantity"><input id="buyQuantity_${company.id}" type="range" min="1" max="${buyMax}" value="1" oninput="updateMarketQuantity('buy','${company.id}',this.value)"><output id="buyQuantityOutput_${company.id}">1</output></div>` : ''}
+          <button class="mini-btn primary" onclick="buyMarketShare('${company.id}')" ${!economyViewState.canPurchase || (!economyViewState.consumerMode && buyMax < 1) || (economyViewState.consumerMode && cooldown > 0) ? 'disabled' : ''}>${economyViewState.consumerMode ? 'Nachfrage erzeugen' : 'Ausgewählte Menge kaufen'}</button>
+        </div>
+        <div class="workspace-card"><h3>Verkaufen</h3><p>Eigener Bestand: ${shares} Aktie(n). Der Erlös wird sofort dem persönlichen Portfolio gutgeschrieben.</p>
+          ${economyViewState.portfolioEnabled && shares > 0 ? `<div class="trade-quantity"><input id="sellQuantity_${company.id}" type="range" min="1" max="${shares}" value="1" oninput="updateMarketQuantity('sell','${company.id}',this.value)"><output id="sellQuantityOutput_${company.id}">1</output></div>` : ''}
+          <button class="mini-btn danger" onclick="sellMarketShare('${company.id}')" ${!economyViewState.portfolioEnabled || shares < 1 ? 'disabled' : ''}>Ausgewählte Menge verkaufen</button>
+        </div>
+      </div>`;
+    return;
+  }
   if (economyViewState.activeSection === 'trade') {
     workspacePanel.innerHTML = `
       <div class="workspace-head">
@@ -8796,15 +8872,18 @@ function renderEconomyView() {
         <div class="project-grid">
           ${visibleCompanies.map((company) => {
             const shares = holdings.get(company.id) || 0;
+            const buyMax = Math.min(10000, Math.floor(portfolioBalance / Math.max(0.01, Number(company.currentPrice || 0))));
             const change = Number(company.currentPrice || 0) - Number(company.previousPrice || 0);
             return `<div class="project-card">
               <h4>${escapeLoginManagerText(company.name)} <span class="badge">${company.symbol}</span></h4>
               <p><strong>${formatCredits(company.currentPrice)}</strong> <span style="color:${change >= 0 ? '#55d68b' : '#ff6b6b'}">${change >= 0 ? '+' : ''}${change.toFixed(2)}</span></p>
               ${renderMarketSparkline(company.id)}
               <p class="project-meta">${economyViewState.portfolioEnabled ? `Eigener Bestand: ${shares} Aktie(n) • ` : ''}${escapeLoginManagerText(company.sector || company.faction)}</p>
+              ${economyViewState.portfolioEnabled && buyMax > 0 ? `<div class="trade-quantity"><input id="buyQuantity_${company.id}" type="range" min="1" max="${buyMax}" value="1" oninput="updateMarketQuantity('buy','${company.id}',this.value)"><output id="buyQuantityOutput_${company.id}">1</output></div>` : ''}
               <div class="toolbar-row">
                 <button class="mini-btn primary" onclick="buyMarketShare('${company.id}')" ${!economyViewState.canPurchase || (economyViewState.consumerMode && cooldown > 0) || (economyViewState.portfolioEnabled && portfolioBalance < Number(company.currentPrice || 0)) || economyViewState.loading ? 'disabled' : ''}>${economyViewState.consumerMode ? 'Nachfrage erzeugen' : 'Kaufen'}</button>
                 ${economyViewState.portfolioEnabled ? `<button class="mini-btn danger" onclick="sellMarketShare('${company.id}')" ${shares < 1 || economyViewState.loading ? 'disabled' : ''}>Verkaufen</button>` : ''}
+                <button class="mini-btn" onclick="openMarketCompanyOverview('${company.id}')">Übersicht</button>
               </div>
             </div>`;
           }).join('') || '<div class="muted-box">Keine passende Aktie gefunden.</div>'}
@@ -9707,6 +9786,8 @@ window.fetchEconomyView = fetchEconomyView;
 window.buyMarketShare = buyMarketShare;
 window.sellMarketShare = sellMarketShare;
 window.setEconomySection = setEconomySection;
+window.openMarketCompanyOverview = openMarketCompanyOverview;
+window.updateMarketQuantity = updateMarketQuantity;
 window.updateEconomySectorQuery = updateEconomySectorQuery;
 window.saveEconomyPolicy = saveEconomyPolicy;
 
