@@ -2680,10 +2680,19 @@ function getMineProjectPlanetChoices() {
     .sort((a, b) => a.name.localeCompare(b.name, 'de'));
 }
 
+function isMineSlotUnderConstruction(planetId, slotIndex) {
+  return state.buildJobs.some((job) => (
+    job.jobType === 'mine'
+    && job.status === 'building'
+    && job.buildLocationPlanetId === planetId
+    && Number(job.targetSlotIndex) === Number(slotIndex)
+  ));
+}
+
 function getAvailableMineSlots(planetId) {
   return getPlanetResourceSlots(planetId)
     .map((slot, index) => ({ index, slot }))
-    .filter((entry) => !entry.slot);
+    .filter((entry) => !entry.slot && !isMineSlotUnderConstruction(planetId, entry.index));
 }
 
 function closeInfoPanel() {
@@ -3053,6 +3062,11 @@ function startMineBuildProject() {
   const slots = getPlanetResourceSlots(planetId);
   if (!Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex >= slots.length) {
     setStatus('Bitte einen freien Minen-Slot wählen.');
+    return;
+  }
+  if (isMineSlotUnderConstruction(planetId, slotIndex)) {
+    setStatus('Dieser Slot wird bereits bebaut.');
+    renderBuildProjectsView();
     return;
   }
   if (slots[slotIndex]) {
