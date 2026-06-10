@@ -543,15 +543,20 @@ function buildMessagePreview(content) {
 function buildProcessedDebug(message, parsed, status, reason) {
   const content = extractRadioMessageText(message);
   const recoveredActorName = recoverActorNameFromContent(content);
+  const authorFallbackNames = buildAuthorFallbackNames(message);
   return {
     messageId: String(message?.id || ''),
     matched: true,
     status,
     reason,
-    actorName: parsed.actorName || recoveredActorName || buildAuthorFallbackNames(message)[0] || '',
+    actorName: parsed.actorName || recoveredActorName || authorFallbackNames[0] || '',
+    parserActorName: parsed.actorName || '',
+    recoveredActorName: recoveredActorName || '',
+    authorFallbackNames,
     fleetNames: parsed.fleets.map((fleet) => fleet.name),
     planetName: parsed.planet?.name || '',
-    preview: buildMessagePreview(parsed.originalMessage)
+    preview: buildMessagePreview(parsed.originalMessage),
+    contentPreview: buildMessagePreview(content)
   };
 }
 
