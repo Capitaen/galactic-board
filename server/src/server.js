@@ -13,10 +13,11 @@ import {
   deleteRadioCommandPermission,
   deleteUser,
   findUserByNormalizedUsername,
+  getConsumerNextPurchaseAt,
   listRadioCommandLogs,
   listRadioCommandPermissions,
   listUsers,
-  purchaseMarketShare,
+  purchaseMarketDemand,
   readCampaignState,
   readMarketSnapshot,
   runMarketTick,
@@ -37,6 +38,7 @@ const PLANET_OWNERSHIP_REFERENCE_PATH = path.join(projectRoot, 'server', 'data',
 const HIDDEN_PLANET_OWNER_FALLBACK_PATH = path.join(projectRoot, 'server', 'data', 'hiddenPlanetOwnerFallback.json');
 
 const app = express();
+app.set('trust proxy', 1);
 const sslOptions = {
   key: fs.readFileSync('C:/Users/Administrator/galactic-campaign/privkey.pem'),
   cert: fs.readFileSync('C:/Users/Administrator/galactic-campaign/fullchain.pem')
@@ -597,10 +599,30 @@ function requireRadioPermissionManager(req, res, next) {
 }
 
 function requireSenateEconomyManager(req, res, next) {
-  if (!req.user || !['Admin', 'Senat', 'Galaktischer Senats Admin'].includes(req.user.role)) {
-    return res.status(403).json({ error: 'Nur Senat oder globaler Admin dürfen die Wirtschaftspolitik ändern.' });
+  if (!req.user || !['Admin', 'Galaktischer Senats Admin'].includes(req.user.role)) {
+    return res.status(403).json({ error: 'Nur Senats-Admins oder globale Admins dürfen den GAR-Haushalt verwalten.' });
   }
   next();
+}
+
+function hasPersonalMarketPortfolio(user) {
+  const definition = LOGIN_ROLE_DEFINITIONS[user?.role];
+  return Boolean(user?.id && definition?.level === 'member' && definition.faction !== 'system');
+}
+
+function getMarketConsumerKey(req) {
+  const address = String(req.ip || req.socket?.remoteAddress || 'unknown').trim();
+  return crypto.createHash('sha256').update(address).digest('hex');
+}
+
+function getMarketFactionAccountKey(role) {
+  const faction = LOGIN_ROLE_DEFINITIONS[role]?.faction;
+  if (faction === 'blackSun') return 'BLACK_SUN';
+  if (faction === 'pyke') return 'PYKE';
+  if (faction === 'hutts') return 'HUTT';
+  if (faction === 'senate' || faction === 'navy') return 'GAR';
+  if (faction === 'event') return 'KUS';
+  return '';
 }
 
 function getAnonymousInvestorId(req, res) {
@@ -862,26 +884,59 @@ app.get('/api/auth/me', (req, res) => {
 });
 
 app.get('/api/economy/market', (req, res) => {
-  const investorId = getAnonymousInvestorId(req, res);
+  const session = getSession(req);
+  const portfolioEnabled = hasPersonalMarketPortfolio(session);
+  const investorId = portfolioEnabled ? `user_${session.id}` : '';
+  const consumerKey = session ? '' : getMarketConsumerKey(req);
   const { state } = readCampaignState(db);
   const inflationRate = Math.min(0.25, Number(state.resources?.GAR?.credits || 0) / 2000000);
   runMarketTick(db, inflationRate);
-  const snapshot = readMarketSnapshot(db, investorId);
-  const lastPurchaseAt = snapshot.investor?.last_purchase_at || null;
+  const snapshot = readMarketSnapshot(db, investorId, session?.id || '');
+  const factionAccounts = {
+    ...snapshot.factionAccounts,
+    GAR: {
+      faction: 'GAR',
+      credits: Number(state.resources?.GAR?.credits || 0),
+      updatedAt: new Date().toISOString()
+    },
+    KUS: {
+      faction: 'KUS',
+      credits: Number(state.resources?.KUS?.credits || 0),
+      updatedAt: new Date().toISOString()
+    }
+  };
   res.json({
     ...snapshot,
+    factionAccounts,
+    portfolioEnabled,
+    consumerMode: !session,
+    canPurchase: portfolioEnabled || !session,
+    factionAccountKey: getMarketFactionAccountKey(session?.role),
     inflationRate,
-    nextPurchaseAt: lastPurchaseAt
-      ? new Date(Date.parse(lastPurchaseAt) + (60 * 60 * 1000)).toISOString()
-      : null
+    nextPurchaseAt: consumerKey ? getConsumerNextPurchaseAt(db, consumerKey) : null
   });
 });
 
 app.post('/api/economy/market/buy', (req, res) => {
-  const investorId = getAnonymousInvestorId(req, res);
+  const session = getSession(req);
+  const portfolioEnabled = hasPersonalMarketPortfolio(session);
+  if (session && !portfolioEnabled) {
+    return res.status(403).json({ error: 'Diese Admin-Rolle besitzt kein persönliches Portfolio.' });
+  }
+  const investorId = portfolioEnabled ? `user_${session.id}` : '';
+  const consumerKey = portfolioEnabled ? '' : getMarketConsumerKey(req);
   try {
-    const purchase = purchaseMarketShare(db, investorId, String(req.body?.companyId || ''));
-    res.json({ ok: true, purchase, market: readMarketSnapshot(db, investorId) });
+    const purchase = purchaseMarketDemand(db, {
+      investorId,
+      userId: session?.id || '',
+      consumerKey,
+      companyId: String(req.body?.companyId || '')
+    });
+    res.json({
+      ok: true,
+      purchase,
+      market: readMarketSnapshot(db, investorId, session?.id || '')
+    });
   } catch (error) {
     res.status(error.status || 500).json({
       error: error.message || 'Aktienkauf fehlgeschlagen.',

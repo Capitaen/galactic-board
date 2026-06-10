@@ -722,6 +722,12 @@ const MINE_PROJECT_DEFS = {
   }
 };
 const INFRASTRUCTURE_KEYS = Object.keys(MINE_PROJECT_DEFS);
+Object.values(MINE_PROJECT_DEFS).forEach((project) => {
+  const rawCost = Object.entries(project.cost || {})
+    .filter(([resourceKey]) => resourceKey !== 'credits')
+    .reduce((sum, [, amount]) => sum + Number(amount || 0), 0);
+  project.cost.credits = rawCost * 2;
+});
 const TRELLO_EXCLUDED_LISTS = new Set([
   'informationen',
   'vorlage',
@@ -874,6 +880,11 @@ const economyViewState = {
   inflationRate: 0,
   nextPurchaseAt: null,
   investor: null,
+  factionAccounts: {},
+  factionAccountKey: '',
+  portfolioEnabled: false,
+  consumerMode: true,
+  canPurchase: true,
   sectorQuery: '',
   resourceFilter: 'all',
   error: ''
@@ -2810,7 +2821,7 @@ function canEditPlanetResourceSlot(planet, index) {
   const role = currentRole();
   if (role === 'Admin') return true;
   if (role === 'Eventleiter / KUS') return planet.owner !== 'GAR' && index < 3;
-  if (role === 'Senat') return planet.owner === 'GAR';
+  if (currentAssignedRole() === 'Galaktischer Senats Admin') return planet.owner === 'GAR';
   return false;
 }
 
@@ -2819,7 +2830,7 @@ function isResourceAssignmentEditable(planet) {
   const role = currentRole();
   if (role === 'Admin') return true;
   if (role === 'Eventleiter / KUS') return planet.owner !== 'GAR';
-  if (role === 'Senat') return planet.owner === 'GAR';
+  if (currentAssignedRole() === 'Galaktischer Senats Admin') return planet.owner === 'GAR';
   return false;
 }
 
@@ -2841,8 +2852,7 @@ function canEditPlanetDescription(planet) {
 }
 
 function canBuildMineProjects() {
-  const role = currentRole();
-  return role === 'Admin' || role === 'Senat';
+  return currentAssignedRole() === 'Admin' || currentAssignedRole() === 'Galaktischer Senats Admin';
 }
 
 function getMineProjectMeta(buildingKey) {
@@ -3293,7 +3303,7 @@ function getBuildJobProgressBar(job) {
 
 function startMineBuildProject() {
   if (!canBuildMineProjects()) {
-    setStatus('Nur Senat oder Admin können Infrastrukturprojekte starten.');
+    setStatus('Nur Senats-Admins oder globale Admins können Infrastrukturprojekte starten.');
     return;
   }
   const planetId = document.getElementById('mineBuildPlanet')?.value || '';
@@ -8550,7 +8560,7 @@ function renderRadioCommandCenterView() {
 }
 
 function canManageEconomyPolicy() {
-  return currentRole() === 'Admin' || currentRole() === 'Senat';
+  return currentAssignedRole() === 'Admin' || currentAssignedRole() === 'Galaktischer Senats Admin';
 }
 
 function formatCredits(value) {
@@ -8621,7 +8631,9 @@ async function buyMarketShare(companyId) {
       throw new Error(payload.error || 'Aktienkauf fehlgeschlagen.');
     }
     economyViewState.nextPurchaseAt = payload.purchase?.nextPurchaseAt || null;
-    setStatus('Eine Aktie wurde dem anonymen Portfolio hinzugefügt.');
+    setStatus(payload.purchase?.purchaseType === 'consumer'
+      ? 'Die Nachfrage wurde am Markt registriert. Es entsteht kein persönlicher Besitz.'
+      : 'Eine Aktie wurde dem persönlichen Portfolio hinzugefügt.');
     await fetchEconomyView();
   } catch (error) {
     setStatus(error.message);
@@ -8654,10 +8666,22 @@ function renderEconomyView() {
   const pool = getFactionResourcePool('GAR');
   const cooldown = getMarketCooldownRemaining();
   const holdings = new Map((economyViewState.holdings || []).map((holding) => [holding.companyId, Number(holding.shares || 0)]));
-  const portfolioValue = (economyViewState.companies || []).reduce((sum, company) => (
+  const securitiesValue = (economyViewState.companies || []).reduce((sum, company) => (
     sum + ((holdings.get(company.id) || 0) * Number(company.currentPrice || 0))
   ), 0);
-  const cooldownText = cooldown > 0 ? formatDuration(cooldown) : 'Kauf verfügbar';
+  const portfolioBalance = Number(economyViewState.investor?.balance || 0);
+  const portfolioValue = portfolioBalance + securitiesValue;
+  const cooldownText = economyViewState.consumerMode
+    ? (cooldown > 0 ? formatDuration(cooldown) : 'Nachfrage verfügbar')
+    : (economyViewState.portfolioEnabled ? 'Direkt verfügbar' : 'Nicht verfügbar');
+  const factionAccount = economyViewState.factionAccounts?.[economyViewState.factionAccountKey] || null;
+  const factionAccountLabels = {
+    GAR: 'GAR-Haushalt',
+    KUS: 'KUS-Fraktionskonto',
+    BLACK_SUN: 'Black-Sun-Fraktionskonto',
+    PYKE: 'Pyke-Fraktionskonto',
+    HUTT: 'Hutten-Fraktionskonto'
+  };
   const marketQuery = String(economyViewState.sectorQuery || '').trim().toLocaleLowerCase('de');
   const resourceFilter = economyViewState.resourceFilter || 'all';
   const filteredCompanies = (economyViewState.companies || []).filter((company) => {
@@ -8676,14 +8700,18 @@ function renderEconomyView() {
     </div>
     ${economyViewState.error ? `<div class="muted-box">${escapeLoginManagerText(economyViewState.error)}</div>` : ''}
     <div class="workspace-grid">
-      <div class="stat-card"><strong>GAR-Haushalt</strong><span>${formatCredits(pool.credits)}</span></div>
+      <div class="stat-card"><strong>${escapeLoginManagerText(factionAccountLabels[economyViewState.factionAccountKey] || 'GAR-Haushalt')}</strong><span>${formatCredits(factionAccount?.credits ?? pool.credits)}</span></div>
       <div class="stat-card"><strong>Inflation</strong><span>${(Number(economyViewState.inflationRate || 0) * 100).toFixed(1).replace('.', ',')} %</span></div>
-      <div class="stat-card"><strong>Portfolio</strong><span>${formatCredits(portfolioValue)}</span></div>
-      <div class="stat-card"><strong>Nächster Kauf</strong><span>${cooldownText}</span></div>
+      <div class="stat-card"><strong>Persönliches Portfolio</strong><span>${economyViewState.portfolioEnabled ? formatCredits(portfolioValue) : 'Nicht vorhanden'}</span></div>
+      <div class="stat-card"><strong>${economyViewState.consumerMode ? 'Nächste Nachfrage' : 'Aktienkauf'}</strong><span>${cooldownText}</span></div>
     </div>
     <div class="workspace-section">
       <h3>Aktienmarkt</h3>
-      <p class="muted">Jeder Browser kann alle 60 Minuten genau eine Aktie erwerben. Der Kauf erhöht den Kurs leicht.</p>
+      <p class="muted">${economyViewState.consumerMode
+        ? 'Viewer können pro IP-Adresse alle 60 Minuten Nachfrage für eine Aktie erzeugen. Dabei entsteht kein Portfolio und kein Gewinn.'
+        : (economyViewState.portfolioEnabled
+          ? `Dein Portfolio startete einmalig mit 5.000 Credits. Verfügbares Kapital: ${formatCredits(portfolioBalance)}. Es werden keine stündlichen Credits gutgeschrieben.`
+          : 'Diese Admin-Rolle verwaltet Fraktionsaufgaben und besitzt kein persönliches Portfolio.')}</p>
       <div class="form-grid">
         <div class="form-row"><label>Sektor oder Holding suchen</label><input id="economySectorSearch" type="search" value="${escapeLoginManagerText(economyViewState.sectorQuery || '')}" placeholder="z. B. Corellian" oninput="updateEconomySectorQuery(this)"></div>
         <div class="form-row"><label>Ressource</label><select onchange="economyViewState.resourceFilter=this.value; renderEconomyView()">
@@ -8703,8 +8731,8 @@ function renderEconomyView() {
             <h4>${escapeLoginManagerText(company.name)} <span class="badge">${company.symbol}</span></h4>
             <p><strong>${formatCredits(company.currentPrice)}</strong> <span style="color:${change >= 0 ? '#55d68b' : '#ff6b6b'}">${change >= 0 ? '+' : ''}${change.toFixed(2)}</span></p>
             ${renderMarketSparkline(company.id)}
-            <p class="project-meta">Eigener Bestand: ${holdings.get(company.id) || 0} Aktie(n) • ${escapeLoginManagerText(company.sector || company.faction)}</p>
-            <button class="mini-btn primary" onclick="buyMarketShare('${company.id}')" ${cooldown > 0 || economyViewState.loading ? 'disabled' : ''}>Aktie kaufen</button>
+            <p class="project-meta">${economyViewState.portfolioEnabled ? `Eigener Bestand: ${holdings.get(company.id) || 0} Aktie(n) • ` : ''}${escapeLoginManagerText(company.sector || company.faction)}</p>
+            <button class="mini-btn primary" onclick="buyMarketShare('${company.id}')" ${!economyViewState.canPurchase || (economyViewState.consumerMode && cooldown > 0) || (economyViewState.portfolioEnabled && portfolioBalance < Number(company.currentPrice || 0)) || economyViewState.loading ? 'disabled' : ''}>${economyViewState.consumerMode ? 'Nachfrage erzeugen' : 'Aktie kaufen'}</button>
           </div>`;
         }).join('') || '<div class="muted-box">Keine passende Holding gefunden.</div>'}
       </div>
@@ -8926,7 +8954,7 @@ function renderBuildProjectsView() {
     <div class="workspace-section workspace-columns">
       <div class="workspace-card">
         <h3>Infrastrukturprojekt</h3>
-        <p>${canStartMineProject ? 'Wähle einen republikanischen Planeten, eine Gebäudekategorie und einen freien Slot. Jedes Gebäude belegt genau einen Slot.' : 'Nur Senat und Admin können GAR-Infrastrukturprojekte starten.'}</p>
+        <p>${canStartMineProject ? 'Wähle einen republikanischen Planeten, eine Gebäudekategorie und einen freien Slot. Jedes Gebäude belegt genau einen Slot.' : 'Nur Senats-Admins und globale Admins können GAR-Infrastrukturprojekte starten.'}</p>
         <div class="form-row">
           <label>Planet</label>
           <div class="inline-search-wrap">
