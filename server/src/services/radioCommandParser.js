@@ -14,6 +14,21 @@ function compactWhitespace(value) {
   return String(value || '').replace(/\s+/g, ' ').trim();
 }
 
+function stripLeadingDiscordFormatting(value) {
+  return String(value || '')
+    .replace(/^[\s\u200B-\u200D\uFEFF]+/g, '')
+    .replace(/^(?:>+\s*)+/gm, '')
+    .trim();
+}
+
+function stripRadioPrefix(value) {
+  return stripLeadingDiscordFormatting(value).replace(/^\[Langstreckenfunk\]\s*/i, '');
+}
+
+function looksLikeRadioPrefix(value) {
+  return /^\[Langstreckenfunk\]\b/i.test(stripLeadingDiscordFormatting(value));
+}
+
 function buildPlanetMatchers(planets = []) {
   return planets
     .map((planet) => ({
@@ -37,7 +52,7 @@ function buildFleetMatchers(fleets = []) {
 }
 
 function extractActorName(content) {
-  const prefixless = String(content || '').replace(/^\[Langstreckenfunk\]\s*/i, '');
+  const prefixless = stripRadioPrefix(content);
   const colonIndex = prefixless.indexOf(':');
   if (colonIndex < 0) return '';
   const left = compactWhitespace(prefixless.slice(0, colonIndex));
@@ -114,12 +129,13 @@ function findFleetMentions(message, fleets = []) {
 }
 
 export function parseRadioCommandMessage(content, context = {}) {
-  const message = String(content || '').trim();
-  if (!message.startsWith('[Langstreckenfunk]')) {
+  const rawMessage = String(content || '');
+  const message = stripLeadingDiscordFormatting(rawMessage);
+  if (!looksLikeRadioPrefix(message)) {
     return {
       isRelevant: false,
       reason: 'missing_prefix',
-      originalMessage: message,
+      originalMessage: compactWhitespace(rawMessage),
       actorName: '',
       commandType: 'unknown',
       fleets: [],
