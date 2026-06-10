@@ -563,7 +563,7 @@ const STARTUP_LAYERS = {
   sectorLabels: true
 };
 const GALACTIC_CORE_CENTER = { x: WORLD_SIZE / 2, y: WORLD_SIZE / 2 };
-const SECTOR_SNAP_RADII = [0.14, 0.22, 0.31, 0.42, 0.54, 0.67, 0.82].map((factor) => WORLD_SIZE * factor * 0.5);
+const SECTOR_SNAP_RADII = [0.08, 0.11, 0.14, 0.22, 0.31, 0.42, 0.54, 0.67, 0.82].map((factor) => WORLD_SIZE * factor * 0.5);
 const SECTOR_ANGLE_STEP_DEG = 15;
 const AUTO_PLACEMENT_VERSION = 3;
 const POSITION_CALIBRATION_VERSION = 1;
@@ -990,6 +990,7 @@ const serverSync = {
   enabled: window.location.protocol.startsWith('http'),
   socket: null,
   revision: 0,
+  clockOffsetMs: 0,
   session: { id: null, username: '', role: 'Viewer' },
   isApplyingRemoteState: false,
   syncQueued: false,
@@ -1287,6 +1288,9 @@ function normalizeCampaignState() {
       sourcePlanetName: String(motion?.sourcePlanetName || '').trim(),
       targetPlanetId: String(motion?.targetPlanetId || '').trim(),
       targetPlanetName: String(motion?.targetPlanetName || '').trim(),
+      startedByUserId: motion?.startedByUserId || null,
+      source: String(motion?.source || '').trim(),
+      serverNowMs: Number(motion?.serverNowMs) || 0,
       startedAtMs: Number(motion?.startedAtMs) || Date.now(),
       durationMs: Math.max(1000, Number(motion?.durationMs) || 0)
     }))
@@ -2517,6 +2521,12 @@ function triggerOwnerChangeEffects(previousOwners) {
 function applyServerCampaign(campaign, revision = serverRevision, options = {}) {
   if (!campaign || typeof campaign !== 'object') return;
   const previousOwners = new Map((state?.planets || []).map((planet) => [planet.id, planet.owner]));
+  if (options.updatedAt) {
+    const updatedAtMs = new Date(options.updatedAt).getTime();
+    if (Number.isFinite(updatedAtMs) && updatedAtMs > 0) {
+      serverSync.clockOffsetMs = Date.now() - updatedAtMs;
+    }
+  }
   applyingRemoteState = true;
   serverSync.isApplyingRemoteState = true;
   try {
@@ -2615,7 +2625,7 @@ async function refreshCampaignFromServer() {
     updateServerSession(payload.me || { id: null, username: '', role: 'Viewer' });
     const nextRevision = Number(payload.revision || 0);
     if (nextRevision > serverRevision) {
-      applyServerCampaign(payload.campaign || DEFAULT_DATA, nextRevision, { playOwnerEffects: true });
+      applyServerCampaign(payload.campaign || DEFAULT_DATA, nextRevision, { playOwnerEffects: true, updatedAt: payload.updatedAt });
     } else {
       syncAuthUsersFromCampaign(payload.campaign);
     }
@@ -2653,7 +2663,7 @@ async function bootstrapFromServer() {
     const nextRevision = Number(payload.revision || 0);
     console.log('bootstrap received');
     if (!(nextRevision > 0 && nextRevision === serverRevision && state?.planets?.length)) {
-      applyServerCampaign(payload.campaign || DEFAULT_DATA, nextRevision, { playOwnerEffects: false });
+      applyServerCampaign(payload.campaign || DEFAULT_DATA, nextRevision, { playOwnerEffects: false, updatedAt: payload.updatedAt });
     } else {
       syncAuthUsersFromCampaign(payload.campaign);
     }
@@ -2686,6 +2696,10 @@ function connectServerSocket() {
   });
   serverSync.socket.on('socket:ready', (payload) => {
     updateServerSession(payload?.me || { id: null, username: '', role: 'Viewer' });
+    if (payload?.updatedAt) {
+      const updatedAtMs = new Date(payload.updatedAt).getTime();
+      if (Number.isFinite(updatedAtMs) && updatedAtMs > 0) serverSync.clockOffsetMs = Date.now() - updatedAtMs;
+    }
     const nextRevision = Number(payload?.revision || 0);
     if (nextRevision > serverRevision) scheduleCampaignRefresh(120);
   });
@@ -2707,14 +2721,31 @@ function connectServerSocket() {
     if (!payload?.campaign) return;
     const nextRevision = Number(payload.revision || 0);
     if (nextRevision > 0 && nextRevision <= serverRevision) return;
-    applyServerCampaign(payload.campaign, nextRevision, { playOwnerEffects: true });
+    applyServerCampaign(payload.campaign, nextRevision, { playOwnerEffects: true, updatedAt: payload.updatedAt });
     if (payload.me) updateServerSession(payload.me);
   });
   serverSync.socket.on('fx:fleet-jump-start', (payload) => {
     if (!payload?.motion?.fleetId) return;
-    playAudioCue(hyperspaceStartAudio);
-    upsertFleetMotionRecord(payload.motion);
-    beginFleetTravelFromMotion(payload.motion, { persistMotion: false });
+    if (payload?.serverNowMs) {
+      const serverNowMs = Number(payload.serverNowMs);
+      if (Number.isFinite(serverNowMs) && serverNowMs > 0) {
+        serverSync.clockOffsetMs = Date.now() - serverNowMs;
+      }
+    } else if (payload?.motion?.serverNowMs) {
+      const serverNowMs = Number(payload.motion.serverNowMs);
+      if (Number.isFinite(serverNowMs) && serverNowMs > 0) {
+        serverSync.clockOffsetMs = Date.now() - serverNowMs;
+      }
+    }
+    const adjustedMotion = normalizeMotionTimingForClient(payload.motion);
+    const existing = fleetTravelState.get(adjustedMotion.fleetId);
+    const isDuplicate = Boolean(existing
+      && existing.sourcePlanetId === adjustedMotion.sourcePlanetId
+      && existing.targetPlanetId === adjustedMotion.targetPlanetId
+      && Math.abs(Number(existing.startedAtMs || 0) - Number(adjustedMotion.startedAtMs || 0)) < 250
+      && Math.abs(Number(existing.durationMs || 0) - Number(adjustedMotion.durationMs || 0)) < 250);
+    upsertFleetMotionRecord(adjustedMotion);
+    beginFleetTravelFromMotion(adjustedMotion, { persistMotion: false, playStartAudio: !isDuplicate });
   });
   serverSync.socket.on('fx:fleet-jump-finish', (payload) => {
     if (!payload?.fleetId) return;
@@ -4130,18 +4161,35 @@ function findFleetTravelPlan(startPlanetId, endPlanetId) {
 }
 
 function upsertFleetMotionRecord(motion) {
+  const normalizedMotion = normalizeMotionTimingForClient(motion);
   const nextMotion = {
-    fleetId: String(motion?.fleetId || '').trim(),
-    sourcePlanetId: String(motion?.sourcePlanetId || '').trim(),
-    sourcePlanetName: String(motion?.sourcePlanetName || '').trim(),
-    targetPlanetId: String(motion?.targetPlanetId || '').trim(),
-    targetPlanetName: String(motion?.targetPlanetName || '').trim(),
-    startedAtMs: Number(motion?.startedAtMs) || Date.now(),
-    durationMs: Math.max(1000, Number(motion?.durationMs) || 0)
+    fleetId: String(normalizedMotion?.fleetId || '').trim(),
+    sourcePlanetId: String(normalizedMotion?.sourcePlanetId || '').trim(),
+    sourcePlanetName: String(normalizedMotion?.sourcePlanetName || '').trim(),
+    targetPlanetId: String(normalizedMotion?.targetPlanetId || '').trim(),
+    targetPlanetName: String(normalizedMotion?.targetPlanetName || '').trim(),
+    startedByUserId: normalizedMotion?.startedByUserId || null,
+    source: String(normalizedMotion?.source || '').trim(),
+    serverNowMs: Number(normalizedMotion?.serverNowMs) || 0,
+    startedAtMs: Number(normalizedMotion?.startedAtMs) || Date.now(),
+    durationMs: Math.max(1000, Number(normalizedMotion?.durationMs) || 0)
   };
   if (!nextMotion.fleetId) return;
   state.fleetMotions = Array.isArray(state.fleetMotions) ? state.fleetMotions.filter((entry) => entry.fleetId !== nextMotion.fleetId) : [];
   state.fleetMotions.push(nextMotion);
+}
+
+function normalizeMotionTimingForClient(motion) {
+  const rawStartedAtMs = Number(motion?.startedAtMs) || Date.now();
+  const source = String(motion?.source || '').trim();
+  let startedAtMs = rawStartedAtMs;
+  if (source === 'discord_radio' && Number.isFinite(serverSync.clockOffsetMs)) {
+    startedAtMs = rawStartedAtMs + serverSync.clockOffsetMs;
+  }
+  return {
+    ...motion,
+    startedAtMs
+  };
 }
 
 function removeFleetMotionRecord(fleetId) {
@@ -4178,7 +4226,7 @@ function buildFleetTravelRuntime(motion, nowMs = Date.now()) {
 }
 
 function beginFleetTravelFromMotion(motion, options = {}) {
-  const runtime = buildFleetTravelRuntime(motion);
+  const runtime = buildFleetTravelRuntime(normalizeMotionTimingForClient(motion));
   if (!runtime) return false;
   if (options.persistMotion !== false) upsertFleetMotionRecord(runtime);
   fleetTravelState.set(runtime.fleetId, runtime);
@@ -4759,8 +4807,7 @@ function startFleetJump(id) {
     durationMs: Math.max(6000, (plan.totalLength / FLEET_TRAVEL_REFERENCE_DISTANCE) * FLEET_TRAVEL_REFERENCE_DURATION_MS),
   };
   upsertFleetMotionRecord(motion);
-  beginFleetTravelFromMotion(motion, { persistMotion: false });
-  playAudioCue(hyperspaceStartAudio);
+  beginFleetTravelFromMotion(motion, { persistMotion: false, playStartAudio: true });
   emitLiveSocketEvent('fx:fleet-jump-start', { motion });
   ensureFleetTravelAnimation();
   updateFleetElement(fleet);
