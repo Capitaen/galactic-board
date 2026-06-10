@@ -529,10 +529,6 @@ function recoverActorNameFromLine(line) {
   const multiWordMatch = leftSide.match(/([A-ZÄÖÜ][\p{L}'’-]+(?:\s+[A-ZÄÖÜ][\p{L}'’-]+){1,3})$/u);
   if (multiWordMatch?.[1]) return multiWordMatch[1].trim();
 
-  const directOrderMatch = normalized.match(
-    /([A-ZÄÖÜ][\p{L}'’-]+(?:\s+[A-ZÄÖÜ][\p{L}'’-]+){1,3})\s*:\s*an\s+/u
-  );
-  if (directOrderMatch?.[1]) return directOrderMatch[1].trim();
 
   return '';
 }
