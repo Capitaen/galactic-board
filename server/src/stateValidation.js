@@ -23,6 +23,20 @@ function cloneWithoutKeys(item, keys = []) {
   return clone;
 }
 
+const ROLE_BASE_ROLES = {
+  'Republic Navy Main-Admin': 'Republic Navy / GAR',
+  'Republic Navy Admin': 'Republic Navy / GAR',
+  'Galaktischer Senat Main-Admin': 'Senat',
+  'Galaktischer Senats Admin': 'Senat',
+  'Eventleiter / KUS Main-Admin': 'Eventleiter / KUS',
+  'Eventleiter / KUS Admin': 'Eventleiter / KUS'
+};
+
+function canManageLogins(role) {
+  const normalizedRole = String(role || '');
+  return normalizedRole === 'Admin' || normalizedRole.endsWith(' Main-Admin') || normalizedRole.endsWith(' Admin');
+}
+
 function validatePlanetChanges(role, previousState, nextState) {
   if (role === 'Admin') return;
   const previous = indexById(previousState.planets);
@@ -194,20 +208,23 @@ function validateBuildJobChanges(role, previousState, nextState) {
   });
 }
 
-function validateAdminOnlyBlocks(role, previousState, nextState) {
-  if (role === 'Admin') return;
-  ensure(!hasChanged(previousState.authUsers || [], nextState.authUsers || []), 'Only Admin may change login manager users', { entity: 'authUsers' });
+function validateAdminOnlyBlocks(role, effectiveRole, previousState, nextState) {
+  if (effectiveRole === 'Admin') return;
+  if (!canManageLogins(role)) {
+    ensure(!hasChanged(previousState.authUsers || [], nextState.authUsers || []), 'Only login managers may submit login manager users', { entity: 'authUsers' });
+  }
   ensure(!hasChanged(previousState.importWarnings || [], nextState.importWarnings || []), 'Only Admin may change import warnings payload', { entity: 'importWarnings' });
   ensure(!hasChanged(previousState.meta?.manualSectors || [], nextState.meta?.manualSectors || []), 'Only Admin may change manual sectors', { entity: 'manualSectors' });
 }
 
 export function validateNextCampaignState(role, previousState, nextState) {
-  ensure(role !== 'Viewer', 'Viewer may not mutate campaign state');
-  validatePlanetChanges(role, previousState, nextState);
-  validatePlanetResourceChanges(role, previousState, nextState);
-  validateFleetChanges(role, previousState, nextState);
-  validateShipChanges(role, previousState, nextState);
-  validateBuildJobChanges(role, previousState, nextState);
-  validateResourceChanges(role, previousState, nextState);
-  validateAdminOnlyBlocks(role, previousState, nextState);
+  const effectiveRole = ROLE_BASE_ROLES[role] || role;
+  ensure(effectiveRole !== 'Viewer', 'Viewer may not mutate campaign state');
+  validatePlanetChanges(effectiveRole, previousState, nextState);
+  validatePlanetResourceChanges(effectiveRole, previousState, nextState);
+  validateFleetChanges(effectiveRole, previousState, nextState);
+  validateShipChanges(effectiveRole, previousState, nextState);
+  validateBuildJobChanges(effectiveRole, previousState, nextState);
+  validateResourceChanges(effectiveRole, previousState, nextState);
+  validateAdminOnlyBlocks(role, effectiveRole, previousState, nextState);
 }

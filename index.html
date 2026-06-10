@@ -188,6 +188,11 @@ textarea { min-height:82px; resize:vertical; }
 .data-table input, .data-table select { padding:7px 8px; font-size:13px; }
 .data-table .actions { display:flex; gap:8px; flex-wrap:wrap; }
 .muted-box { padding:12px; border:1px dashed rgba(255,255,255,.16); border-radius:12px; color:var(--muted); }
+.login-faction-grid { display:grid; gap:16px; }
+.login-faction-head { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; margin-bottom:12px; }
+.login-faction-head h3 { margin:0 0 4px; }
+.login-faction-head p { margin:0; color:var(--muted); font-size:13px; }
+.login-main-admin { color:#d8e7ff; font-size:12px; }
 .warning-list { margin:0; padding-left:18px; color:#ffcf9d; }
 .warning-list li { margin:4px 0; }
 .resource-slot-row { display:grid; grid-template-columns:repeat(5,1fr); gap:8px; }
@@ -456,8 +461,14 @@ a { color:#8bc7ff; }
     <span class="muted">Rolle:</span>
     <select id="roleSelect">
       <option>Admin</option>
+      <option>Republic Navy Main-Admin</option>
+      <option>Republic Navy Admin</option>
       <option>Eventleiter / KUS</option>
+      <option>Eventleiter / KUS Main-Admin</option>
+      <option>Eventleiter / KUS Admin</option>
       <option>Republic Navy / GAR</option>
+      <option>Galaktischer Senat Main-Admin</option>
+      <option>Galaktischer Senats Admin</option>
       <option>Senat</option>
       <option selected>Viewer</option>
     </select>
@@ -759,6 +770,25 @@ const orientationLockBtn = document.getElementById('orientationLockBtn');
 const orientationDismissBtn = document.getElementById('orientationDismissBtn');
 const buildProjectsTabBtn = document.getElementById('buildProjectsTabBtn');
 const loginManagerTabBtn = document.getElementById('loginManagerTabBtn');
+const LOGIN_ROLE_DEFINITIONS = {
+  Admin: { label: 'Globaler Admin', baseRole: 'Admin', faction: 'system', level: 'global' },
+  'Republic Navy Main-Admin': { label: 'Republic Navy Main-Admin', baseRole: 'Republic Navy / GAR', faction: 'navy', level: 'main' },
+  'Republic Navy Admin': { label: 'Republic Navy Admin', baseRole: 'Republic Navy / GAR', faction: 'navy', level: 'admin' },
+  'Republic Navy / GAR': { label: 'Republic Navy', baseRole: 'Republic Navy / GAR', faction: 'navy', level: 'member' },
+  'Galaktischer Senat Main-Admin': { label: 'Galaktischer Senat Main-Admin', baseRole: 'Senat', faction: 'senate', level: 'main' },
+  'Galaktischer Senats Admin': { label: 'Galaktischer Senats Admin', baseRole: 'Senat', faction: 'senate', level: 'admin' },
+  Senat: { label: 'Galaktischer Senat', baseRole: 'Senat', faction: 'senate', level: 'member' },
+  'Eventleiter / KUS Main-Admin': { label: 'Eventleiter / KUS Main-Admin', baseRole: 'Eventleiter / KUS', faction: 'event', level: 'main' },
+  'Eventleiter / KUS Admin': { label: 'Eventleiter / KUS Admin', baseRole: 'Eventleiter / KUS', faction: 'event', level: 'admin' },
+  'Eventleiter / KUS': { label: 'Eventleiter / KUS', baseRole: 'Eventleiter / KUS', faction: 'event', level: 'member' },
+  Viewer: { label: 'Viewer', baseRole: 'Viewer', faction: 'system', level: 'viewer' }
+};
+const LOGIN_ROLES = Object.keys(LOGIN_ROLE_DEFINITIONS);
+const LOGIN_FACTIONS = [
+  { id: 'navy', label: 'Republic Navy', memberRole: 'Republic Navy / GAR', adminRole: 'Republic Navy Admin', mainRole: 'Republic Navy Main-Admin' },
+  { id: 'senate', label: 'Galaktischer Senat', memberRole: 'Senat', adminRole: 'Galaktischer Senats Admin', mainRole: 'Galaktischer Senat Main-Admin' },
+  { id: 'event', label: 'Eventleiter / KUS', memberRole: 'Eventleiter / KUS', adminRole: 'Eventleiter / KUS Admin', mainRole: 'Eventleiter / KUS Main-Admin' }
+];
 const sectorDrawBtn = document.getElementById('sectorDrawBtn');
 const planetIndex = new Map();
 const fleetIndex = new Map();
@@ -1082,7 +1112,7 @@ function normalizeCampaignState() {
       id: user.id || `auth_${Math.random().toString(36).slice(2, 10)}`,
       username: String(user.username || '').trim(),
       password: String(user.password || ''),
-      role: ['Admin', 'Eventleiter / KUS', 'Republic Navy / GAR', 'Senat', 'Viewer'].includes(user.role) ? user.role : 'Viewer'
+      role: LOGIN_ROLES.includes(user.role) ? user.role : 'Viewer'
     }))
     .filter((user) => user.username);
   state.fleetMotions = state.fleetMotions
@@ -2350,10 +2380,10 @@ function syncAuthUsersFromCampaign(campaign) {
       id: user.id || `auth_${Math.random().toString(36).slice(2, 10)}`,
       username: String(user.username || '').trim(),
       password: String(user.password || ''),
-      role: ['Admin', 'Eventleiter / KUS', 'Republic Navy / GAR', 'Senat', 'Viewer'].includes(user.role) ? user.role : 'Viewer'
+      role: LOGIN_ROLES.includes(user.role) ? user.role : 'Viewer'
     }))
     .filter((user) => user.username);
-  if (activeMainTab === 'loginManager' && isAdminRole()) renderLoginManagerView();
+  if (activeMainTab === 'loginManager' && canManageLogins()) renderLoginManagerView();
 }
 
 function clearServerReconnectTimer() {
@@ -4415,12 +4445,39 @@ function startFleetJump(id) {
   setStatus(`Sprung eingeleitet: ${fleet.name} -> ${targetPlanet.name}`);
 }
 
-function currentRole() {
+function currentAssignedRole() {
   return serverSync.session?.role || roleSelect.value || 'Viewer';
+}
+
+function currentRole() {
+  return LOGIN_ROLE_DEFINITIONS[currentAssignedRole()]?.baseRole || 'Viewer';
 }
 
 function isAdminRole() {
   return currentRole() === 'Admin';
+}
+
+function canManageLogins() {
+  return ['global', 'main', 'admin'].includes(LOGIN_ROLE_DEFINITIONS[currentAssignedRole()]?.level);
+}
+
+function getManageableLoginRoles() {
+  const actor = LOGIN_ROLE_DEFINITIONS[currentAssignedRole()];
+  if (actor?.level === 'global') return LOGIN_ROLES;
+  const faction = LOGIN_FACTIONS.find((entry) => entry.id === actor?.faction);
+  if (!faction) return [];
+  if (actor.level === 'main') return [faction.adminRole, faction.memberRole];
+  if (actor.level === 'admin') return [faction.memberRole];
+  return [];
+}
+
+function escapeLoginManagerText(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
 }
 
 async function attemptLogin() {
@@ -4481,13 +4538,13 @@ function getRoleFaction(role = currentRole()) {
 
 function refreshRoleChrome() {
   saveBtn.classList.toggle('hidden', !isAdminRole());
-  loginManagerTabBtn.classList.toggle('hidden', !isAdminRole());
+  loginManagerTabBtn.classList.toggle('hidden', !canManageLogins());
   buildProjectsTabBtn.classList.remove('hidden');
   updateSectorDrawButton();
   document.querySelector('[data-main-tab="fleetManagement"]')?.classList.toggle('hidden', currentRole() === 'Senat');
   document.querySelector('[data-main-tab="shipyard"]')?.classList.toggle('hidden', currentRole() === 'Senat');
   roleSelect.disabled = true;
-  if (!isAdminRole() && activeMainTab === 'loginManager') setMainTab('map');
+  if (!canManageLogins() && activeMainTab === 'loginManager') setMainTab('map');
   if (currentRole() === 'Senat' && (activeMainTab === 'fleetManagement' || activeMainTab === 'shipyard')) setMainTab('buildProjects');
   const faction = getRoleFaction();
   if (!faction) {
@@ -7541,20 +7598,22 @@ function renderFleetManagementView() {
   }
 }
 
-function createLoginManagerUser() {
-  if (!isAdminRole()) return;
+function createLoginManagerUser(role = '') {
+  if (!canManageLogins()) return;
+  const manageableRoles = getManageableLoginRoles();
+  const selectedRole = manageableRoles.includes(role) ? role : (manageableRoles[0] || 'Viewer');
   state.authUsers.push({
     id: `auth_${Math.random().toString(36).slice(2, 10)}`,
     username: '',
     password: '',
-    role: 'Viewer',
+    role: selectedRole,
     isDraft: true
   });
   renderLoginManagerView();
 }
 
 async function saveLoginManagerUser(id) {
-  if (!isAdminRole()) return;
+  if (!canManageLogins()) return;
   const user = state.authUsers.find((entry) => entry.id === id);
   if (!user) return;
   const username = document.getElementById(`authUser_${id}`)?.value.trim() || '';
@@ -7577,7 +7636,7 @@ async function saveLoginManagerUser(id) {
       body: JSON.stringify({
         username,
         password,
-        role: ['Admin', 'Eventleiter / KUS', 'Republic Navy / GAR', 'Senat', 'Viewer'].includes(role) ? role : 'Viewer'
+        role: LOGIN_ROLES.includes(role) ? role : 'Viewer'
       })
     });
     const payload = await response.json();
@@ -7591,7 +7650,7 @@ async function saveLoginManagerUser(id) {
 }
 
 async function deleteLoginManagerUser(id) {
-  if (!isAdminRole()) return;
+  if (!canManageLogins()) return;
   const user = state.authUsers.find((entry) => entry.id === id);
   if (user?.isDraft) {
     state.authUsers = state.authUsers.filter((entry) => entry.id !== id);
@@ -7615,54 +7674,85 @@ async function deleteLoginManagerUser(id) {
 }
 
 function renderLoginManagerView() {
-  if (!isAdminRole()) {
+  if (!canManageLogins()) {
     setMainTab('map');
     return;
   }
+  const actorDefinition = LOGIN_ROLE_DEFINITIONS[currentAssignedRole()];
+  const visibleFactions = actorDefinition.level === 'global'
+    ? LOGIN_FACTIONS
+    : LOGIN_FACTIONS.filter((faction) => faction.id === actorDefinition.faction);
+  const manageableRoles = getManageableLoginRoles();
+  const renderUserRows = (users) => users.length ? users.map((user) => {
+    const userDefinition = LOGIN_ROLE_DEFINITIONS[user.role];
+    const userFaction = LOGIN_FACTIONS.find((faction) => faction.id === userDefinition?.faction);
+    const categoryRoles = userFaction
+      ? [userFaction.mainRole, userFaction.adminRole, userFaction.memberRole]
+      : ['Admin', 'Viewer'];
+    const roleOptions = actorDefinition.level === 'global'
+      ? categoryRoles
+      : (user.isDraft || manageableRoles.includes(user.role) ? manageableRoles : [user.role]);
+    const editable = user.isDraft || manageableRoles.includes(user.role);
+    return `
+      <tr>
+        <td><input id="authUser_${user.id}" value="${escapeLoginManagerText(user.username)}" placeholder="z.B. benutzer" ${editable ? '' : 'disabled'}></td>
+        <td><input id="authPass_${user.id}" type="text" value="${user.password || ''}" placeholder="${editable ? 'Neues Passwort' : 'Nicht bearbeitbar'}" ${editable ? '' : 'disabled'}></td>
+        <td>
+          <select id="authRole_${user.id}" ${editable ? '' : 'disabled'}>
+            ${roleOptions.map((role) => `<option value="${role}" ${user.role === role ? 'selected' : ''}>${LOGIN_ROLE_DEFINITIONS[role]?.label || role}</option>`).join('')}
+          </select>
+        </td>
+        <td class="actions">
+          ${editable ? `
+            <button class="mini-btn primary" onclick="saveLoginManagerUser('${user.id}')">Speichern</button>
+            <button class="mini-btn danger" onclick="deleteLoginManagerUser('${user.id}')">Löschen</button>
+          ` : '<span class="muted">Geschützt</span>'}
+        </td>
+      </tr>
+    `;
+  }).join('') : '<tr><td colspan="4"><div class="muted-box">Noch keine Logins in dieser Kategorie.</div></td></tr>';
+  const renderFactionSection = (faction) => {
+    const users = state.authUsers.filter((user) => LOGIN_ROLE_DEFINITIONS[user.role]?.faction === faction.id);
+    const mainAdmin = users.find((user) => user.role === faction.mainRole && !user.isDraft);
+    const createRole = manageableRoles.includes(faction.memberRole) ? faction.memberRole : manageableRoles[0];
+    return `
+      <div class="workspace-card">
+        <div class="login-faction-head">
+          <div>
+            <h3>${faction.label}</h3>
+            <p class="login-main-admin">Main-Admin: ${escapeLoginManagerText(mainAdmin?.username || 'Noch nicht vergeben')}</p>
+          </div>
+          ${createRole ? `<button class="mini-btn primary" onclick="createLoginManagerUser('${createRole}')">Login anlegen</button>` : ''}
+        </div>
+        <table class="data-table">
+          <thead><tr><th>Benutzername</th><th>Passwort</th><th>Rolle</th><th>Aktionen</th></tr></thead>
+          <tbody>${renderUserRows(users)}</tbody>
+        </table>
+      </div>
+    `;
+  };
+  const systemUsers = state.authUsers.filter((user) => LOGIN_ROLE_DEFINITIONS[user.role]?.faction === 'system');
   workspacePanel.innerHTML = `
     <div class="workspace-head">
       <div>
         <h2>Login Manager</h2>
-        <p>Admins können hier gültige Login-Namen, Passwörter und Rollen persistent in der Server-Datenbank verwalten.</p>
-      </div>
-      <div class="toolbar-row">
-        <button class="mini-btn primary" onclick="createLoginManagerUser()">Login anlegen</button>
+        <p>Logins sind nach Fraktionen geordnet. Main-Admins verwalten ihre Fraktions-Admins und Mitglieder; Fraktions-Admins verwalten Mitglieder.</p>
       </div>
     </div>
-    <div class="workspace-section">
+    <div class="workspace-section login-faction-grid">
+      ${visibleFactions.map(renderFactionSection).join('')}
+      ${actorDefinition.level === 'global' ? `
       <div class="workspace-card">
+        <div class="login-faction-head">
+          <div><h3>System / Global</h3><p>Globale Admins und reine Viewer.</p></div>
+          <button class="mini-btn primary" onclick="createLoginManagerUser('Viewer')">Login anlegen</button>
+        </div>
         <table class="data-table">
-          <thead>
-            <tr>
-              <th>Benutzername</th>
-              <th>Passwort</th>
-              <th>Rolle</th>
-              <th>Aktionen</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${state.authUsers.length ? state.authUsers.map((user) => `
-              <tr>
-                <td><input id="authUser_${user.id}" value="${user.username || ''}" placeholder="z.B. admin"></td>
-                <td><input id="authPass_${user.id}" type="text" value="${user.password || ''}" placeholder="Passwort"></td>
-                <td>
-                  <select id="authRole_${user.id}">
-                    ${['Admin', 'Eventleiter / KUS', 'Republic Navy / GAR', 'Senat', 'Viewer'].map((role) => `<option value="${role}" ${user.role === role ? 'selected' : ''}>${role}</option>`).join('')}
-                  </select>
-                </td>
-                <td class="actions">
-                  <button class="mini-btn primary" onclick="saveLoginManagerUser('${user.id}')">Speichern</button>
-                  <button class="mini-btn danger" onclick="deleteLoginManagerUser('${user.id}')">Löschen</button>
-                </td>
-              </tr>
-            `).join('') : `
-              <tr>
-                <td colspan="4"><div class="muted-box">Noch keine Logins angelegt.</div></td>
-              </tr>
-            `}
-          </tbody>
+          <thead><tr><th>Benutzername</th><th>Passwort</th><th>Rolle</th><th>Aktionen</th></tr></thead>
+          <tbody>${renderUserRows(systemUsers)}</tbody>
         </table>
       </div>
+      ` : ''}
     </div>
   `;
 }

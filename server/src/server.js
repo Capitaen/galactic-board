@@ -35,6 +35,20 @@ const RESOURCE_FACTIONS = ['GAR', 'KUS'];
 const RESOURCE_PRODUCTION_TICK_MS = 60 * 60 * 1000;
 const RESOURCE_RESET_VERSION = 'resource_reset_2026_05_01';
 const OWNER_FRONTLINE_PASS_VERSION = 'excel_owner_visibility_v2';
+const LOGIN_ROLE_DEFINITIONS = {
+  Admin: { faction: 'system', level: 'global' },
+  'Republic Navy Main-Admin': { faction: 'navy', level: 'main' },
+  'Republic Navy Admin': { faction: 'navy', level: 'admin' },
+  'Republic Navy / GAR': { faction: 'navy', level: 'member' },
+  'Galaktischer Senat Main-Admin': { faction: 'senate', level: 'main' },
+  'Galaktischer Senats Admin': { faction: 'senate', level: 'admin' },
+  Senat: { faction: 'senate', level: 'member' },
+  'Eventleiter / KUS Main-Admin': { faction: 'event', level: 'main' },
+  'Eventleiter / KUS Admin': { faction: 'event', level: 'admin' },
+  'Eventleiter / KUS': { faction: 'event', level: 'member' },
+  Viewer: { faction: 'system', level: 'viewer' }
+};
+const LOGIN_ROLES = Object.keys(LOGIN_ROLE_DEFINITIONS);
 function normalizeOwnershipReferenceName(text) {
   return String(text || '')
     .toLowerCase()
@@ -218,10 +232,22 @@ function getSession(req) {
   return token ? sessions.get(token) || null : null;
 }
 
-function sanitizeStateForRole(state, role) {
+function canManageLogins(role) {
+  return ['global', 'main', 'admin'].includes(LOGIN_ROLE_DEFINITIONS[role]?.level);
+}
+
+function listUsersForActor(actor) {
+  const users = listUsers(db);
+  const actorDefinition = LOGIN_ROLE_DEFINITIONS[actor?.role];
+  if (actorDefinition?.level === 'global') return users;
+  if (!canManageLogins(actor?.role)) return [];
+  return users.filter((user) => LOGIN_ROLE_DEFINITIONS[user.role]?.faction === actorDefinition.faction);
+}
+
+function sanitizeStateForRole(state, actor) {
   return {
     ...state,
-    authUsers: role === 'Admin' ? listUsers(db) : []
+    authUsers: listUsersForActor(actor)
   };
 }
 
@@ -401,8 +427,8 @@ function requireAuth(req, res, next) {
   next();
 }
 
-function requireAdmin(req, res, next) {
-  if (!req.user || req.user.role !== 'Admin') {
+function requireLoginManager(req, res, next) {
+  if (!req.user || !canManageLogins(req.user.role)) {
     return res.status(403).json({ error: 'Forbidden' });
   }
   next();
@@ -410,7 +436,30 @@ function requireAdmin(req, res, next) {
 
 function sanitizeAdminRole(rawRole) {
   const role = String(rawRole || '').trim();
-  return ['Admin', 'Eventleiter / KUS', 'Republic Navy / GAR', 'Senat', 'Viewer'].includes(role) ? role : 'Viewer';
+  return LOGIN_ROLES.includes(role) ? role : 'Viewer';
+}
+
+function canActorAssignRole(actor, role) {
+  const actorDefinition = LOGIN_ROLE_DEFINITIONS[actor?.role];
+  const roleDefinition = LOGIN_ROLE_DEFINITIONS[role];
+  if (!actorDefinition || !roleDefinition) return false;
+  if (actorDefinition.level === 'global') return true;
+  if (actorDefinition.faction !== roleDefinition.faction) return false;
+  if (actorDefinition.level === 'main') return ['admin', 'member'].includes(roleDefinition.level);
+  return actorDefinition.level === 'admin' && roleDefinition.level === 'member';
+}
+
+function canActorManageUser(actor, targetUser) {
+  return Boolean(targetUser && canActorAssignRole(actor, targetUser.role));
+}
+
+function ensureSingleMainAdmin(role, ignoredUserId = '') {
+  if (LOGIN_ROLE_DEFINITIONS[role]?.level !== 'main') return;
+  const existing = listUsers(db).find((user) => user.id !== ignoredUserId && user.role === role);
+  if (!existing) return;
+  const error = new Error(`Für diese Fraktion ist bereits ein Main-Admin vergeben: ${existing.username}.`);
+  error.status = 409;
+  throw error;
 }
 
 function validateAdminUserInput(body) {
@@ -575,7 +624,7 @@ app.get('/api/bootstrap', (req, res) => {
   }
   res.json({
     me,
-    campaign: sanitizeStateForRole(effectiveState, me.role),
+    campaign: sanitizeStateForRole(effectiveState, me),
     revision: effectiveRevision,
     updatedAt: effectiveUpdatedAt
   });
@@ -634,57 +683,70 @@ app.post('/api/auth/logout', (req, res) => {
   res.json({ ok: true });
 });
 
-app.post('/api/admin/users', requireAuth, requireAdmin, async (req, res) => {
+app.post('/api/admin/users', requireAuth, requireLoginManager, async (req, res) => {
   try {
     const { username, password, role } = validateAdminUserInput(req.body);
+    if (!canActorAssignRole(req.user, role)) {
+      return res.status(403).json({ error: 'Diese Rolle darfst du nicht vergeben.', users: listUsersForActor(req.user) });
+    }
+    ensureSingleMainAdmin(role);
     const existing = findUserByNormalizedUsername(db, username);
     if (existing) {
-      return res.status(409).json({ error: 'Dieser Benutzername existiert bereits.', users: listUsers(db) });
+      return res.status(409).json({ error: 'Dieser Benutzername existiert bereits.', users: listUsersForActor(req.user) });
     }
     const passwordHash = await bcrypt.hash(password, 10);
     createUser(db, { username, passwordHash, role });
-    res.json({ ok: true, users: listUsers(db) });
+    res.json({ ok: true, users: listUsersForActor(req.user) });
   } catch (error) {
     res.status(error.status || 500).json({
       error: error.message || 'Login konnte nicht erstellt werden.',
-      users: listUsers(db)
+      users: listUsersForActor(req.user)
     });
   }
 });
 
-app.patch('/api/admin/users/:id', requireAuth, requireAdmin, async (req, res) => {
+app.patch('/api/admin/users/:id', requireAuth, requireLoginManager, async (req, res) => {
   const userId = String(req.params.id || '').trim();
   if (!userId) {
-    return res.status(400).json({ error: 'Ungültige Benutzer-ID.', users: listUsers(db) });
+    return res.status(400).json({ error: 'Ungültige Benutzer-ID.', users: listUsersForActor(req.user) });
   }
 
   try {
     const { username, password, role } = validateAdminUserInput(req.body);
+    const targetUser = listUsers(db).find((user) => user.id === userId);
+    if (!canActorManageUser(req.user, targetUser) || !canActorAssignRole(req.user, role)) {
+      return res.status(403).json({ error: 'Diesen Login darfst du nicht bearbeiten.', users: listUsersForActor(req.user) });
+    }
+    ensureSingleMainAdmin(role, userId);
     const existing = findUserByNormalizedUsername(db, username);
     if (existing && existing.id !== userId) {
-      return res.status(409).json({ error: 'Dieser Benutzername existiert bereits.', users: listUsers(db) });
+      return res.status(409).json({ error: 'Dieser Benutzername existiert bereits.', users: listUsersForActor(req.user) });
     }
     const passwordHash = await bcrypt.hash(password, 10);
     updateUser(db, userId, { username, passwordHash, role });
-    res.json({ ok: true, users: listUsers(db) });
+    res.json({ ok: true, users: listUsersForActor(req.user) });
   } catch (error) {
     res.status(error.status || 500).json({
       error: error.message || 'Login konnte nicht gespeichert werden.',
-      users: listUsers(db)
+      users: listUsersForActor(req.user)
     });
   }
 });
 
-app.delete('/api/admin/users/:id', requireAuth, requireAdmin, (req, res) => {
+app.delete('/api/admin/users/:id', requireAuth, requireLoginManager, (req, res) => {
   const userId = String(req.params.id || '').trim();
   if (!userId) {
-    return res.status(400).json({ error: 'Ungültige Benutzer-ID.', users: listUsers(db) });
+    return res.status(400).json({ error: 'Ungültige Benutzer-ID.', users: listUsersForActor(req.user) });
   }
 
   const existingUsers = listUsers(db);
   const targetUser = existingUsers.find((entry) => entry.id === userId);
   if (!targetUser) {
-    return res.status(404).json({ error: 'Login nicht gefunden.', users: existingUsers });
+    return res.status(404).json({ error: 'Login nicht gefunden.', users: listUsersForActor(req.user) });
+  }
+
+  if (!canActorManageUser(req.user, targetUser)) {
+    return res.status(403).json({ error: 'Diesen Login darfst du nicht löschen.', users: listUsersForActor(req.user) });
   }
 
   if (String(targetUser.username || '').trim().toLowerCase() === 'admin') {
@@ -692,7 +754,7 @@ app.delete('/api/admin/users/:id', requireAuth, requireAdmin, (req, res) => {
   }
 
   deleteUser(db, userId);
-  res.json({ ok: true, users: listUsers(db) });
+  res.json({ ok: true, users: listUsersForActor(req.user) });
 });
 
 app.put('/api/campaign/state', requireAuth, (req, res) => {
