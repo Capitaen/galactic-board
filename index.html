@@ -1066,6 +1066,16 @@ function normalizeCampaignState() {
   state.meta.manualSectors = ensureSectorStore()
     .map((sector) => createManualSectorRecord(sector))
     .filter((sector) => sector.points.length >= 3);
+  state.meta.customRoutes = ensureCustomRouteStore()
+    .map((route, index) => ({
+      id: String(route?.id || `custom_route_${index + 1}`),
+      name: String(route?.name || '').trim() || `Neue Route ${index + 1}`,
+      connections: (Array.isArray(route?.connections) ? route.connections : [])
+        .map(normalizeRouteConnection)
+        .filter(Boolean)
+        .map(serializeRouteConnection)
+    }))
+    .filter((route) => route.connections.length);
   state.fleets = Array.isArray(state.fleets) ? state.fleets : [];
   state.fleets.forEach((fleet) => {
     fleet.commander = fleet.commander || fleet.leader || '';
@@ -3542,6 +3552,12 @@ function ensureRouteMetaStore() {
   return state.meta.routeMeta;
 }
 
+function ensureCustomRouteStore() {
+  state.meta = state.meta || {};
+  state.meta.customRoutes = Array.isArray(state.meta.customRoutes) ? state.meta.customRoutes : [];
+  return state.meta.customRoutes;
+}
+
 function getRouteId(a, b) {
   return [a.id, b.id].sort().join('__');
 }
@@ -3559,6 +3575,14 @@ function isUnnamedRoute(route) {
   return /^unnamed route(?:\s*\(\d+\))?$/i.test(String(route?.name || '').trim());
 }
 
+function isCustomRoute(route) {
+  return Boolean(route?.isCustom);
+}
+
+function canManuallyEditRoute(route) {
+  return isUnnamedRoute(route) || isCustomRoute(route);
+}
+
 function normalizeRouteConnection(connection) {
   const startPlanetId = String(connection?.startPlanetId || '').trim();
   const endPlanetId = String(connection?.endPlanetId || '').trim();
@@ -3566,8 +3590,29 @@ function normalizeRouteConnection(connection) {
   return {
     startPlanetId,
     endPlanetId,
-    ...(Array.isArray(connection?.path) ? { path: connection.path } : {})
+    ...(Array.isArray(connection?.path) && connection.path.length >= 2 ? { path: connection.path } : {})
   };
+}
+
+function serializeRouteConnection(connection) {
+  return {
+    startPlanetId: connection.startPlanetId,
+    endPlanetId: connection.endPlanetId,
+    ...(Array.isArray(connection.path) && connection.path.length >= 2 ? { path: connection.path } : {})
+  };
+}
+
+function createCustomRoute(connection, name = '') {
+  const normalizedConnection = normalizeRouteConnection(connection);
+  if (!normalizedConnection) return null;
+  const routes = ensureCustomRouteStore();
+  const route = {
+    id: `custom_route_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
+    name: String(name || '').trim() || `Neue Route ${routes.length + 1}`,
+    connections: [serializeRouteConnection(normalizedConnection)]
+  };
+  routes.push(route);
+  return route;
 }
 
 function getRouteConnections(route) {
@@ -5212,6 +5257,37 @@ function rebuildTacticalRouteCache(data, projectionMode) {
       componentIndex += 1;
     }
   });
+  ensureCustomRouteStore().forEach((customRoute) => {
+    const connections = (customRoute.connections || []).map(normalizeRouteConnection).filter(Boolean);
+    const paths = connections.map((connection) => {
+      if (projectionMode !== 'schematic' && Array.isArray(connection.path) && connection.path.length >= 2) return connection.path;
+      const startPlanet = planetIndex.get(connection.startPlanetId);
+      const endPlanet = planetIndex.get(connection.endPlanetId);
+      return startPlanet && endPlanet
+        ? [getPlanetDisplayPosition(startPlanet), getPlanetDisplayPosition(endPlanet)]
+        : null;
+    }).filter(Boolean);
+    if (!paths.length) return;
+    const planets = new Map();
+    connections.forEach((connection) => {
+      const startPlanet = planetIndex.get(connection.startPlanetId);
+      const endPlanet = planetIndex.get(connection.endPlanetId);
+      if (startPlanet) planets.set(startPlanet.id, startPlanet);
+      if (endPlanet) planets.set(endPlanet.id, endPlanet);
+    });
+    tacticalRouteCache.push({
+      id: customRoute.id,
+      name: customRoute.name,
+      isCustom: true,
+      paths,
+      svgPaths: paths.map((path) => path
+        .map((point, index) => `${index ? 'L' : 'M'}${point.x.toFixed(2)},${point.y.toFixed(2)}`)
+        .join(' ')),
+      planets: [...planets.values()],
+      autoConnections: connections.map(serializeRouteConnection),
+      bounds: buildBoundsForPaths(paths)
+    });
+  });
   tacticalRouteCache.forEach((route) => {
     const meta = getRouteMeta(route);
     if (!Array.isArray(meta?.connections)) return;
@@ -5239,8 +5315,10 @@ function rebuildTacticalRouteCache(data, projectionMode) {
       const startPlanet = planetIndex.get(connection.startPlanetId);
       const endPlanet = planetIndex.get(connection.endPlanetId);
       if (!startPlanet || !endPlanet) return;
-      const path = Array.isArray(connection.path) && connection.path.length >= 2
-        ? connection.path
+      const path = route.isCustom && Array.isArray(route.paths?.[connectionIndex])
+        ? route.paths[connectionIndex]
+        : Array.isArray(connection.path) && connection.path.length >= 2
+          ? connection.path
         : [getPlanetDisplayPosition(startPlanet), getPlanetDisplayPosition(endPlanet)];
       tacticalTravelEdges.push({
         id: `travel_edge__${route.id}__${connectionIndex}`,
@@ -5665,6 +5743,23 @@ function drawInfluencePlanetHalo(ctx, x, y, innerColor, outerColor, radius) {
   ctx.fill();
 }
 
+function drawCustomRoutesOnCanvas(ctx) {
+  if (!layers.hyperlanes) return;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(245,248,255,.96)';
+  ctx.lineWidth = 5;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.setLineDash([10, 8]);
+  tacticalRouteCache.filter(isCustomRoute).forEach((route) => {
+    route.paths.forEach((path) => {
+      canvasPathFromPoints(ctx, path);
+      ctx.stroke();
+    });
+  });
+  ctx.restore();
+}
+
 function renderInfluenceClouds() {
   const width = influenceCanvas.width || WORLD_SIZE;
   const height = influenceCanvas.height || WORLD_SIZE;
@@ -5954,7 +6049,10 @@ function renderTacticalBase() {
     try {
       if (layers.grid) tacticalCtx.drawImage(getTacticalSectionCanvas('grid', data, projectionMode, width, height), 0, 0);
       if (layers.sectorLabels) tacticalCtx.drawImage(getTacticalSectionCanvas('sectors', data, projectionMode, width, height), 0, 0);
-      if (layers.hyperlanes) tacticalCtx.drawImage(getTacticalSectionCanvas('hyperlanes', data, projectionMode, width, height), 0, 0);
+      if (layers.hyperlanes) {
+        tacticalCtx.drawImage(getTacticalSectionCanvas('hyperlanes', data, projectionMode, width, height), 0, 0);
+        drawCustomRoutesOnCanvas(tacticalCtx);
+      }
 
       renderTacticalRouteInteraction();
       return;
@@ -6023,6 +6121,14 @@ function renderTacticalBase() {
       line.setAttribute('y2', end.y);
       line.setAttribute('class', 'tactical-hyperlane');
       frag.appendChild(line);
+    });
+    tacticalRouteCache.filter(isCustomRoute).forEach((route) => {
+      route.svgPaths.forEach((pathData) => {
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', pathData);
+        path.setAttribute('class', 'tactical-hyperlane');
+        frag.appendChild(path);
+      });
     });
   }
 
@@ -6195,7 +6301,7 @@ function openRoute(id) {
   const disabled = canEditPlanet() ? '' : 'disabled';
   const routePlanets = getRoutePlanets(route).map((planet) => planet.name).join(', ') || (route.a && route.b ? `${route.a.name}, ${route.b.name}` : '—');
   const routeConnections = getRouteConnections(route);
-  const canEditConnections = canEditPlanet() && isUnnamedRoute(route);
+  const canEditConnections = canEditPlanet() && canManuallyEditRoute(route);
   infoPanel.style.display = 'block';
   infoPanel.innerHTML = `
     ${getInfoPanelHeader(getRouteDisplayName(route))}
@@ -6204,7 +6310,7 @@ function openRoute(id) {
     <div class="form-row"><label>Routenname</label><input id="routeName" value="${meta?.name || getRouteDisplayName(route)}" ${disabled}></div>
     <p class="muted">Dominanz automatisch aus den verbundenen Planeten berechnet.</p>
     <p class="muted">GAR ${dominance.gar.toFixed(0)}% • KUS ${dominance.kus.toFixed(0)}% • HUTT ${dominance.hutt.toFixed(0)}% • Neutral / umkämpft ${dominance.neutral.toFixed(0)}%</p>
-    ${isUnnamedRoute(route) ? `
+    ${canManuallyEditRoute(route) ? `
       <div class="form-row">
         <label>Manuelle Routenverbindungen</label>
         <div class="route-connection-list">
@@ -6223,15 +6329,26 @@ function openRoute(id) {
             <input id="routeConnectionEnd" list="routePlanetChoices" placeholder="Planet B">
             <button class="mini-btn primary" onclick="addRouteConnection('${route.id}')">Verbinden</button>
           </div>
-          <datalist id="routePlanetChoices">
-            ${state.planets.slice().sort((a, b) => a.name.localeCompare(b.name, 'de')).map((planet) => `<option value="${planet.name}"></option>`).join('')}
-          </datalist>
-          <div class="toolbar-row" style="margin-top:8px">
+          ${isUnnamedRoute(route) ? `<div class="toolbar-row" style="margin-top:8px">
             <button class="mini-btn" onclick="resetRouteConnections('${route.id}')">Automatisch zurücksetzen</button>
-          </div>
+          </div>` : ''}
         ` : ''}
       </div>
     ` : ''}
+    ${canEditPlanet() ? `
+      <div class="form-row">
+        <label>Neue Route erstellen</label>
+        <div class="route-connection-add">
+          <input id="newRouteStart" list="routePlanetChoices" placeholder="Planet A">
+          <input id="newRouteEnd" list="routePlanetChoices" placeholder="Planet B">
+          <button class="mini-btn primary" onclick="createNewRouteFromPanel()">Neue Route</button>
+        </div>
+        <p class="muted">Erstellt aus den beiden Planeten eine eigenständige Hyperraumroute.</p>
+      </div>
+    ` : ''}
+    <datalist id="routePlanetChoices">
+      ${state.planets.slice().sort((a, b) => a.name.localeCompare(b.name, 'de')).map((planet) => `<option value="${planet.name}"></option>`).join('')}
+    </datalist>
     <button class="primary" onclick="saveRoute('${route.id}')" ${disabled}>Route speichern</button>
   `;
 }
@@ -6244,6 +6361,8 @@ function saveRoute(id) {
     ...(store[id] || {}),
     name: document.getElementById('routeName').value.trim() || getRouteDisplayName(route)
   };
+  const customRoute = ensureCustomRouteStore().find((entry) => entry.id === id);
+  if (customRoute) customRoute.name = store[id].name;
   saveLocal();
   playAudioCue(datapadAcceptAudio);
   render({ frontline: true, influence: true, layers: true });
@@ -6264,7 +6383,7 @@ function refreshManualRouteNetwork() {
 
 function addRouteConnection(id) {
   const route = tacticalRouteCache.find((entry) => entry.id === id);
-  if (!route || !canEditPlanet() || !isUnnamedRoute(route)) return;
+  if (!route || !canEditPlanet() || !canManuallyEditRoute(route)) return;
   const startPlanet = resolveRoutePlanetInput('routeConnectionStart');
   const endPlanet = resolveRoutePlanetInput('routeConnectionEnd');
   if (!startPlanet || !endPlanet) {
@@ -6285,10 +6404,7 @@ function addRouteConnection(id) {
   store[id] = {
     ...(store[id] || {}),
     connections: [
-      ...connections.map((connection) => ({
-        startPlanetId: connection.startPlanetId,
-        endPlanetId: connection.endPlanetId
-      })),
+      ...connections.map(serializeRouteConnection),
       { startPlanetId: startPlanet.id, endPlanetId: endPlanet.id }
     ]
   };
@@ -6300,26 +6416,66 @@ function addRouteConnection(id) {
 
 function removeRouteConnection(id, index) {
   const route = tacticalRouteCache.find((entry) => entry.id === id);
-  if (!route || !canEditPlanet() || !isUnnamedRoute(route)) return;
+  if (!route || !canEditPlanet() || !canManuallyEditRoute(route)) return;
   const connections = getRouteConnections(route);
   if (index < 0 || index >= connections.length) return;
   const removed = connections[index];
+  const automaticMatch = (route.autoConnections || []).find((connection) => {
+    const candidateKey = [connection.startPlanetId, connection.endPlanetId].sort().join('__');
+    const removedKey = [removed.startPlanetId, removed.endPlanetId].sort().join('__');
+    return candidateKey === removedKey;
+  });
+  const detachedRoute = createCustomRoute({
+    ...serializeRouteConnection(removed),
+    ...(!removed.path && automaticMatch?.path ? { path: automaticMatch.path } : {})
+  }, `Gelöste Route ${ensureCustomRouteStore().length + 1}`);
+  if (!detachedRoute) return;
+  const remainingConnections = connections
+    .filter((_, connectionIndex) => connectionIndex !== index)
+    .map(serializeRouteConnection);
   const store = ensureRouteMetaStore();
-  store[id] = {
-    ...(store[id] || {}),
-    connections: connections
-      .filter((_, connectionIndex) => connectionIndex !== index)
-      .map((connection) => ({
-        startPlanetId: connection.startPlanetId,
-        endPlanetId: connection.endPlanetId
-      }))
-  };
+  if (isCustomRoute(route)) {
+    const customRoutes = ensureCustomRouteStore();
+    const sourceRoute = customRoutes.find((entry) => entry.id === id);
+    if (sourceRoute) sourceRoute.connections = remainingConnections;
+    if (!remainingConnections.length) {
+      state.meta.customRoutes = customRoutes.filter((entry) => entry.id !== id);
+      delete store[id];
+    } else {
+      store[id] = { ...(store[id] || {}), connections: remainingConnections };
+    }
+  } else {
+    store[id] = { ...(store[id] || {}), connections: remainingConnections };
+  }
   saveLocal();
   refreshManualRouteNetwork();
-  openRoute(id);
+  openRoute(detachedRoute.id);
   const startPlanet = planetIndex.get(removed.startPlanetId);
   const endPlanet = planetIndex.get(removed.endPlanetId);
-  setStatus(`Routenverbindung gelöst: ${startPlanet?.name || removed.startPlanetId} ↔ ${endPlanet?.name || removed.endPlanetId}`);
+  setStatus(`Verbindung aus der bisherigen Route gelöst und als neue Route erstellt: ${startPlanet?.name || removed.startPlanetId} ↔ ${endPlanet?.name || removed.endPlanetId}`);
+}
+
+function createNewRouteFromPanel() {
+  if (!canEditPlanet()) return;
+  const startPlanet = resolveRoutePlanetInput('newRouteStart');
+  const endPlanet = resolveRoutePlanetInput('newRouteEnd');
+  if (!startPlanet || !endPlanet) {
+    setStatus('Bitte zwei gültige Planetennamen für die neue Route auswählen.');
+    return;
+  }
+  if (startPlanet.id === endPlanet.id) {
+    setStatus('Eine Route benötigt zwei unterschiedliche Planeten.');
+    return;
+  }
+  const customRoute = createCustomRoute({
+    startPlanetId: startPlanet.id,
+    endPlanetId: endPlanet.id
+  });
+  if (!customRoute) return;
+  saveLocal();
+  refreshManualRouteNetwork();
+  openRoute(customRoute.id);
+  setStatus(`Neue Route erstellt: ${startPlanet.name} ↔ ${endPlanet.name}`);
 }
 
 function resetRouteConnections(id) {
@@ -8473,6 +8629,7 @@ window.closeInfoPanel = closeInfoPanel;
 window.saveRoute = saveRoute;
 window.addRouteConnection = addRouteConnection;
 window.removeRouteConnection = removeRouteConnection;
+window.createNewRouteFromPanel = createNewRouteFromPanel;
 window.resetRouteConnections = resetRouteConnections;
 window.startFleetJump = startFleetJump;
 window.createFleetManagementFleet = createFleetManagementFleet;
