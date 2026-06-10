@@ -58,7 +58,7 @@ const MANUAL_SECTOR_NAME_MAP = {
   sector_yq5od42w: 'Atrivis',
   sector_pl8wxcgz: 'Rago',
   sector_n26qkyn3: 'Lahara',
-  sector_5ckya7l3: 'Ariarch',
+  sector_5ckya7l3: 'Chubara',
   sector_h7up5ihg: 'Velcar',
   sector_rk5unz12: 'Relgim',
   sector_m1dumi12: 'Calamari',
@@ -81,6 +81,44 @@ const MANUAL_SECTOR_NAME_MAP = {
   sector_f4s8vacj: 'Bothan Space',
   sector_vj1yfx9d: 'Abrion'
 };
+
+const ECONOMY_EXCLUDED_SECTOR_NAMES = [
+  'Velcar',
+  'Rago',
+  'Chiss Ascendancy Ost',
+  'Chss Ascendancy',
+  'Chiss Ascendancy',
+  'Vardoss',
+  'Ghost Nebula',
+  'Bakura'
+];
+
+const LEGACY_SECTOR_NAME_ALIASES = {
+  Chubara: ['Ariarch', 'Sektor 61', 'Sector 61']
+};
+
+function normalizeEconomySectorName(value) {
+  return String(value || '')
+    .trim()
+    .toLocaleLowerCase('de')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ');
+}
+
+const ECONOMY_EXCLUDED_SECTOR_KEYS = new Set(ECONOMY_EXCLUDED_SECTOR_NAMES.map(normalizeEconomySectorName));
+
+function isEconomyExcludedSector(sectorName) {
+  return ECONOMY_EXCLUDED_SECTOR_KEYS.has(normalizeEconomySectorName(sectorName));
+}
+
+function getLegacySectorNames(sectorName, previousSectorName = '') {
+  return [
+    sectorName,
+    previousSectorName,
+    ...(LEGACY_SECTOR_NAME_ALIASES[sectorName] || [])
+  ].map((name) => String(name || '').trim()).filter(Boolean);
+}
 
 const INSTITUTIONAL_INVESTOR_SEEDS = [
   { id: 'inst_republic_infra_fund', name: 'Republic Infrastructure Fund', strategy: 'infrastructure', riskTolerance: 0.62, corruptionAffinity: 0.7, creditBalance: 420000 },
@@ -683,6 +721,7 @@ export function createDb(projectRoot) {
   const existingHistory = db.prepare('SELECT 1 FROM market_history WHERE company_id = ? LIMIT 1');
   const deleteCompanyHistory = db.prepare('DELETE FROM market_history WHERE company_id = ?');
   const deleteCompanyHoldings = db.prepare('DELETE FROM market_holdings WHERE company_id = ?');
+  const deleteCompanyOrders = db.prepare('DELETE FROM market_orders WHERE company_id = ?');
   const deleteCompany = db.prepare('DELETE FROM market_companies WHERE id = ?');
   const existingSectorCompanies = db.prepare(`
     SELECT id, sector, resource_key AS resourceKey FROM market_companies
@@ -696,7 +735,26 @@ export function createDb(projectRoot) {
   const existingCompanyLookup = new Map(existingSectorCompaniesBySector.map((company) => [`${company.sector}::${company.resourceKey}`, company]));
 
   db.transaction(() => {
-    const canonicalSectorNames = [...sectorNames].sort((a, b) => a.localeCompare(b, 'de', { numeric: true }));
+    const deleteEconomyStateByName = db.prepare('DELETE FROM sector_economy_state WHERE sector_name = ?');
+    const deleteResourceDemandByName = db.prepare('DELETE FROM sector_resource_demand WHERE sector_name = ?');
+    const deleteReportsBySectorName = db.prepare(`
+      DELETE FROM market_intelligence_reports
+      WHERE sector_id IN (SELECT sector_id FROM sector_economy_state WHERE sector_name = ?)
+    `);
+    const deleteTradesBySectorName = db.prepare(`
+      DELETE FROM institutional_trades
+      WHERE sector_id IN (SELECT sector_id FROM sector_economy_state WHERE sector_name = ?)
+    `);
+    ECONOMY_EXCLUDED_SECTOR_NAMES.forEach((sectorName) => {
+      deleteTradesBySectorName.run(sectorName);
+      deleteReportsBySectorName.run(sectorName);
+      deleteResourceDemandByName.run(sectorName);
+      deleteEconomyStateByName.run(sectorName);
+    });
+
+    const canonicalSectorNames = [...sectorNames]
+      .filter((sectorName) => !isEconomyExcludedSector(sectorName))
+      .sort((a, b) => a.localeCompare(b, 'de', { numeric: true }));
     const validCompanyIds = new Set();
     canonicalSectorNames.forEach((sector) => {
       const ownerCounts = sectorOwners.get(sector) || new Map();
@@ -705,8 +763,9 @@ export function createDb(projectRoot) {
       const manualSector = manualSectors.find((entry) => entry.name === sector);
       const previousSectorName = previousSectorNamesById.get(String(manualSector?.id || '')) || sector;
       sectorHoldingResources.forEach(([resourceKey, holdingLabel, price]) => {
-        const existingCompany = existingCompanyLookup.get(`${sector}::${resourceKey}`)
-          || existingCompanyLookup.get(`${previousSectorName}::${resourceKey}`);
+        const existingCompany = getLegacySectorNames(sector, previousSectorName)
+          .map((sectorName) => existingCompanyLookup.get(`${sectorName}::${resourceKey}`))
+          .find(Boolean);
         const companyId = existingCompany?.id || getHoldingCompanyId(sector, resourceKey);
         validCompanyIds.add(companyId);
         const symbol = getHoldingSymbol(sector, resourceKey);
@@ -744,6 +803,7 @@ export function createDb(projectRoot) {
       if (validCompanyIds.has(id)) return;
       deleteCompanyHistory.run(id);
       deleteCompanyHoldings.run(id);
+      deleteCompanyOrders.run(id);
       deleteCompany.run(id);
     });
   })();
@@ -1122,7 +1182,8 @@ function getActiveEventImpact(db, nowIso) {
 
 function buildDemandComputationContext(db, state, now = Date.now()) {
   const manualSectors = buildCanonicalManualSectors(state);
-  const sectors = buildSectorMembership(state, manualSectors);
+  const sectors = buildSectorMembership(state, manualSectors)
+    .filter((sector) => !isEconomyExcludedSector(sector.name));
   const neighbors = buildNeighborMap(sectors, 4);
   const inflationRate = Math.min(0.25, Number(state?.resources?.GAR?.credits || 0) / 2000000);
   const policy = getPolicyForEconomy(db);

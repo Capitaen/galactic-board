@@ -10535,6 +10535,19 @@ function eventToWorld(event) {
   };
 }
 
+function startMapPan(event) {
+  activeInteraction = {
+    mode: 'pan',
+    pointerId: event.pointerId,
+    startClientX: event.clientX,
+    startClientY: event.clientY,
+    startPanX: panX,
+    startPanY: panY
+  };
+  viewport.classList.add('dragging');
+  setHoveredRoute(null);
+}
+
 function finishInteraction(event) {
   if (!activeInteraction) return;
   if (event && activeInteraction.pointerId !== undefined && event.pointerId !== activeInteraction.pointerId) return;
@@ -10666,6 +10679,13 @@ viewport.addEventListener('pointerleave', () => {
 });
 
 viewport.addEventListener('pointerdown', (event) => {
+  if (event.button === 1) {
+    event.preventDefault();
+    event.stopPropagation();
+    closeContextMenu();
+    startMapPan(event);
+    return;
+  }
   if (event.button !== 0) return;
   closeContextMenu();
   if (event.target.closest('.planet, .marker, .fleet, #infoPanel, #legendPanel, #layersPanel, #topbar, .toolstack, #homeBtn, #muteBtn, #contextMenu')) return;
@@ -10702,20 +10722,17 @@ viewport.addEventListener('pointerdown', (event) => {
     openSector(clickedSector.id || clickedSector.name);
     return;
   }
-  activeInteraction = {
-    mode: 'pan',
-    pointerId: event.pointerId,
-    startClientX: event.clientX,
-    startClientY: event.clientY,
-    startPanX: panX,
-    startPanY: panY
-  };
-  viewport.classList.add('dragging');
+  startMapPan(event);
   if (selected?.type === 'route') {
     selected = null;
     refreshRouteSelectionState();
   }
-  setHoveredRoute(null);
+});
+
+viewport.addEventListener('auxclick', (event) => {
+  if (event.button !== 1) return;
+  event.preventDefault();
+  event.stopPropagation();
 });
 
 planetLayer.addEventListener('click', (event) => {
