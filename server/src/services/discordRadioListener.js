@@ -487,8 +487,12 @@ function extractRadioMessageText(message) {
   return textParts.join('\n').trim();
 }
 
+function stripAnsiSequences(value) {
+  return String(value || '').replace(/\u001b\[[0-9;]*m/g, '');
+}
+
 function recoverActorNameFromContent(content) {
-  const lines = String(content || '')
+  const lines = stripAnsiSequences(content)
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean);
@@ -502,10 +506,15 @@ function recoverActorNameFromContent(content) {
 }
 
 function recoverActorNameFromLine(line) {
-  const normalized = String(line || '')
+  const normalized = stripAnsiSequences(line)
     .replace(/^\[Langstreckenfunk\]\s*/i, '')
     .replace(/[_*`~|>()[\]{}]/g, ' ')
     .trim();
+
+  const directOrderMatch = normalized.match(
+    /(?:^|\s)(?:[A-Z]{1,8}(?:\/[A-Z]{1,8})+\s+)*(?:[A-Z]{2,8}\s+)*([A-ZÄÖÜ][\p{L}'’-]+(?:\s+[A-ZÄÖÜ][\p{L}'’-]+){1,3})\s*:\s*an\b/u
+  );
+  if (directOrderMatch?.[1]) return directOrderMatch[1].trim();
 
   const colonIndex = normalized.indexOf(':');
   if (colonIndex < 0) return '';

@@ -14,8 +14,12 @@ function compactWhitespace(value) {
   return String(value || '').replace(/\s+/g, ' ').trim();
 }
 
+function stripAnsiSequences(value) {
+  return String(value || '').replace(/\u001b\[[0-9;]*m/g, '');
+}
+
 function stripLeadingDiscordFormatting(value) {
-  return String(value || '')
+  return stripAnsiSequences(value)
     .replace(/^[\s\u200B-\u200D\uFEFF]+/g, '')
     .replace(/^(?:>+\s*)+/gm, '')
     .trim();
@@ -54,6 +58,11 @@ function buildFleetMatchers(fleets = []) {
 
 function extractActorName(content) {
   const prefixless = stripRadioPrefix(content);
+  const directOrderMatch = prefixless.match(
+    /(?:^|\s)(?:[A-Z]{1,8}(?:\/[A-Z]{1,8})+\s+)*(?:[A-Z]{2,8}\s+)*([A-ZÄÖÜ][\p{L}'’-]+(?:\s+[A-ZÄÖÜ][\p{L}'’-]+){1,3})\s*:\s*an\b/u
+  );
+  if (directOrderMatch?.[1]) return compactWhitespace(directOrderMatch[1]);
+
   const colonIndex = prefixless.indexOf(':');
   const leftSide = colonIndex >= 0 ? compactWhitespace(prefixless.slice(0, colonIndex)) : '';
   const sanitizedLeftSide = compactWhitespace(
