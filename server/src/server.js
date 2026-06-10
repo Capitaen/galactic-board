@@ -1,4 +1,4 @@
-import fs from 'node:fs';
+﻿import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import express from 'express';
@@ -112,7 +112,7 @@ function normalizeOwnershipReferenceName(text) {
     .replace(/\bviii\b/g, ' 8 ')
     .replace(/\bix\b/g, ' 9 ')
     .replace(/\bx\b/g, ' 10 ')
-    .replace(/['’`"]/g, '')
+    .replace(/['â€™`"]/g, '')
     .replace(/[^a-z0-9]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
@@ -625,53 +625,14 @@ function validateRadioPermissionInput(body) {
   }
 
   if (!RADIO_PERMISSION_ROLES.includes(permissionRole)) {
-    const error = new Error('Ungültige Befehlsrolle.');
+    const error = new Error('UngÃ¼ltige Befehlsrolle.');
     error.status = 400;
     throw error;
   }
 
   const linkedUser = linkedUserId ? listUsers(db).find((user) => user.id === linkedUserId) : null;
   if (linkedUserId && !linkedUser) {
-    const error = new Error('Verknüpfter Website-Login wurde nicht gefunden.');
-    error.status = 400;
-    throw error;
-  }
-
-  return {
-    ingameName,
-    linkedUserId: linkedUser?.id || null,
-    linkedUsername: linkedUser?.username || null,
-    permissionRole,
-    fleets
-  };
-}
-
-function validateRadioPermissionInput(body) {
-  const ingameName = String(body?.ingameName || '').trim();
-  const linkedUserId = String(body?.linkedUserId || '').trim();
-  const permissionRole = String(body?.permissionRole || '').trim();
-  const fleets = Array.isArray(body?.fleets)
-    ? body.fleets.map((fleet) => ({
-      fleetId: String(fleet?.fleetId || '').trim(),
-      fleetName: String(fleet?.fleetName || '').trim()
-    })).filter((fleet) => fleet.fleetId && fleet.fleetName)
-    : [];
-
-  if (!ingameName) {
-    const error = new Error('Ingame-Name darf nicht leer sein.');
-    error.status = 400;
-    throw error;
-  }
-
-  if (!RADIO_PERMISSION_ROLES.includes(permissionRole)) {
-    const error = new Error('Ungültige Befehlsrolle.');
-    error.status = 400;
-    throw error;
-  }
-
-  const linkedUser = linkedUserId ? listUsers(db).find((user) => user.id === linkedUserId) : null;
-  if (linkedUserId && !linkedUser) {
-    const error = new Error('Verknüpfter Website-Login wurde nicht gefunden.');
+    const error = new Error('VerknÃ¼pfter Website-Login wurde nicht gefunden.');
     error.status = 400;
     throw error;
   }
@@ -716,7 +677,6 @@ function createFleetAuditPayload({
     actorUserId: actor?.id || ''
   };
 }
-
 function stampFleetLastMove(fleet, actor, fromPlanetId, toPlanetId, movedAtIso) {
   if (!fleet || !actor) return;
   fleet.lastMovedBy = actor.username || '';
@@ -916,7 +876,7 @@ app.post('/api/admin/users', requireAuth, requireLoginManager, async (req, res) 
 app.patch('/api/admin/users/:id', requireAuth, requireLoginManager, async (req, res) => {
   const userId = String(req.params.id || '').trim();
   if (!userId) {
-    return res.status(400).json({ error: 'Ungültige Benutzer-ID.', users: listUsersForActor(req.user) });
+    return res.status(400).json({ error: 'UngÃ¼ltige Benutzer-ID.', users: listUsersForActor(req.user) });
   }
 
   try {
@@ -944,7 +904,7 @@ app.patch('/api/admin/users/:id', requireAuth, requireLoginManager, async (req, 
 app.delete('/api/admin/users/:id', requireAuth, requireLoginManager, (req, res) => {
   const userId = String(req.params.id || '').trim();
   if (!userId) {
-    return res.status(400).json({ error: 'Ungültige Benutzer-ID.', users: listUsersForActor(req.user) });
+    return res.status(400).json({ error: 'UngÃ¼ltige Benutzer-ID.', users: listUsersForActor(req.user) });
   }
 
   const existingUsers = listUsers(db);
@@ -954,11 +914,11 @@ app.delete('/api/admin/users/:id', requireAuth, requireLoginManager, (req, res) 
   }
 
   if (!canActorManageUser(req.user, targetUser)) {
-    return res.status(403).json({ error: 'Diesen Login darfst du nicht löschen.', users: listUsersForActor(req.user) });
+    return res.status(403).json({ error: 'Diesen Login darfst du nicht lÃ¶schen.', users: listUsersForActor(req.user) });
   }
 
   if (String(targetUser.username || '').trim().toLowerCase() === 'admin') {
-    return res.status(403).json({ error: 'Der Standard-Admin darf nicht gelöscht werden.', users: existingUsers });
+    return res.status(403).json({ error: 'Der Standard-Admin darf nicht gelÃ¶scht werden.', users: existingUsers });
   }
 
   deleteUser(db, userId);
@@ -988,7 +948,7 @@ app.post('/api/admin/radio-command-permissions', requireAuth, requireRadioPermis
 app.patch('/api/admin/radio-command-permissions/:id', requireAuth, requireRadioPermissionManager, (req, res) => {
   const id = String(req.params.id || '').trim();
   if (!id) {
-    return res.status(400).json({ error: 'Ungültige Berechtigungs-ID.', ...buildRadioCommandAdminPayload(req.user) });
+    return res.status(400).json({ error: 'UngÃ¼ltige Berechtigungs-ID.', ...buildRadioCommandAdminPayload(req.user) });
   }
   try {
     const input = validateRadioPermissionInput(req.body);
@@ -1005,7 +965,7 @@ app.patch('/api/admin/radio-command-permissions/:id', requireAuth, requireRadioP
 app.delete('/api/admin/radio-command-permissions/:id', requireAuth, requireRadioPermissionManager, (req, res) => {
   const id = String(req.params.id || '').trim();
   if (!id) {
-    return res.status(400).json({ error: 'Ungültige Berechtigungs-ID.', ...buildRadioCommandAdminPayload(req.user) });
+    return res.status(400).json({ error: 'UngÃ¼ltige Berechtigungs-ID.', ...buildRadioCommandAdminPayload(req.user) });
   }
   deleteRadioCommandPermission(db, id);
   res.json({ ok: true, ...buildRadioCommandAdminPayload(req.user) });
@@ -1184,3 +1144,4 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log('Default admin login: admin / admin');
   discordRadioListener.start();
 });
+
