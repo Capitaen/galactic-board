@@ -46,14 +46,34 @@ function buildPlanetMatchers(planets = []) {
 }
 
 function buildFleetMatchers(fleets = []) {
-  return fleets
-    .map((fleet) => ({
-      id: fleet.id,
-      name: fleet.name,
-      normalized: normalizeText(fleet.name)
-    }))
-    .filter((fleet) => fleet.id && fleet.name && fleet.normalized)
-    .sort((a, b) => b.name.length - a.name.length);
+  const results = [];
+
+  for (const fleet of fleets) {
+    const variants = new Set();
+    const fleetName = String(fleet?.name || '').trim();
+    const assignment = String(fleet?.assignment || '').trim();
+
+    if (fleetName) variants.add(fleetName);
+    if (assignment) {
+      variants.add(assignment);
+      variants.add(`Schlacht Division ${assignment}`);
+      variants.add(`Schlachtdivision ${assignment}`);
+      variants.add(`Division ${assignment}`);
+      variants.add(`SD ${assignment}`);
+    }
+
+    for (const variant of variants) {
+      const normalized = normalizeText(variant);
+      if (!fleet?.id || !normalized) continue;
+      results.push({
+        id: fleet.id,
+        name: fleetName || variant,
+        normalized
+      });
+    }
+  }
+
+  return results.sort((a, b) => b.normalized.length - a.normalized.length);
 }
 
 function extractActorName(content) {
