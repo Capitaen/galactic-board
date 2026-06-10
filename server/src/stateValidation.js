@@ -28,6 +28,18 @@ const ROLE_BASE_ROLES = {
   'Galaktischer Senats Admin': 'Senat',
   'Eventleiter / KUS Admin': 'Eventleiter / KUS'
 };
+const INFRASTRUCTURE_KEYS = new Set([
+  'quadraniumErz',
+  'agrinium',
+  'tibannaGas',
+  'baradium',
+  'kavamSalz',
+  'civil_trade_center',
+  'civil_industrial_complex',
+  'civil_logistics_center',
+  'civil_research_academy',
+  'civil_orbital_trade_station'
+]);
 
 function canManageLogins(role) {
   const normalizedRole = String(role || '');
@@ -89,6 +101,7 @@ function validatePlanetResourceChanges(role, previousState, nextState) {
     const before = previousSlots[planetId] || [];
     const after = nextSlots[planetId] || [];
     if (!hasChanged(before, after)) return;
+    ensure(Array.isArray(after) && after.length <= 10 && after.every((slot) => !slot || INFRASTRUCTURE_KEYS.has(slot)), 'Invalid infrastructure slot value', { entity: 'planetResources', planetId });
     const beforePlanet = previousPlanets.get(planetId);
     const nextPlanet = nextPlanets.get(planetId);
     if (role === 'Senat') {

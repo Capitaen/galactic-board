@@ -52,6 +52,15 @@ const sessions = new Map();
 const COOKIE_NAME = 'gcb_session';
 const PORT = Number(process.env.PORT || 443);
 const RESOURCE_KEYS = ['quadraniumErz', 'agrinium', 'tibannaGas', 'baradium', 'kavamSalz'];
+const CIVILIAN_INFRASTRUCTURE_BONUSES = {
+  civil_trade_center: { quadraniumErz: 0.03, agrinium: 0.03, tibannaGas: 0.03, baradium: 0.03, kavamSalz: 0.03 },
+  civil_industrial_complex: { quadraniumErz: 0.06, baradium: 0.04 },
+  civil_logistics_center: { quadraniumErz: 0.03, agrinium: 0.03, tibannaGas: 0.06, baradium: 0.03, kavamSalz: 0.03 },
+  civil_research_academy: { agrinium: 0.08 },
+  civil_orbital_trade_station: { quadraniumErz: 0.10, agrinium: 0.10, tibannaGas: 0.10, baradium: 0.10, kavamSalz: 0.10 }
+};
+const INFRASTRUCTURE_KEYS = [...RESOURCE_KEYS, ...Object.keys(CIVILIAN_INFRASTRUCTURE_BONUSES)];
+const MAX_CIVILIAN_PRODUCTION_BONUS = 0.30;
 const RESOURCE_FACTIONS = ['GAR', 'KUS'];
 const RESOURCE_PRODUCTION_TICK_MS = 60 * 60 * 1000;
 const RESOURCE_RESET_VERSION = 'resource_reset_2026_05_01';
@@ -334,7 +343,7 @@ function createEmptyFactionResources() {
 function getPlanetResourceSlotsFromState(state, planetId) {
   const slots = state?.planetResources?.[planetId];
   const normalized = Array.isArray(slots)
-    ? slots.filter((slot) => RESOURCE_KEYS.includes(slot)).slice(0, 10)
+    ? slots.slice(0, 10).map((slot) => (INFRASTRUCTURE_KEYS.includes(slot) ? slot : ''))
     : [];
   while (normalized.length < 10) normalized.push('');
   return normalized;
@@ -344,10 +353,21 @@ function getFactionProductionRateFromState(state, faction = 'GAR') {
   const totals = createEmptyFactionResources();
   for (const planet of Array.isArray(state?.planets) ? state.planets : []) {
     if (planet?.owner !== faction) continue;
+    const base = createEmptyFactionResources();
+    const bonuses = createEmptyFactionResources();
     for (const slot of getPlanetResourceSlotsFromState(state, planet.id)) {
       if (!slot) continue;
-      totals[slot] += 1;
+      if (RESOURCE_KEYS.includes(slot)) base[slot] += 1;
+      for (const key of RESOURCE_KEYS) {
+        bonuses[key] += Number(CIVILIAN_INFRASTRUCTURE_BONUSES[slot]?.[key] || 0);
+      }
     }
+    for (const key of RESOURCE_KEYS) {
+      totals[key] += base[key] * (1 + Math.min(MAX_CIVILIAN_PRODUCTION_BONUS, bonuses[key]));
+    }
+  }
+  for (const key of RESOURCE_KEYS) {
+    totals[key] = Math.round(totals[key] * 100) / 100;
   }
   return totals;
 }
@@ -393,7 +413,9 @@ function applyServerProductionTicks(previousState, now = Date.now()) {
   RESOURCE_FACTIONS.forEach((faction) => {
     const rate = getFactionProductionRateFromState(nextState, faction);
     for (const key of RESOURCE_KEYS) {
-      nextState.resources[faction][key] = Number(nextState.resources[faction][key] || 0) + (Number(rate[key] || 0) * ticks);
+      nextState.resources[faction][key] = Math.round((
+        Number(nextState.resources[faction][key] || 0) + (Number(rate[key] || 0) * ticks)
+      ) * 100) / 100;
     }
   });
   nextState.lastResourceTickAt = lastTick + (ticks * RESOURCE_PRODUCTION_TICK_MS);

@@ -601,6 +601,7 @@ const RESOURCE_PRODUCTION_TICK_MS = 60 * 60 * 1000;
 const RESOURCE_RESET_VERSION = 'resource_reset_2026_05_01';
 const CAPTURE_REWARD_PER_SLOT = 20;
 const MINE_BUILD_DURATION_HOURS = 30;
+const MAX_CIVILIAN_PRODUCTION_BONUS = 0.30;
 const DEFAULT_SHIPYARD_PLANET_KEYS = ['anaxes', 'kuat', 'rothana'];
 const KUS_SHIPYARD_PLANET_KEYS = ['geonosis', 'muunilinst', 'serenno', 'raxus'];
 const RESOURCE_FACTIONS = ['GAR', 'KUS'];
@@ -611,25 +612,71 @@ const DEBUG_DISABLE_GAR_BUILD_LIMITS = false;
 const MINE_PROJECT_DEFS = {
   quadraniumErz: {
     label: 'Metallmine',
+    category: 'military',
+    productionResource: 'quadraniumErz',
     cost: { quadraniumErz: 980, agrinium: 280, tibannaGas: 140, baradium: 210, kavamSalz: 280 }
   },
   agrinium: {
     label: 'Technologie-Komplex',
+    category: 'military',
+    productionResource: 'agrinium',
     cost: { quadraniumErz: 420, agrinium: 980, tibannaGas: 280, baradium: 140, kavamSalz: 280 }
   },
   tibannaGas: {
     label: 'Tibanna-Gas-Raffinerie',
+    category: 'military',
+    productionResource: 'tibannaGas',
     cost: { quadraniumErz: 350, agrinium: 280, tibannaGas: 980, baradium: 210, kavamSalz: 210 }
   },
   baradium: {
     label: 'Chemiewerk / Baradium-Foerderung',
+    category: 'military',
+    productionResource: 'baradium',
     cost: { quadraniumErz: 420, agrinium: 210, tibannaGas: 210, baradium: 980, kavamSalz: 210 }
   },
   kavamSalz: {
     label: 'Versorgungsgueter-Depot',
+    category: 'military',
+    productionResource: 'kavamSalz',
     cost: { quadraniumErz: 350, agrinium: 210, tibannaGas: 210, baradium: 140, kavamSalz: 980 }
+  },
+  civil_trade_center: {
+    label: 'Handelszentrum',
+    category: 'civilian',
+    description: '+3 % Produktion auf alle Rohstoffe dieses Planeten',
+    bonuses: { quadraniumErz: 0.03, agrinium: 0.03, tibannaGas: 0.03, baradium: 0.03, kavamSalz: 0.03 },
+    cost: { quadraniumErz: 560, agrinium: 420, tibannaGas: 280, baradium: 210, kavamSalz: 490 }
+  },
+  civil_industrial_complex: {
+    label: 'Industriekomplex',
+    category: 'civilian',
+    description: '+6 % Metalle und +4 % Chemikalien',
+    bonuses: { quadraniumErz: 0.06, baradium: 0.04 },
+    cost: { quadraniumErz: 840, agrinium: 350, tibannaGas: 350, baradium: 490, kavamSalz: 420 }
+  },
+  civil_logistics_center: {
+    label: 'Logistikzentrum',
+    category: 'civilian',
+    description: '+6 % Treibstoffe und +3 % auf alle anderen Rohstoffe',
+    bonuses: { quadraniumErz: 0.03, agrinium: 0.03, tibannaGas: 0.06, baradium: 0.03, kavamSalz: 0.03 },
+    cost: { quadraniumErz: 630, agrinium: 420, tibannaGas: 700, baradium: 280, kavamSalz: 560 }
+  },
+  civil_research_academy: {
+    label: 'Forschungsakademie',
+    category: 'civilian',
+    description: '+8 % Technologien',
+    bonuses: { agrinium: 0.08 },
+    cost: { quadraniumErz: 490, agrinium: 840, tibannaGas: 350, baradium: 350, kavamSalz: 420 }
+  },
+  civil_orbital_trade_station: {
+    label: 'Orbitale Handelsstation',
+    category: 'civilian',
+    description: '+10 % Produktion auf alle Rohstoffe dieses Planeten',
+    bonuses: { quadraniumErz: 0.10, agrinium: 0.10, tibannaGas: 0.10, baradium: 0.10, kavamSalz: 0.10 },
+    cost: { quadraniumErz: 1400, agrinium: 1120, tibannaGas: 980, baradium: 840, kavamSalz: 1120 }
   }
 };
+const INFRASTRUCTURE_KEYS = Object.keys(MINE_PROJECT_DEFS);
 const TRELLO_EXCLUDED_LISTS = new Set([
   'informationen',
   'vorlage',
@@ -1055,7 +1102,9 @@ function normalizeCampaignState() {
   state.planetResources = Object.fromEntries(
     Object.entries(state.planetResources || {}).map(([planetId, slots]) => [
       planetId,
-      Array.isArray(slots) ? slots.filter((slot) => RESOURCE_KEYS.includes(slot)).slice(0, 10) : []
+      Array.isArray(slots)
+        ? slots.slice(0, 10).map((slot) => (INFRASTRUCTURE_KEYS.includes(slot) ? slot : ''))
+        : []
     ])
   );
   state.ships = Array.isArray(state.ships) ? state.ships : [];
@@ -2670,14 +2719,18 @@ function getFactionResourcePool(faction = 'GAR') {
 
 function getPlanetResourceSlots(planetId) {
   const slots = state.planetResources?.[planetId];
-  const normalized = Array.isArray(slots) ? slots.filter((slot) => RESOURCE_KEYS.includes(slot)).slice(0, 10) : [];
+  const normalized = Array.isArray(slots)
+    ? slots.slice(0, 10).map((slot) => (INFRASTRUCTURE_KEYS.includes(slot) ? slot : ''))
+    : [];
   while (normalized.length < 10) normalized.push('');
   return normalized;
 }
 
 function setPlanetResourceSlots(planetId, slots) {
   state.planetResources = state.planetResources || {};
-  state.planetResources[planetId] = (slots || []).filter((slot) => RESOURCE_KEYS.includes(slot)).slice(0, 10);
+  state.planetResources[planetId] = (slots || [])
+    .slice(0, 10)
+    .map((slot) => (INFRASTRUCTURE_KEYS.includes(slot) ? slot : ''));
 }
 
 function canEditPlanetResourceSlot(planet, index) {
@@ -2720,8 +2773,8 @@ function canBuildMineProjects() {
   return role === 'Admin' || role === 'Senat';
 }
 
-function getMineProjectMeta(resourceKey) {
-  return MINE_PROJECT_DEFS[resourceKey] || null;
+function getMineProjectMeta(buildingKey) {
+  return MINE_PROJECT_DEFS[buildingKey] || null;
 }
 
 function getMineProjectPlanetChoices() {
@@ -2777,25 +2830,64 @@ function summarizeResourceSlots(slots) {
 function addFactionResources(faction, delta) {
   const pool = getFactionResourcePool(faction);
   RESOURCE_KEYS.forEach((key) => {
-    pool[key] = Math.max(0, Math.round((pool[key] || 0) + (delta?.[key] || 0)));
+    pool[key] = Math.max(0, Math.round(((pool[key] || 0) + (delta?.[key] || 0)) * 100) / 100);
   });
 }
 
 function getCaptureRewardForPlanet(planetId) {
   const reward = createEmptyFactionResources();
   getPlanetResourceSlots(planetId).forEach((slot) => {
-    reward[slot] += CAPTURE_REWARD_PER_SLOT;
+    const resourceKey = getMineProjectMeta(slot)?.productionResource;
+    if (resourceKey) reward[resourceKey] += CAPTURE_REWARD_PER_SLOT;
   });
   return reward;
+}
+
+function getPlanetProductionRate(planetId) {
+  const base = createEmptyFactionResources();
+  const bonuses = getPlanetCivilianBonuses(planetId);
+  getPlanetResourceSlots(planetId).forEach((slot) => {
+    const building = getMineProjectMeta(slot);
+    if (!building) return;
+    if (building.productionResource) base[building.productionResource] += 1;
+  });
+  const rate = createEmptyFactionResources();
+  RESOURCE_KEYS.forEach((key) => {
+    rate[key] = Math.round(base[key] * (1 + Math.min(MAX_CIVILIAN_PRODUCTION_BONUS, bonuses[key])) * 100) / 100;
+  });
+  return rate;
+}
+
+function getPlanetCivilianBonuses(planetId) {
+  const bonuses = createEmptyFactionResources();
+  getPlanetResourceSlots(planetId).forEach((slot) => {
+    const building = getMineProjectMeta(slot);
+    RESOURCE_KEYS.forEach((key) => {
+      bonuses[key] += Number(building?.bonuses?.[key] || 0);
+    });
+  });
+  RESOURCE_KEYS.forEach((key) => {
+    bonuses[key] = Math.min(MAX_CIVILIAN_PRODUCTION_BONUS, bonuses[key]);
+  });
+  return bonuses;
+}
+
+function formatResourceAmount(value) {
+  const amount = Number(value || 0);
+  return Number.isInteger(amount) ? String(amount) : amount.toFixed(2).replace('.', ',');
 }
 
 function getFactionProductionRate(faction = 'GAR') {
   const totals = createEmptyFactionResources();
   state.planets.forEach((planet) => {
     if (planet.owner !== faction) return;
-    getPlanetResourceSlots(planet.id).forEach((slot) => {
-      totals[slot] += 1;
+    const planetRate = getPlanetProductionRate(planet.id);
+    RESOURCE_KEYS.forEach((key) => {
+      totals[key] += planetRate[key];
     });
+  });
+  RESOURCE_KEYS.forEach((key) => {
+    totals[key] = Math.round(totals[key] * 100) / 100;
   });
   return totals;
 }
@@ -2950,6 +3042,7 @@ function createBuildJobRecord(data = {}) {
     buildLocationPlanetId: data.buildLocationPlanetId || '',
     targetSlotIndex: Number.isInteger(data.targetSlotIndex) ? data.targetSlotIndex : -1,
     resourceKey: data.resourceKey || '',
+    buildingKey: data.buildingKey || data.resourceKey || '',
     startedAt: data.startedAt || Date.now(),
     finishesAt: data.finishesAt || Date.now(),
     faction: data.faction || 'GAR',
@@ -2983,7 +3076,8 @@ function processBuildJobs(now = Date.now()) {
     if (job.jobType === 'mine') {
       const planet = planetIndex.get(job.buildLocationPlanetId);
       const slots = getPlanetResourceSlots(job.buildLocationPlanetId);
-      if (!planet || planet.owner !== 'GAR' || !RESOURCE_KEYS.includes(job.resourceKey) || !Number.isInteger(job.targetSlotIndex) || job.targetSlotIndex < 0 || job.targetSlotIndex >= slots.length) {
+      const buildingKey = job.buildingKey || job.resourceKey;
+      if (!planet || planet.owner !== 'GAR' || !INFRASTRUCTURE_KEYS.includes(buildingKey) || !Number.isInteger(job.targetSlotIndex) || job.targetSlotIndex < 0 || job.targetSlotIndex >= slots.length) {
         job.status = 'cancelled';
         changed = true;
         return;
@@ -2993,7 +3087,7 @@ function processBuildJobs(now = Date.now()) {
         changed = true;
         return;
       }
-      slots[job.targetSlotIndex] = job.resourceKey;
+      slots[job.targetSlotIndex] = buildingKey;
       setPlanetResourceSlots(job.buildLocationPlanetId, slots);
       job.status = 'completed';
       changed = true;
@@ -3055,9 +3149,13 @@ function formatDuration(ms) {
 }
 
 function renderResourcePills(slots) {
-  const visibleSlots = (slots || []).filter((slot) => RESOURCE_LABELS[slot]);
-  if (!visibleSlots.length) return '<span class="muted">Keine Rohstoffe zugewiesen.</span>';
-  return visibleSlots.map((slot) => `<span class="resource-pill">${RESOURCE_LABELS[slot]}</span>`).join('');
+  const visibleSlots = (slots || []).filter((slot) => getMineProjectMeta(slot));
+  if (!visibleSlots.length) return '<span class="muted">Keine Infrastruktur vorhanden.</span>';
+  return visibleSlots.map((slot) => {
+    const building = getMineProjectMeta(slot);
+    const category = building.category === 'civilian' ? 'Zivil' : 'Militärisch';
+    return `<span class="resource-pill">${category}: ${building.label}</span>`;
+  }).join('');
 }
 
 function getBuildJobProgress(job, now = Date.now()) {
@@ -3068,7 +3166,7 @@ function getBuildJobProgress(job, now = Date.now()) {
 }
 
 function getBuildJobDisplayName(job) {
-  if (job?.jobType === 'mine') return job.projectName || (getMineProjectMeta(job.resourceKey)?.label || 'Minenprojekt');
+  if (job?.jobType === 'mine') return job.projectName || (getMineProjectMeta(job.buildingKey || job.resourceKey)?.label || 'Infrastrukturprojekt');
   return job?.shipName || getShipClassMeta(job?.classId)?.displayName || 'Bauprojekt';
 }
 
@@ -3077,7 +3175,10 @@ function getBuildJobLocationName(job) {
 }
 
 function getBuildJobTypeLabel(job) {
-  return job?.jobType === 'mine' ? 'Minenbau' : 'Schiffbau';
+  if (job?.jobType !== 'mine') return 'Schiffbau';
+  return getMineProjectMeta(job.buildingKey || job.resourceKey)?.category === 'civilian'
+    ? 'Zivile Infrastruktur'
+    : 'Militärische Infrastruktur';
 }
 
 function getBuildJobProgressBar(job) {
@@ -3093,25 +3194,25 @@ function getBuildJobProgressBar(job) {
 
 function startMineBuildProject() {
   if (!canBuildMineProjects()) {
-    setStatus('Nur Senat oder Admin können Minenbau starten.');
+    setStatus('Nur Senat oder Admin können Infrastrukturprojekte starten.');
     return;
   }
   const planetId = document.getElementById('mineBuildPlanet')?.value || '';
-  const resourceKey = document.getElementById('mineBuildResource')?.value || '';
+  const buildingKey = document.getElementById('mineBuildResource')?.value || '';
   const slotIndex = Number(document.getElementById('mineBuildSlot')?.value ?? -1);
   const planet = planetIndex.get(planetId);
-  const project = getMineProjectMeta(resourceKey);
+  const project = getMineProjectMeta(buildingKey);
   if (!planet || planet.owner !== 'GAR') {
-    setStatus('Minenbau ist nur auf republikanischen Planeten möglich.');
+    setStatus('Infrastrukturbau ist nur auf republikanischen Planeten möglich.');
     return;
   }
-  if (!project || !RESOURCE_KEYS.includes(resourceKey)) {
-    setStatus('Bitte einen gültigen Minentyp wählen.');
+  if (!project || !INFRASTRUCTURE_KEYS.includes(buildingKey)) {
+    setStatus('Bitte einen gültigen Gebäudetyp wählen.');
     return;
   }
   const slots = getPlanetResourceSlots(planetId);
   if (!Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex >= slots.length) {
-    setStatus('Bitte einen freien Minen-Slot wählen.');
+    setStatus('Bitte einen freien Infrastruktur-Slot wählen.');
     return;
   }
   if (isMineSlotUnderConstruction(planetId, slotIndex)) {
@@ -3120,11 +3221,11 @@ function startMineBuildProject() {
     return;
   }
   if (slots[slotIndex]) {
-    setStatus('Der gewählte Minen-Slot ist bereits belegt.');
+    setStatus('Der gewählte Infrastruktur-Slot ist bereits belegt.');
     return;
   }
   if (!spendResources(project.cost, 'GAR')) {
-    setStatus('Nicht genug GAR-Ressourcen für dieses Minenprojekt.');
+    setStatus('Nicht genug GAR-Ressourcen für dieses Infrastrukturprojekt.');
     renderBuildProjectsView();
     return;
   }
@@ -3133,7 +3234,8 @@ function startMineBuildProject() {
     projectName: `${project.label} (${planet.name})`,
     buildLocationPlanetId: planetId,
     targetSlotIndex: slotIndex,
-    resourceKey,
+    resourceKey: project.productionResource || '',
+    buildingKey,
     startedAt: Date.now(),
     finishesAt: Date.now() + (MINE_BUILD_DURATION_HOURS * RESOURCE_PRODUCTION_TICK_MS),
     faction: 'GAR',
@@ -3143,7 +3245,7 @@ function startMineBuildProject() {
   playAudioCue(datapadAcceptAudio);
   renderBuildProjectsView();
   if (activeMainTab === 'shipyard') renderShipyardView();
-  setStatus(`Minenprojekt gestartet: ${project.label} auf ${planet.name} (Slot ${slotIndex + 1})`);
+  setStatus(`Infrastrukturprojekt gestartet: ${project.label} auf ${planet.name} (Slot ${slotIndex + 1})`);
 }
 
 function closeMineBuildPlanetResults() {
@@ -6795,9 +6897,15 @@ function openPlanet(id) {
   const canEditPlanetCore = canEditPlanetRecord(p);
   const canEditDescription = canEditPlanetDescription(p);
   const resourceSlots = getPlanetResourceSlots(p.id);
-  const resourceOptions = ['<option value="">Leer</option>']
-    .concat(RESOURCE_DEFS.map((entry) => `<option value="${entry.key}">${entry.label}</option>`))
+  const militaryInfrastructureOptions = Object.entries(MINE_PROJECT_DEFS)
+    .filter(([, entry]) => entry.category === 'military')
+    .map(([key, entry]) => `<option value="${key}">${entry.label}</option>`)
     .join('');
+  const civilianInfrastructureOptions = Object.entries(MINE_PROJECT_DEFS)
+    .filter(([, entry]) => entry.category === 'civilian')
+    .map(([key, entry]) => `<option value="${key}">${entry.label}</option>`)
+    .join('');
+  const resourceOptions = `<option value="">Leer</option><optgroup label="Militärische Infrastruktur">${militaryInfrastructureOptions}</optgroup><optgroup label="Zivile Infrastruktur">${civilianInfrastructureOptions}</optgroup>`;
   const resourceSlotControls = resourceSlots.map((slot, index) => {
     const slotEditable = canEditPlanetResourceSlot(p, index);
     return `
@@ -6834,16 +6942,16 @@ function openPlanet(id) {
       </div>
     </div>
     <div class="form-row">
-      <label>Minen-Slots</label>
+      <label>Infrastruktur-Slots</label>
       <div>${renderResourcePills(resourceSlots)}</div>
       <div class="resource-slot-row">
         ${resourceSlotControls}
       </div>
       <small>${currentRole() === 'Admin'
-        ? 'Admin kann alle 10 Minen-Slots pflegen.'
+        ? 'Admin kann alle 10 Infrastruktur-Slots pflegen.'
         : (currentRole() === 'Senat'
-          ? (isResourceAssignmentEditable(p) ? 'Senat kann alle 10 Minen-Slots auf republikanischen Planeten verwalten.' : 'Senat kann nur republikanische Planeten verwalten.')
-          : (isResourceAssignmentEditable(p) ? 'Eventleitung darf nur die ersten 3 Minen-Slots auf KUS- und Neutral-Planeten ändern.' : 'Minen-Slots sind für deine Rolle auf diesem Planeten nicht editierbar.'))}</small>
+          ? (isResourceAssignmentEditable(p) ? 'Senat kann alle 10 Infrastruktur-Slots auf republikanischen Planeten verwalten.' : 'Senat kann nur republikanische Planeten verwalten.')
+          : (isResourceAssignmentEditable(p) ? 'Eventleitung darf nur die ersten 3 Infrastruktur-Slots auf KUS- und Neutral-Planeten ändern.' : 'Infrastruktur-Slots sind für deine Rolle auf diesem Planeten nicht editierbar.'))}</small>
     </div>
     <p>${p.wiki ? `<a href="${p.wiki}" target="_blank">Wiki öffnen</a>` : '<span class="muted">Kein Wiki-Link gesetzt.</span>'}</p>
     <div class="toolbar-row">
@@ -7696,7 +7804,7 @@ function renderFleetManagementView() {
       <div class="workspace-head">
         <div>
           <h2>Flottenmanagement</h2>
-          <p>Diese Ansicht ist für den Senat gesperrt. Senatoren verwalten nur republikanische Minen-Slots, GAR-Planetbeschreibungen und Infrastrukturprojekte.</p>
+          <p>Diese Ansicht ist für den Senat gesperrt. Senatoren verwalten republikanische Infrastruktur-Slots, GAR-Planetbeschreibungen und Infrastrukturprojekte.</p>
         </div>
       </div>
       <div class="workspace-section">
@@ -8356,7 +8464,7 @@ function renderShipyardView() {
     || (role === 'Republic Navy / GAR' && faction === 'GAR' && canCoordinate4thFleet())
     || (role === 'Eventleiter / KUS' && faction === 'KUS')
   );
-  const resourceSummary = RESOURCE_KEYS.map((key) => `<div class="stat-card"><strong>${RESOURCE_LABELS[key]}</strong><span>${pool[key] || 0}</span></div>`).join('');
+  const resourceSummary = RESOURCE_KEYS.map((key) => `<div class="stat-card"><strong>${RESOURCE_LABELS[key]}</strong><span>${formatResourceAmount(pool[key])}</span></div>`).join('');
   const buildJobs = state.buildJobs.filter((job) => job.faction === faction && job.jobType !== 'mine' && job.status === 'building');
   const readyShips = state.ships.filter((ship) => ship.faction === faction && ship.status === 'ready');
   workspacePanel.innerHTML = `
@@ -8423,7 +8531,7 @@ function renderShipyardView() {
         <table class="data-table">
           <thead><tr><th>Rohstoff</th><th>Pro Stunde</th></tr></thead>
           <tbody>
-            ${RESOURCE_KEYS.map((key) => `<tr><td>${RESOURCE_LABELS[key]}</td><td>+${production[key] || 0}</td></tr>`).join('')}
+            ${RESOURCE_KEYS.map((key) => `<tr><td>${RESOURCE_LABELS[key]}</td><td>+${formatResourceAmount(production[key])}</td></tr>`).join('')}
           </tbody>
         </table>
       </div>
@@ -8474,10 +8582,18 @@ function renderBuildProjectsView() {
   const minePlanetChoices = getMineProjectPlanetChoices();
   const selectedPlanetId = document.getElementById('mineBuildPlanet')?.value || minePlanetChoices[0]?.id || '';
   const selectedPlanet = minePlanetChoices.find((planet) => planet.id === selectedPlanetId) || minePlanetChoices[0] || null;
-  const selectedResourceKey = document.getElementById('mineBuildResource')?.value || RESOURCE_KEYS[0];
+  const requestedCategory = document.getElementById('infrastructureCategory')?.value || 'military';
+  const selectedCategory = requestedCategory === 'civilian' ? 'civilian' : 'military';
+  const categoryProjects = Object.entries(MINE_PROJECT_DEFS).filter(([, project]) => project.category === selectedCategory);
+  const requestedBuildingKey = document.getElementById('mineBuildResource')?.value || '';
+  const selectedBuildingKey = categoryProjects.some(([key]) => key === requestedBuildingKey)
+    ? requestedBuildingKey
+    : (categoryProjects[0]?.[0] || '');
   const availableSlots = getAvailableMineSlots(selectedPlanet?.id || '');
   const selectedSlotIndex = document.getElementById('mineBuildSlot')?.value || String(availableSlots[0]?.index ?? '');
-  const selectedMineMeta = getMineProjectMeta(selectedResourceKey);
+  const selectedMineMeta = getMineProjectMeta(selectedBuildingKey);
+  const selectedPlanetProduction = selectedPlanet ? getPlanetProductionRate(selectedPlanet.id) : createEmptyFactionResources();
+  const selectedPlanetBonuses = selectedPlanet ? getPlanetCivilianBonuses(selectedPlanet.id) : createEmptyFactionResources();
   const canStartMineProject = canBuildMineProjects();
   workspacePanel.innerHTML = `
     <div class="workspace-head">
@@ -8490,12 +8606,12 @@ function renderBuildProjectsView() {
       </div>
     </div>
     <div class="workspace-grid">
-      ${RESOURCE_KEYS.map((key) => `<div class="stat-card"><strong>${RESOURCE_LABELS[key]}</strong><span>${pool[key] || 0}</span></div>`).join('')}
+      ${RESOURCE_KEYS.map((key) => `<div class="stat-card"><strong>${RESOURCE_LABELS[key]}</strong><span>${formatResourceAmount(pool[key])}</span></div>`).join('')}
     </div>
     <div class="workspace-section workspace-columns">
       <div class="workspace-card">
-        <h3>Minenbau</h3>
-        <p>${canStartMineProject ? 'Wähle republikanischen Planeten, Minentyp und freien Slot. Bauzeit: 30 Stunden.' : 'Nur Senat und Admin können GAR-Minenprojekte starten.'}</p>
+        <h3>Infrastrukturprojekt</h3>
+        <p>${canStartMineProject ? 'Wähle einen republikanischen Planeten, eine Gebäudekategorie und einen freien Slot. Jedes Gebäude belegt genau einen Slot.' : 'Nur Senat und Admin können GAR-Infrastrukturprojekte starten.'}</p>
         <div class="form-row">
           <label>Planet</label>
           <div class="inline-search-wrap">
@@ -8505,9 +8621,16 @@ function renderBuildProjectsView() {
           </div>
         </div>
         <div class="form-row">
-          <label>Minenart</label>
+          <label>Gebäudekategorie</label>
+          <select id="infrastructureCategory" ${canStartMineProject ? '' : 'disabled'} onchange="renderBuildProjectsView()">
+            <option value="military" ${selectedCategory === 'military' ? 'selected' : ''}>Militärische Infrastruktur</option>
+            <option value="civilian" ${selectedCategory === 'civilian' ? 'selected' : ''}>Zivile Infrastruktur</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label>Gebäudetyp</label>
           <select id="mineBuildResource" ${canStartMineProject ? '' : 'disabled'} onchange="renderBuildProjectsView()">
-            ${RESOURCE_KEYS.map((resourceKey) => `<option value="${resourceKey}" ${resourceKey === selectedResourceKey ? 'selected' : ''}>${getMineProjectMeta(resourceKey)?.label || RESOURCE_LABELS[resourceKey]}</option>`).join('')}
+            ${categoryProjects.map(([buildingKey, project]) => `<option value="${buildingKey}" ${buildingKey === selectedBuildingKey ? 'selected' : ''}>${project.label}</option>`).join('')}
           </select>
         </div>
         <div class="form-row">
@@ -8519,11 +8642,25 @@ function renderBuildProjectsView() {
           </select>
         </div>
         <div class="workspace-card compact">
+          <strong>${selectedMineMeta?.label || 'Gebäude'}</strong>
+          <p>${selectedMineMeta?.category === 'civilian'
+            ? selectedMineMeta.description
+            : `Produziert +1 ${RESOURCE_LABELS[selectedMineMeta?.productionResource] || 'Ressource'} pro Stunde.`}</p>
           <strong>Kosten</strong>
           <p>${RESOURCE_KEYS.map((key) => `${RESOURCE_LABELS[key]}: ${selectedMineMeta?.cost?.[key] || 0}`).join(' • ')}</p>
           <p><strong>Bauzeit:</strong> ${MINE_BUILD_DURATION_HOURS}h</p>
         </div>
-        <button class="primary" onclick="startMineBuildProject()" ${(canStartMineProject && availableSlots.length && canAffordCost(selectedMineMeta?.cost || {}, 'GAR')) ? '' : 'disabled'}>Minenprojekt starten</button>
+        <button class="primary" onclick="startMineBuildProject()" ${(canStartMineProject && availableSlots.length && canAffordCost(selectedMineMeta?.cost || {}, 'GAR')) ? '' : 'disabled'}>Infrastrukturprojekt starten</button>
+      </div>
+      <div class="workspace-card">
+        <h3>Produktion auf ${selectedPlanet?.name || 'Planet'}</h3>
+        <table class="data-table">
+          <thead><tr><th>Rohstoff</th><th>Bonus</th><th>Pro Stunde</th></tr></thead>
+          <tbody>
+            ${RESOURCE_KEYS.map((key) => `<tr><td>${RESOURCE_LABELS[key]}</td><td>+${Math.round((selectedPlanetBonuses[key] || 0) * 100)} %</td><td>+${formatResourceAmount(selectedPlanetProduction[key])}</td></tr>`).join('')}
+          </tbody>
+        </table>
+        <p class="muted">Zivile Boni wirken nur auf produzierende Gebäude desselben Planeten und sind je Rohstoff bei +${MAX_CIVILIAN_PRODUCTION_BONUS * 100} % gedeckelt.</p>
       </div>
       <div class="workspace-card">
         <h3>Projektübersicht</h3>
@@ -8533,7 +8670,7 @@ function renderBuildProjectsView() {
               <div class="project-card">
                 <h4>${getBuildJobDisplayName(job)}</h4>
                 <p class="project-meta">${getBuildJobTypeLabel(job)} • ${getBuildJobLocationName(job)} • ${job.faction || 'GAR'}</p>
-                ${job.jobType === 'mine' ? `<p class="project-meta">Slot ${Number(job.targetSlotIndex) + 1} • ${RESOURCE_LABELS[job.resourceKey] || job.resourceKey}</p>` : ''}
+                ${job.jobType === 'mine' ? `<p class="project-meta">Slot ${Number(job.targetSlotIndex) + 1} • ${getMineProjectMeta(job.buildingKey || job.resourceKey)?.label || 'Infrastruktur'}</p>` : ''}
                 ${getBuildJobProgressBar(job)}
               </div>
             `).join('')}
