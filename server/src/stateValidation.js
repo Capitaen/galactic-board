@@ -27,12 +27,9 @@ const ROLE_BASE_ROLES = {
   'Republic Navy Admin': 'Republic Navy / GAR',
   'Galaktischer Senats Admin': 'Senat',
   'Eventleiter / KUS Admin': 'Eventleiter / KUS',
-  'Black Sun Syndikat Admin': 'Viewer',
-  'Black Sun Syndikat': 'Viewer',
-  'Pyke-Syndikat Admin': 'Viewer',
-  'Pyke-Syndikat': 'Viewer',
-  'Huttenkartell Admin': 'Viewer',
-  Huttenkartell: 'Viewer'
+  'Black Sun Syndikat Admin': 'Black Sun Syndikat',
+  'Pyke-Syndikat Admin': 'Pyke-Syndikat',
+  'Huttenkartell Admin': 'Huttenkartell'
 };
 const INFRASTRUCTURE_KEYS = new Set([
   'quadraniumErz',
