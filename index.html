@@ -908,6 +908,7 @@ let radioCommandAdminState = {
   audit: [],
   users: [],
   fleets: [],
+  radioConfig: null,
   loading: false
 };
 let currentAuthenticatedUsername = '';
@@ -8248,6 +8249,7 @@ async function fetchRadioCommandCenterData() {
       audit: payload.audit || [],
       users: payload.users || [],
       fleets: payload.fleets || [],
+      radioConfig: payload.radioConfig || null,
       loading: false
     };
     if (activeMainTab === 'radioCommandCenter') renderRadioCommandCenterView();
@@ -8312,6 +8314,7 @@ async function saveRadioPermission(id) {
       audit: payload.audit || [],
       users: payload.users || [],
       fleets: payload.fleets || [],
+      radioConfig: payload.radioConfig || null,
       loading: false
     };
     renderRadioCommandCenterView();
@@ -8342,6 +8345,7 @@ async function deleteRadioPermission(id) {
       audit: payload.audit || [],
       users: payload.users || [],
       fleets: payload.fleets || [],
+      radioConfig: payload.radioConfig || null,
       loading: false
     };
     renderRadioCommandCenterView();
@@ -8365,6 +8369,7 @@ async function pollDiscordRadioCommands() {
       audit: payload.audit || [],
       users: payload.users || [],
       fleets: payload.fleets || [],
+      radioConfig: payload.radioConfig || null,
       loading: false
     };
     renderRadioCommandCenterView();
@@ -8375,7 +8380,8 @@ async function pollDiscordRadioCommands() {
     const rejected = payload.result?.rejected || 0;
     const firstDebug = Array.isArray(payload.result?.debug) ? payload.result.debug.find(Boolean) : null;
     const debugSuffix = firstDebug?.reason ? ` Letzter Grund: ${firstDebug.reason}.` : '';
-    setStatus(`Discord-Funk ausgewertet: ${fetched} geladen, ${relevant} erkannt, ${processed} verarbeitet, ${accepted} akzeptiert, ${rejected} abgelehnt.${debugSuffix}`);
+    const channelInfo = payload.radioConfig?.channelId ? ` Aktiver Channel: ${payload.radioConfig.channelId}.` : '';
+    setStatus(`Discord-Funk ausgewertet: ${fetched} geladen, ${relevant} erkannt, ${processed} verarbeitet, ${accepted} akzeptiert, ${rejected} abgelehnt.${channelInfo}${debugSuffix}`);
   } catch (error) {
     setStatus(`Discord-Funk Poll fehlgeschlagen: ${error.message}`);
   }

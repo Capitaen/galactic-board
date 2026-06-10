@@ -56,7 +56,7 @@ export function createDiscordRadioListener({
   return { start, stop, pollOnce };
 }
 
-function getDiscordRadioConfig() {
+export function getDiscordRadioConfig() {
   const botToken = String(process.env.DISCORD_BOT_TOKEN || '').trim();
   const channelId = String(process.env.DISCORD_RADIO_CHANNEL_ID || '').trim();
   const pollMs = Math.max(5000, Number(process.env.DISCORD_RADIO_POLL_MS || 15000) || 15000);

@@ -23,7 +23,7 @@ import {
 } from './db.js';
 import { getFleetMotionArrivalIso, getFleetMotionByFleetId, getFleetMotionStartedAtIso, getFleetPlanetId, getPlanetNameById, writeAuditLog } from './audit.js';
 import { applyEnvFiles } from './env.js';
-import { createDiscordRadioListener } from './services/discordRadioListener.js';
+import { createDiscordRadioListener, getDiscordRadioConfig } from './services/discordRadioListener.js';
 import { validateNextCampaignState } from './stateValidation.js';
 
 const projectRoot = process.cwd();
@@ -327,6 +327,7 @@ function listRadioAuditForActor(actor, limit = 200) {
 
 function buildRadioCommandAdminPayload(actor) {
   const { state } = readCampaignState(db);
+  const radioConfig = getDiscordRadioConfig();
   const users = listUsersForActor(actor);
   const fleets = (Array.isArray(state?.fleets) ? state.fleets : [])
     .filter((fleet) => String(fleet?.faction || '').trim().toUpperCase() === 'GAR')
@@ -336,13 +337,19 @@ function buildRadioCommandAdminPayload(actor) {
       faction: fleet.faction || ''
     }))
     .sort((a, b) => a.name.localeCompare(b.name, 'de'));
-  return {
-    permissions: listRadioPermissionsForActor(actor),
-    audit: listRadioAuditForActor(actor),
-    users,
-    fleets
-  };
-}
+    return {
+      permissions: listRadioPermissionsForActor(actor),
+      audit: listRadioAuditForActor(actor),
+      users,
+      fleets,
+      radioConfig: {
+        enabled: radioConfig.enabled,
+        channelId: radioConfig.channelId,
+        pollMs: radioConfig.pollMs,
+        tokenLoaded: Boolean(radioConfig.botToken)
+      }
+    };
+  }
 
 function sanitizeStateForRole(state, actor) {
   return {

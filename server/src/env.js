@@ -36,7 +36,7 @@ export function loadEnvFiles(rootDir = process.cwd()) {
 export function applyEnvFiles(rootDir = process.cwd()) {
   const envValues = loadEnvFiles(rootDir);
   Object.entries(envValues).forEach(([key, value]) => {
-    if (!(key in process.env)) process.env[key] = value;
+    process.env[key] = value;
   });
   return envValues;
 }
