@@ -8224,12 +8224,14 @@ async function pollDiscordRadioCommands() {
       loading: false
     };
     renderRadioCommandCenterView();
-      const fetched = payload.result?.fetched || 0;
-      const relevant = payload.result?.relevant || 0;
-      const processed = payload.result?.processed || 0;
-      const accepted = payload.result?.accepted || 0;
-      const rejected = payload.result?.rejected || 0;
-      setStatus(`Discord-Funk ausgewertet: ${fetched} geladen, ${relevant} erkannt, ${processed} verarbeitet, ${accepted} akzeptiert, ${rejected} abgelehnt.`);
+    const fetched = payload.result?.fetched || 0;
+    const relevant = payload.result?.relevant || 0;
+    const processed = payload.result?.processed || 0;
+    const accepted = payload.result?.accepted || 0;
+    const rejected = payload.result?.rejected || 0;
+    const firstDebug = Array.isArray(payload.result?.debug) ? payload.result.debug.find(Boolean) : null;
+    const debugSuffix = firstDebug?.reason ? ` Letzter Grund: ${firstDebug.reason}.` : '';
+    setStatus(`Discord-Funk ausgewertet: ${fetched} geladen, ${relevant} erkannt, ${processed} verarbeitet, ${accepted} akzeptiert, ${rejected} abgelehnt.${debugSuffix}`);
   } catch (error) {
     setStatus(`Discord-Funk Poll fehlgeschlagen: ${error.message}`);
   }

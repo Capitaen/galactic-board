@@ -26,7 +26,8 @@ function stripRadioPrefix(value) {
 }
 
 function looksLikeRadioPrefix(value) {
-  return /^\[Langstreckenfunk\]\b/i.test(stripLeadingDiscordFormatting(value));
+  const normalized = stripLeadingDiscordFormatting(value);
+  return /^\[Langstreckenfunk\]\b/i.test(normalized) || /\blangstreckenfunk\b/i.test(normalized);
 }
 
 function buildPlanetMatchers(planets = []) {
@@ -53,6 +54,18 @@ function buildFleetMatchers(fleets = []) {
 
 function extractActorName(content) {
   const prefixless = stripRadioPrefix(content);
+  const labeledPatterns = [
+    /\b(?:von|ausgelost von|ausgelöst von|befehlgeber|kommandant|sender)\s*[:\-]\s*([^\n|]+)/i,
+    /\b(?:von|ausgelost von|ausgelöst von|befehlgeber|kommandant|sender)\s+([A-ZÄÖÜ][^\n|]{2,80})/i
+  ];
+
+  for (const pattern of labeledPatterns) {
+    const match = prefixless.match(pattern);
+    if (!match?.[1]) continue;
+    const candidate = compactWhitespace(match[1].split(/(?:\s{2,}|,|;)/)[0]);
+    if (candidate) return candidate;
+  }
+
   const colonIndex = prefixless.indexOf(':');
   if (colonIndex < 0) return '';
   const left = compactWhitespace(prefixless.slice(0, colonIndex));
@@ -128,29 +141,32 @@ function findFleetMentions(message, fleets = []) {
   return results;
 }
 
-export function parseRadioCommandMessage(content, context = {}) {
+export function parseRadioCommandMessage(content, context = {}, options = {}) {
   const rawMessage = String(content || '');
   const message = stripLeadingDiscordFormatting(rawMessage);
-  if (!looksLikeRadioPrefix(message)) {
+  const fleets = findFleetMentions(message, buildFleetMatchers(context.fleets || []));
+  const planet = findPlanetMention(message, buildPlanetMatchers(context.planets || []));
+  const hasPrefix = looksLikeRadioPrefix(message);
+  const assumeRelevant = Boolean(options.assumeRelevant);
+
+  if (!hasPrefix && !assumeRelevant && !fleets.length && !planet) {
     return {
       isRelevant: false,
       reason: 'missing_prefix',
       originalMessage: compactWhitespace(rawMessage),
       actorName: '',
       commandType: 'unknown',
-      fleets: [],
-      planet: null
+      fleets,
+      planet
     };
   }
 
   const actorName = extractActorName(message);
   const commandType = detectCommandType(message);
-  const fleets = findFleetMentions(message, buildFleetMatchers(context.fleets || []));
-  const planet = findPlanetMention(message, buildPlanetMatchers(context.planets || []));
 
   return {
     isRelevant: true,
-    reason: '',
+    reason: hasPrefix ? '' : 'inferred_command',
     originalMessage: message,
     actorName,
     commandType,
