@@ -72,7 +72,9 @@ function extractActorName(content) {
   const matches = [...left.matchAll(/([A-ZÃ„Ã–Ãœ][a-zÃ¤Ã¶Ã¼ÃŸ'â€™-]+(?:\s+[A-ZÃ„Ã–Ãœ][a-zÃ¤Ã¶Ã¼ÃŸ'â€™-]+)+)\s*$/g)];
   if (matches.length) return compactWhitespace(matches[matches.length - 1][1]);
   const fallback = left.match(/([A-ZÃ„Ã–Ãœ][a-zÃ¤Ã¶Ã¼ÃŸ'â€™-]+(?:\s+[A-ZÃ„Ã–Ãœ][a-zÃ¤Ã¶Ã¼ÃŸ'â€™-]+){1,3})/g);
-  return fallback?.length ? compactWhitespace(fallback[fallback.length - 1]) : '';
+  if (fallback?.length) return compactWhitespace(fallback[fallback.length - 1]);
+  const singleWordMatch = left.match(/([A-ZÃ„Ã–Ãœ][a-zÃ¤Ã¶Ã¼ÃŸ'â€™-]{2,})\s*$/);
+  return singleWordMatch?.[1] ? compactWhitespace(singleWordMatch[1]) : '';
 }
 
 function detectCommandType(text) {

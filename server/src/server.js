@@ -97,7 +97,7 @@ const LOGIN_ROLE_DEFINITIONS = {
   Viewer: { faction: 'system', level: 'viewer' }
 };
 const LOGIN_ROLES = Object.keys(LOGIN_ROLE_DEFINITIONS);
-const RADIO_PERMISSION_ROLES = ['fleet_officer', 'staff_officer', 'faction_admin', 'admiralty'];
+const RADIO_PERMISSION_ROLES = ['fleet_officer', 'admiralty'];
 function normalizeOwnershipReferenceName(text) {
   return String(text || '')
     .toLowerCase()
@@ -617,7 +617,6 @@ function validateAdminUserInput(body) {
 function validateRadioPermissionInput(body) {
   const ingameName = String(body?.ingameName || '').trim();
   const linkedUserId = String(body?.linkedUserId || '').trim();
-  const permissionRole = String(body?.permissionRole || '').trim();
   const fleets = Array.isArray(body?.fleets)
     ? body.fleets.map((fleet) => ({
       fleetId: String(fleet?.fleetId || '').trim(),
@@ -643,6 +642,10 @@ function validateRadioPermissionInput(body) {
     error.status = 400;
     throw error;
   }
+
+  const permissionRole = ['Admin', 'Republic Navy Admin'].includes(linkedUser?.role)
+    ? 'admiralty'
+    : 'fleet_officer';
 
   return {
     ingameName,

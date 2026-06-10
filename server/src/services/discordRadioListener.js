@@ -131,7 +131,9 @@ async function processSingleDiscordMessage({ db, message, actor, getIo, onCampai
   }
 
   const authorFallbackNames = buildAuthorFallbackNames(message);
-  const actorPermission = resolveActorPermission(db, parsed.actorName, authorFallbackNames);
+  const actorPermission = resolveActorPermission(db, parsed.actorName, authorFallbackNames, {
+    allowFallbackNames: !isRelayMirrorMessage(message)
+  });
   const actorDisplayName = parsed.actorName || authorFallbackNames[0] || '';
   const linkedUserMatches = actorPermission?.linkedUserId
     ? listUsers(db).find((user) => user.id === actorPermission.linkedUserId)
@@ -517,8 +519,11 @@ function buildAuthorFallbackNames(message) {
   return [...new Set(values.map((value) => String(value || '').trim()).filter(Boolean))];
 }
 
-function resolveActorPermission(db, parsedActorName, fallbackNames = []) {
-  const candidates = [parsedActorName, ...fallbackNames]
+function resolveActorPermission(db, parsedActorName, fallbackNames = [], options = {}) {
+  const candidates = [
+    parsedActorName,
+    ...(options.allowFallbackNames ? fallbackNames : [])
+  ]
     .map((value) => String(value || '').trim())
     .filter(Boolean);
 
@@ -528,4 +533,12 @@ function resolveActorPermission(db, parsedActorName, fallbackNames = []) {
   }
 
   return null;
+}
+
+function isRelayMirrorMessage(message) {
+  return Boolean(
+    message?.webhook_id
+    || message?.application_id
+    || message?.author?.bot
+  );
 }
