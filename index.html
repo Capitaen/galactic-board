@@ -9851,6 +9851,17 @@ function updateMarketQuantity(kind, companyId, value) {
   if (output) output.value = range?.value || String(quantity);
 }
 
+async function readJsonResponse(response, fallbackMessage = 'Anfrage fehlgeschlagen.') {
+  const contentType = String(response.headers.get('content-type') || '').toLowerCase();
+  if (contentType.includes('application/json')) return response.json();
+  const text = await response.text();
+  const error = new Error(text.trim().startsWith('<')
+    ? `${fallbackMessage} Der Server hat HTML statt JSON geliefert. Bitte Server neu starten oder API-Route prüfen.`
+    : (text.trim() || fallbackMessage));
+  error.status = response.status;
+  throw error;
+}
+
 async function fetchEconomyView(options = {}) {
   if (economyViewState.loading) return;
   const renderLoading = options.renderLoading !== false;
@@ -9859,7 +9870,7 @@ async function fetchEconomyView(options = {}) {
   if (renderLoading && activeMainTab === 'economy') renderEconomyView();
   try {
     const response = await fetch('/api/economy/market', { credentials: 'include' });
-    const payload = await response.json();
+    const payload = await readJsonResponse(response, 'Wirtschaftsdaten konnten nicht geladen werden.');
     if (!response.ok) throw new Error(payload.error || 'Wirtschaftsdaten konnten nicht geladen werden.');
     Object.assign(economyViewState, payload, { loaded: true });
   } catch (error) {
@@ -9882,7 +9893,7 @@ async function buyMarketShare(companyId) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ companyId, quantity })
     });
-    const payload = await response.json();
+    const payload = await readJsonResponse(response, 'Aktienkauf fehlgeschlagen.');
     if (!response.ok) {
       if (payload.nextPurchaseAt) economyViewState.nextPurchaseAt = payload.nextPurchaseAt;
       throw new Error(payload.error || 'Aktienkauf fehlgeschlagen.');
@@ -9907,7 +9918,7 @@ async function sellMarketShare(companyId) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ companyId, quantity })
     });
-    const payload = await response.json();
+    const payload = await readJsonResponse(response, 'Aktienverkauf fehlgeschlagen.');
     if (!response.ok) throw new Error(payload.error || 'Aktienverkauf fehlgeschlagen.');
     setStatus(`Aktie verkauft. ${formatCredits(payload.sale?.credited || 0)} wurden dem persönlichen Portfolio gutgeschrieben.`);
     await fetchEconomyView();
@@ -9936,7 +9947,7 @@ async function fetchSectorEconomyList(options = {}) {
   if (activeMainTab === 'economy') renderEconomyView();
   try {
     const response = await fetch('/api/economy/sectors', { credentials: 'include' });
-    const payload = await response.json();
+    const payload = await readJsonResponse(response, 'Sektor-Wirtschaft konnte nicht geladen werden.');
     if (!response.ok) throw new Error(payload.error || 'Sektor-Wirtschaft konnte nicht geladen werden.');
     economyViewState.economySectors = payload.sectors || [];
     economyViewState.canBuySectorResources = Boolean(payload.canBuyResources);
@@ -9965,7 +9976,7 @@ async function fetchSectorEconomyDetail(sectorId, options = {}) {
   }
   try {
     const response = await fetch(`/api/economy/sectors/${encodeURIComponent(sectorId)}`, { credentials: 'include' });
-    const payload = await response.json();
+    const payload = await readJsonResponse(response, 'Sektor-Wirtschaft konnte nicht geladen werden.');
     if (!response.ok) throw new Error(payload.error || 'Sektor-Wirtschaft konnte nicht geladen werden.');
     economyViewState.selectedEconomySector = payload.sector || null;
     economyViewState.canBuySectorResources = Boolean(payload.canBuyResources);
@@ -10006,7 +10017,7 @@ async function buySectorResource() {
         quantity: economyViewState.sectorPurchaseQuantity
       })
     });
-    const payload = await response.json();
+    const payload = await readJsonResponse(response, 'Ressourcenkauf fehlgeschlagen.');
     if (!response.ok) throw new Error(payload.error || 'Ressourcenkauf fehlgeschlagen.');
     economyViewState.selectedEconomySector = payload.sector || economyViewState.selectedEconomySector;
     setStatus(`${payload.purchase?.quantity || 0} ${RESOURCE_LABELS[payload.purchase?.resourceType] || 'Ressourcen'} gekauft. Kosten: ${formatCredits(payload.purchase?.totalPrice || 0)}.`);
@@ -10029,7 +10040,7 @@ async function setEconomySectorEmbargo(isEmbargoed) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ isEmbargoed })
     });
-    const payload = await response.json();
+    const payload = await readJsonResponse(response, 'Embargo konnte nicht aktualisiert werden.');
     if (!response.ok) throw new Error(payload.error || 'Embargo konnte nicht aktualisiert werden.');
     economyViewState.selectedEconomySector = payload.sector || null;
     setStatus(isEmbargoed ? 'Embargo verhängt.' : 'Embargo aufgehoben.');
@@ -10055,7 +10066,7 @@ async function saveEconomyPolicy() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ taxRate, subsidy })
     });
-    const payload = await response.json();
+    const payload = await readJsonResponse(response, 'Wirtschaftspolitik konnte nicht gespeichert werden.');
     if (!response.ok) throw new Error(payload.error || 'Wirtschaftspolitik konnte nicht gespeichert werden.');
     economyViewState.policy = payload.policy;
     setStatus('Wirtschaftspolitik des Senats gespeichert.');
