@@ -1,8 +1,8 @@
-function normalizeText(text) {
+﻿function normalizeText(text) {
   return String(text || '')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[â€žâ€œâ€"']/g, '')
+    .replace(/[Ã¢â‚¬Å¾Ã¢â‚¬Å“Ã¢â‚¬Â"']/g, '')
     .toLowerCase();
 }
 
@@ -69,14 +69,22 @@ function extractActorName(content) {
   const colonIndex = prefixless.indexOf(':');
   if (colonIndex < 0) return '';
   const left = compactWhitespace(prefixless.slice(0, colonIndex));
-  const matches = [...left.matchAll(/([A-ZÃ„Ã–Ãœ][a-zÃ¤Ã¶Ã¼ÃŸ'â€™-]+(?:\s+[A-ZÃ„Ã–Ãœ][a-zÃ¤Ã¶Ã¼ÃŸ'â€™-]+)+)\s*$/g)];
-  if (matches.length) return compactWhitespace(matches[matches.length - 1][1]);
-  const fallback = left.match(/([A-ZÃ„Ã–Ãœ][a-zÃ¤Ã¶Ã¼ÃŸ'â€™-]+(?:\s+[A-ZÃ„Ã–Ãœ][a-zÃ¤Ã¶Ã¼ÃŸ'â€™-]+){1,3})/g);
-  if (fallback?.length) return compactWhitespace(fallback[fallback.length - 1]);
-  const singleWordMatch = left.match(/([A-ZÃ„Ã–Ãœ][a-zÃ¤Ã¶Ã¼ÃŸ'â€™-]{2,})\s*$/);
-  return singleWordMatch?.[1] ? compactWhitespace(singleWordMatch[1]) : '';
-}
+  const leftWithoutCallsigns = compactWhitespace(
+    left
+      .replace(/\b[A-Z]{1,6}(?:\/[A-Z]{1,6})+\b/g, ' ')
+      .replace(/\b[A-Z]{2,6}\b/g, ' ')
+      .replace(/\b\d+(?:th|st|nd|rd)?\b/gi, ' ')
+      .replace(/[_*`~]/g, ' ')
+  );
 
+  const unicodeNameMatch = leftWithoutCallsigns.match(/([\p{Lu}][\p{L}'’-]+(?:\s+[\p{Lu}][\p{L}'’-]+){1,2})$/u);
+  if (unicodeNameMatch?.[1]) return compactWhitespace(unicodeNameMatch[1]);
+
+  const unicodeSingleWordMatch = leftWithoutCallsigns.match(/([\p{Lu}][\p{L}'’-]{2,})$/u);
+  if (unicodeSingleWordMatch?.[1]) return compactWhitespace(unicodeSingleWordMatch[1]);
+
+  return '';
+}
 function detectCommandType(text) {
   const normalized = normalizeText(text);
   if (/\bverlager(n|en|e|t)\b/.test(normalized)) return 'verlagern';
@@ -119,10 +127,10 @@ function findFleetMentions(message, fleets = []) {
     if (pattern.test(normalizedMessage)) addFleetMatch(results, fleet, seenIds);
   }
 
-  const admiraltyListMatch = normalizedMessage.match(/admiralit[aÃ¤]tsflotte\s+([0-9,\sund]+)/i);
+  const admiraltyListMatch = normalizedMessage.match(/admiralit[aÃƒÂ¤]tsflotte\s+([0-9,\sund]+)/i);
   if (admiraltyListMatch?.[1]) {
     for (const number of admiraltyListMatch[1].match(/\d+/g) || []) {
-      const wanted = normalizeText(`AdmiralitÃ¤tsflotte ${number}`);
+      const wanted = normalizeText(`AdmiralitÃƒÂ¤tsflotte ${number}`);
       const match = fleets.find((fleet) => fleet.normalized === wanted);
       if (match) addFleetMatch(results, match, seenIds);
     }
@@ -132,7 +140,7 @@ function findFleetMentions(message, fleets = []) {
     ...normalizedMessage.matchAll(/\bsd\s+\d+(?:\.\d+)+\b/gi),
     ...normalizedMessage.matchAll(/\bschlacht division\s+\d+(?:\.\d+)+\b/gi),
     ...normalizedMessage.matchAll(/\btask force\s+[a-z0-9-]+\b/gi),
-    ...normalizedMessage.matchAll(/\badmiralit[aÃ¤]tsflotte\s+\d+\b/gi)
+    ...normalizedMessage.matchAll(/\badmiralit[aÃƒÂ¤]tsflotte\s+\d+\b/gi)
   ];
 
   compactPatternMatches.forEach((entry) => {
@@ -176,3 +184,4 @@ export function parseRadioCommandMessage(content, context = {}, options = {}) {
     planet
   };
 }
+
