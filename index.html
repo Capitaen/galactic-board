@@ -1577,6 +1577,7 @@ function isPlanetVisibleInClusterZoom(planet) {
   if (!planet) return false;
   if (selected?.type === 'planet' && selected.id === planet.id) return true;
   if (hoveredPlanetId === planet.id) return true;
+  if (isPlanetInsideHoveredSector(planet)) return true;
   const basePosition = viewMode === 'schematic' ? getSchematicPlanetPosition(planet) : getImagePlanetPosition(planet);
   const center = clusterZoomState.center;
   const distance = Math.hypot(basePosition.x - center.x, basePosition.y - center.y);
@@ -4024,7 +4025,10 @@ function hoveredZoneKey(info) {
 function isPlanetInsideHoveredSector(planet) {
   const sectorArea = hoveredZoneInfo?.sectorArea;
   if (!planet || !sectorArea?.rings?.length) return false;
-  return pointInAreaRings(getPlanetDisplayPosition(planet), sectorArea.rings);
+  const basePosition = viewMode === 'schematic'
+    ? getSchematicPlanetPosition(planet)
+    : getImagePlanetPosition(planet);
+  return pointInAreaRings(basePosition, sectorArea.rings);
 }
 
 function normalizeAngle(angle) {
@@ -8350,7 +8354,11 @@ window.addEventListener('pointermove', (event) => {
     const hoveredPlanet = nearestDisplayedPlanet(worldPos.x, worldPos.y, 18);
     const hoveredRoute = hoveredPlanet ? null : nearestDisplayedRoute(worldPos.x, worldPos.y, 8);
     queueHoveredRoute(hoveredRoute?.id || null);
-    setHoveredZone(nearestDisplayedZone(worldPos.x, worldPos.y));
+    const nextHoveredZone = nearestDisplayedZone(worldPos.x, worldPos.y);
+    const keepCurrentSector = !nextHoveredZone
+      && hoveredPlanet
+      && isPlanetInsideHoveredSector(hoveredPlanet);
+    setHoveredZone(keepCurrentSector ? hoveredZoneInfo : nextHoveredZone);
     const hoveredMarker = (hoveredPlanet || hoveredRoute) ? null : nearestDisplayedMarker(worldPos.x, worldPos.y, 20);
     hoveredMarkerId = hoveredMarker?.id || null;
     setHoveredPlanet(hoveredPlanet?.id || null);
