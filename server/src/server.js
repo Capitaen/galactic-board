@@ -230,7 +230,15 @@ app.get('/favicon.ico', (_req, res) => {
 
 function readUsersWithSecrets() {
   return db.prepare(`
-    SELECT id, username, password_hash AS passwordHash, role, created_at AS createdAt, updated_at AS updatedAt
+    SELECT
+      id,
+      username,
+      password_hash AS passwordHash,
+      role,
+      can_coordinate_4th_fleet AS canCoordinate4thFleet,
+      senate_position AS senatePosition,
+      created_at AS createdAt,
+      updated_at AS updatedAt
     FROM users
     ORDER BY username COLLATE NOCASE
   `).all();
@@ -241,9 +249,24 @@ function createSession(user) {
   sessions.set(token, {
     id: user.id,
     username: user.username,
-    role: user.role
+    role: user.role,
+    canCoordinate4thFleet: Boolean(user.canCoordinate4thFleet),
+    senatePosition: user.senatePosition || ''
   });
   return token;
+}
+
+function refreshUserSessions(userId, user) {
+  sessions.forEach((session, token) => {
+    if (session.id !== userId) return;
+    sessions.set(token, {
+      ...session,
+      username: user.username,
+      role: user.role,
+      canCoordinate4thFleet: Boolean(user.canCoordinate4thFleet),
+      senatePosition: user.senatePosition || ''
+    });
+  });
 }
 
 function getSession(req) {
@@ -516,6 +539,13 @@ function validateAdminUserInput(body) {
   const username = String(body?.username || '').trim();
   const password = String(body?.password || '');
   const role = sanitizeAdminRole(body?.role);
+  const roleDefinition = LOGIN_ROLE_DEFINITIONS[role];
+  const canCoordinate4thFleet = roleDefinition?.faction === 'navy' && Boolean(body?.canCoordinate4thFleet);
+  const allowedSenatePositions = ['Vizekanzler', 'Regierungsdirektor', 'Minister', 'Vizeminister'];
+  const requestedSenatePosition = String(body?.senatePosition || '').trim();
+  const senatePosition = roleDefinition?.faction === 'senate' && allowedSenatePositions.includes(requestedSenatePosition)
+    ? requestedSenatePosition
+    : '';
 
   if (!username) {
     const error = new Error('Benutzername darf nicht leer sein.');
@@ -529,7 +559,7 @@ function validateAdminUserInput(body) {
     throw error;
   }
 
-  return { username, password, role };
+  return { username, password, role, canCoordinate4thFleet, senatePosition };
 }
 
 function validateRadioPermissionInput(body) {
@@ -722,7 +752,7 @@ app.get('/api/bootstrap', (req, res) => {
 app.get('/api/auth/me', (req, res) => {
   const session = getSession(req);
   res.json({
-    user: session || { id: null, username: '', role: 'Viewer' }
+    user: session || { id: null, username: '', role: 'Viewer', canCoordinate4thFleet: false, senatePosition: '' }
   });
 });
 
@@ -761,7 +791,13 @@ app.post('/api/auth/login', async (req, res) => {
   });
 
   res.json({
-    user: { id: user.id, username: user.username, role: user.role }
+    user: {
+      id: user.id,
+      username: user.username,
+      role: user.role,
+      canCoordinate4thFleet: Boolean(user.canCoordinate4thFleet),
+      senatePosition: user.senatePosition || ''
+    }
   });
 });
 
@@ -774,7 +810,7 @@ app.post('/api/auth/logout', (req, res) => {
 
 app.post('/api/admin/users', requireAuth, requireLoginManager, async (req, res) => {
   try {
-    const { username, password, role } = validateAdminUserInput(req.body);
+    const { username, password, role, canCoordinate4thFleet, senatePosition } = validateAdminUserInput(req.body);
     if (!canActorAssignRole(req.user, role)) {
       return res.status(403).json({ error: 'Diese Rolle darfst du nicht vergeben.', users: listUsersForActor(req.user) });
     }
@@ -783,7 +819,7 @@ app.post('/api/admin/users', requireAuth, requireLoginManager, async (req, res) 
       return res.status(409).json({ error: 'Dieser Benutzername existiert bereits.', users: listUsersForActor(req.user) });
     }
     const passwordHash = await bcrypt.hash(password, 10);
-    createUser(db, { username, passwordHash, role });
+    createUser(db, { username, passwordHash, role, canCoordinate4thFleet, senatePosition });
     res.json({ ok: true, users: listUsersForActor(req.user) });
   } catch (error) {
     res.status(error.status || 500).json({
@@ -800,7 +836,7 @@ app.patch('/api/admin/users/:id', requireAuth, requireLoginManager, async (req, 
   }
 
   try {
-    const { username, password, role } = validateAdminUserInput(req.body);
+    const { username, password, role, canCoordinate4thFleet, senatePosition } = validateAdminUserInput(req.body);
     const targetUser = listUsers(db).find((user) => user.id === userId);
     if (!canActorManageUser(req.user, targetUser) || !canActorAssignRole(req.user, role)) {
       return res.status(403).json({ error: 'Diesen Login darfst du nicht bearbeiten.', users: listUsersForActor(req.user) });
@@ -810,7 +846,8 @@ app.patch('/api/admin/users/:id', requireAuth, requireLoginManager, async (req, 
       return res.status(409).json({ error: 'Dieser Benutzername existiert bereits.', users: listUsersForActor(req.user) });
     }
     const passwordHash = await bcrypt.hash(password, 10);
-    updateUser(db, userId, { username, passwordHash, role });
+    updateUser(db, userId, { username, passwordHash, role, canCoordinate4thFleet, senatePosition });
+    refreshUserSessions(userId, { username, role, canCoordinate4thFleet, senatePosition });
     res.json({ ok: true, users: listUsersForActor(req.user) });
   } catch (error) {
     res.status(error.status || 500).json({
@@ -917,7 +954,7 @@ app.put('/api/campaign/state', requireAuth, (req, res) => {
   }
 
   try {
-    validateNextCampaignState(req.user.role, previousState, nextState);
+    validateNextCampaignState(req.user, previousState, nextState);
 
     const mergedState = {
       ...previousState,

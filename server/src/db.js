@@ -24,6 +24,8 @@ export function createDb(projectRoot) {
       username TEXT NOT NULL UNIQUE,
       password_hash TEXT NOT NULL,
       role TEXT NOT NULL,
+      can_coordinate_4th_fleet INTEGER NOT NULL DEFAULT 0,
+      senate_position TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
@@ -77,6 +79,14 @@ export function createDb(projectRoot) {
     CREATE INDEX IF NOT EXISTS idx_radio_command_log_created_at
       ON radio_command_log (created_at DESC);
   `);
+
+  const userColumns = new Set(db.prepare('PRAGMA table_info(users)').all().map((column) => column.name));
+  if (!userColumns.has('can_coordinate_4th_fleet')) {
+    db.exec('ALTER TABLE users ADD COLUMN can_coordinate_4th_fleet INTEGER NOT NULL DEFAULT 0');
+  }
+  if (!userColumns.has('senate_position')) {
+    db.exec("ALTER TABLE users ADD COLUMN senate_position TEXT NOT NULL DEFAULT ''");
+  }
 
   const legacyFactionAdminRoles = [
     ['Republic Navy Main-Admin', 'Republic Navy Admin'],
@@ -189,7 +199,14 @@ export function writeCampaignState(db, nextState, nextRevision) {
 
 export function listUsers(db) {
   return db.prepare(`
-    SELECT id, username, role, created_at AS createdAt, updated_at AS updatedAt
+    SELECT
+      id,
+      username,
+      role,
+      can_coordinate_4th_fleet AS canCoordinate4thFleet,
+      senate_position AS senatePosition,
+      created_at AS createdAt,
+      updated_at AS updatedAt
     FROM users
     ORDER BY username COLLATE NOCASE
   `).all();
@@ -197,30 +214,39 @@ export function listUsers(db) {
 
 export function findUserByNormalizedUsername(db, username) {
   return db.prepare(`
-    SELECT id, username, role, created_at AS createdAt, updated_at AS updatedAt
+    SELECT
+      id,
+      username,
+      role,
+      can_coordinate_4th_fleet AS canCoordinate4thFleet,
+      senate_position AS senatePosition,
+      created_at AS createdAt,
+      updated_at AS updatedAt
     FROM users
     WHERE lower(username) = lower(?)
     LIMIT 1
   `).get(username);
 }
 
-export function createUser(db, { username, passwordHash, role }) {
+export function createUser(db, { username, passwordHash, role, canCoordinate4thFleet = false, senatePosition = '' }) {
   const now = new Date().toISOString();
   const id = crypto.randomUUID();
   db.prepare(`
-    INSERT INTO users (id, username, password_hash, role, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).run(id, username, passwordHash, role, now, now);
+    INSERT INTO users (
+      id, username, password_hash, role, can_coordinate_4th_fleet, senate_position, created_at, updated_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(id, username, passwordHash, role, canCoordinate4thFleet ? 1 : 0, senatePosition, now, now);
   return id;
 }
 
-export function updateUser(db, id, { username, passwordHash, role }) {
+export function updateUser(db, id, { username, passwordHash, role, canCoordinate4thFleet = false, senatePosition = '' }) {
   const now = new Date().toISOString();
   db.prepare(`
     UPDATE users
-    SET username = ?, password_hash = ?, role = ?, updated_at = ?
+    SET username = ?, password_hash = ?, role = ?, can_coordinate_4th_fleet = ?, senate_position = ?, updated_at = ?
     WHERE id = ?
-  `).run(username, passwordHash, role, now, id);
+  `).run(username, passwordHash, role, canCoordinate4thFleet ? 1 : 0, senatePosition, now, id);
 }
 
 export function deleteUser(db, id) {

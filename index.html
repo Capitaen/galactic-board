@@ -785,6 +785,7 @@ const LOGIN_FACTIONS = [
   { id: 'senate', label: 'Galaktischer Senat', memberRole: 'Senat', adminRole: 'Galaktischer Senats Admin' },
   { id: 'event', label: 'Eventleiter / KUS', memberRole: 'Eventleiter / KUS', adminRole: 'Eventleiter / KUS Admin' }
 ];
+const SENATE_POSITIONS = ['Vizekanzler', 'Regierungsdirektor', 'Minister', 'Vizeminister'];
 const sectorDrawBtn = document.getElementById('sectorDrawBtn');
 const planetIndex = new Map();
 const fleetIndex = new Map();
@@ -1126,7 +1127,9 @@ function normalizeCampaignState() {
       id: user.id || `auth_${Math.random().toString(36).slice(2, 10)}`,
       username: String(user.username || '').trim(),
       password: String(user.password || ''),
-      role: LOGIN_ROLES.includes(user.role) ? user.role : 'Viewer'
+      role: LOGIN_ROLES.includes(user.role) ? user.role : 'Viewer',
+      canCoordinate4thFleet: Boolean(user.canCoordinate4thFleet),
+      senatePosition: SENATE_POSITIONS.includes(user.senatePosition) ? user.senatePosition : ''
     }))
     .filter((user) => user.username);
   state.fleetMotions = state.fleetMotions
@@ -2395,7 +2398,9 @@ function syncAuthUsersFromCampaign(campaign) {
       id: user.id || `auth_${Math.random().toString(36).slice(2, 10)}`,
       username: String(user.username || '').trim(),
       password: String(user.password || ''),
-      role: LOGIN_ROLES.includes(user.role) ? user.role : 'Viewer'
+      role: LOGIN_ROLES.includes(user.role) ? user.role : 'Viewer',
+      canCoordinate4thFleet: Boolean(user.canCoordinate4thFleet),
+      senatePosition: SENATE_POSITIONS.includes(user.senatePosition) ? user.senatePosition : ''
     }))
     .filter((user) => user.username);
   if (activeMainTab === 'loginManager' && canManageLogins()) renderLoginManagerView();
@@ -4540,6 +4545,13 @@ function currentAssignedRole() {
 
 function currentRole() {
   return LOGIN_ROLE_DEFINITIONS[currentAssignedRole()]?.baseRole || 'Viewer';
+}
+
+function canCoordinate4thFleet() {
+  return isAdminRole() || (
+    currentRole() === 'Republic Navy / GAR'
+    && Boolean(serverSync.session?.canCoordinate4thFleet)
+  );
 }
 
 function isAdminRole() {
@@ -7157,6 +7169,10 @@ function startBuildOrder() {
     setStatus('Republic Navy kann nur GAR-Schiffe bauen.');
     return;
   }
+  if (role === 'Republic Navy / GAR' && faction === 'GAR' && !canCoordinate4thFleet()) {
+    setStatus('Nur Personen mit der Berechtigung „4th Flottenkoordination“ können GAR-Schiffe in Auftrag geben.');
+    return;
+  }
   if (role === 'Eventleiter / KUS' && faction !== 'KUS') {
     setStatus('Eventleitung kann hier nur KUS-Schiffe bauen.');
     return;
@@ -7900,6 +7916,8 @@ function createLoginManagerUser(role = '') {
     username: '',
     password: '',
     role: selectedRole,
+    canCoordinate4thFleet: false,
+    senatePosition: '',
     isDraft: true
   });
   renderLoginManagerView();
@@ -7912,6 +7930,12 @@ async function saveLoginManagerUser(id) {
   const username = document.getElementById(`authUser_${id}`)?.value.trim() || '';
   const password = document.getElementById(`authPass_${id}`)?.value || '';
   const role = document.getElementById(`authRole_${id}`)?.value || 'Viewer';
+  const roleDefinition = LOGIN_ROLE_DEFINITIONS[role];
+  const canCoordinate4thFleetValue = roleDefinition?.faction === 'navy'
+    && Boolean(document.getElementById(`authFleetCoord_${id}`)?.checked);
+  const senatePosition = roleDefinition?.faction === 'senate'
+    ? (document.getElementById(`authSenatePosition_${id}`)?.value || '')
+    : '';
   if (!username || !password) {
     setStatus('Login-Name und Passwort dürfen nicht leer sein.');
     return;
@@ -7929,7 +7953,9 @@ async function saveLoginManagerUser(id) {
       body: JSON.stringify({
         username,
         password,
-        role: LOGIN_ROLES.includes(role) ? role : 'Viewer'
+        role: LOGIN_ROLES.includes(role) ? role : 'Viewer',
+        canCoordinate4thFleet: canCoordinate4thFleetValue,
+        senatePosition
       })
     });
     const payload = await response.json();
@@ -7986,6 +8012,14 @@ function renderLoginManagerView() {
       ? categoryRoles
       : (user.isDraft || manageableRoles.includes(user.role) ? manageableRoles : [user.role]);
     const editable = user.isDraft || manageableRoles.includes(user.role);
+    const extraField = userDefinition?.faction === 'navy'
+      ? `<label class="layer-row" style="border:0;padding:0"><input id="authFleetCoord_${user.id}" type="checkbox" ${user.canCoordinate4thFleet ? 'checked' : ''} ${editable ? '' : 'disabled'}> 4th Flottenkoordination</label>`
+      : userDefinition?.faction === 'senate'
+        ? `<select id="authSenatePosition_${user.id}" ${editable ? '' : 'disabled'}>
+            <option value="">Keine Senatsfunktion</option>
+            ${SENATE_POSITIONS.map((position) => `<option value="${position}" ${user.senatePosition === position ? 'selected' : ''}>${position}</option>`).join('')}
+          </select>`
+        : '<span class="muted">—</span>';
     return `
       <tr>
         <td><input id="authUser_${user.id}" value="${escapeLoginManagerText(user.username)}" placeholder="z.B. benutzer" ${editable ? '' : 'disabled'}></td>
@@ -7995,6 +8029,7 @@ function renderLoginManagerView() {
             ${roleOptions.map((role) => `<option value="${role}" ${user.role === role ? 'selected' : ''}>${LOGIN_ROLE_DEFINITIONS[role]?.label || role}</option>`).join('')}
           </select>
         </td>
+        <td>${extraField}</td>
         <td class="actions">
           ${editable ? `
             <button class="mini-btn primary" onclick="saveLoginManagerUser('${user.id}')">Speichern</button>
@@ -8003,7 +8038,7 @@ function renderLoginManagerView() {
         </td>
       </tr>
     `;
-  }).join('') : '<tr><td colspan="4"><div class="muted-box">Noch keine Logins in dieser Kategorie.</div></td></tr>';
+  }).join('') : '<tr><td colspan="5"><div class="muted-box">Noch keine Logins in dieser Kategorie.</div></td></tr>';
   const renderFactionSection = (faction) => {
     const users = state.authUsers.filter((user) => LOGIN_ROLE_DEFINITIONS[user.role]?.faction === faction.id);
     const factionAdmins = users.filter((user) => user.role === faction.adminRole && !user.isDraft);
@@ -8018,7 +8053,7 @@ function renderLoginManagerView() {
           ${createRole ? `<button class="mini-btn primary" onclick="createLoginManagerUser('${createRole}')">Login anlegen</button>` : ''}
         </div>
         <table class="data-table">
-          <thead><tr><th>Benutzername</th><th>Passwort</th><th>Rolle</th><th>Aktionen</th></tr></thead>
+          <thead><tr><th>Benutzername</th><th>Passwort</th><th>Rolle</th><th>Zusatzfunktion</th><th>Aktionen</th></tr></thead>
           <tbody>${renderUserRows(users)}</tbody>
         </table>
       </div>
@@ -8041,7 +8076,7 @@ function renderLoginManagerView() {
           <button class="mini-btn primary" onclick="createLoginManagerUser('Viewer')">Login anlegen</button>
         </div>
         <table class="data-table">
-          <thead><tr><th>Benutzername</th><th>Passwort</th><th>Rolle</th><th>Aktionen</th></tr></thead>
+          <thead><tr><th>Benutzername</th><th>Passwort</th><th>Rolle</th><th>Zusatzfunktion</th><th>Aktionen</th></tr></thead>
           <tbody>${renderUserRows(systemUsers)}</tbody>
         </table>
       </div>
@@ -8314,7 +8349,11 @@ function renderShipyardView() {
   const faction = getActiveShipyardFaction();
   const production = getFactionProductionRate(faction);
   const pool = getFactionResourcePool(faction);
-  const canBuildAnything = role !== 'Viewer' && ((role === 'Admin') || (role === 'Republic Navy / GAR' && faction === 'GAR') || (role === 'Eventleiter / KUS' && faction === 'KUS'));
+  const canBuildAnything = role !== 'Viewer' && (
+    role === 'Admin'
+    || (role === 'Republic Navy / GAR' && faction === 'GAR' && canCoordinate4thFleet())
+    || (role === 'Eventleiter / KUS' && faction === 'KUS')
+  );
   const resourceSummary = RESOURCE_KEYS.map((key) => `<div class="stat-card"><strong>${RESOURCE_LABELS[key]}</strong><span>${pool[key] || 0}</span></div>`).join('');
   const buildJobs = state.buildJobs.filter((job) => job.faction === faction && job.jobType !== 'mine' && job.status === 'building');
   const readyShips = state.ships.filter((ship) => ship.faction === faction && ship.status === 'ready');
@@ -8341,7 +8380,11 @@ function renderShipyardView() {
     <div class="workspace-grid">
       ${resourceSummary}
     </div>
-    ${canBuildAnything ? '' : '<div class="workspace-section"><div class="muted-box">Deine aktuelle Rolle kann keinen Schiffbau starten.</div></div>'}
+    ${canBuildAnything ? '' : `<div class="workspace-section"><div class="muted-box">${
+      role === 'Republic Navy / GAR' && faction === 'GAR'
+        ? 'Für GAR-Schiffbau wird die Berechtigung „4th Flottenkoordination“ benötigt.'
+        : 'Deine aktuelle Rolle kann keinen Schiffbau starten.'
+    }</div></div>`}
     <div class="workspace-section workspace-columns">
       <div class="workspace-card">
         <h3>Bauauftrag starten</h3>

@@ -215,13 +215,30 @@ function validateAdminOnlyBlocks(role, effectiveRole, previousState, nextState) 
 }
 
 export function validateNextCampaignState(role, previousState, nextState) {
-  const effectiveRole = ROLE_BASE_ROLES[role] || role;
+  const actor = role && typeof role === 'object' ? role : { role };
+  const assignedRole = actor.role;
+  const effectiveRole = ROLE_BASE_ROLES[assignedRole] || assignedRole;
   ensure(effectiveRole !== 'Viewer', 'Viewer may not mutate campaign state');
+  if (effectiveRole === 'Republic Navy / GAR' && !actor.canCoordinate4thFleet) {
+    const previousJobs = indexById(previousState.buildJobs || []);
+    const previousShips = indexById(previousState.ships || []);
+    const addedGarShipJob = (nextState.buildJobs || []).some((job) => (
+      !previousJobs.has(job.id)
+      && (job.faction || 'GAR') === 'GAR'
+      && job.jobType !== 'mine'
+    ));
+    const addedGarShip = (nextState.ships || []).some((ship) => (
+      !previousShips.has(ship.id)
+      && (ship.faction || 'GAR') === 'GAR'
+      && String(ship.createdFrom || '').startsWith('shipyard')
+    ));
+    ensure(!addedGarShipJob && !addedGarShip, '4th Fleet Coordination permission required for GAR ship construction');
+  }
   validatePlanetChanges(effectiveRole, previousState, nextState);
   validatePlanetResourceChanges(effectiveRole, previousState, nextState);
   validateFleetChanges(effectiveRole, previousState, nextState);
   validateShipChanges(effectiveRole, previousState, nextState);
   validateBuildJobChanges(effectiveRole, previousState, nextState);
   validateResourceChanges(effectiveRole, previousState, nextState);
-  validateAdminOnlyBlocks(role, effectiveRole, previousState, nextState);
+  validateAdminOnlyBlocks(assignedRole, effectiveRole, previousState, nextState);
 }
