@@ -249,8 +249,8 @@ function getHiddenPlanetFallbackOwner(planet) {
 
 function findIndexHtml() {
   const candidates = [
-    path.join(projectRoot, 'index.html'),
-    path.join(projectRoot, 'public', 'index.html')
+    path.join(projectRoot, 'public', 'index.html'),
+    path.join(projectRoot, 'index.html')
   ];
 
   for (const filePath of candidates) {
@@ -567,9 +567,6 @@ function applyServerProductionTicks(previousState, now = Date.now()) {
 function applyOwnerFrontlineImagePass(previousState) {
   const nextState = JSON.parse(JSON.stringify(previousState || {}));
   nextState.meta = nextState.meta || {};
-  if (nextState.meta.ownerMapPassVersion === OWNER_FRONTLINE_PASS_VERSION) {
-    return { changed: false, state: nextState };
-  }
   const planets = Array.isArray(nextState.planets) ? nextState.planets : [];
   let changed = false;
   for (const planet of planets) {
@@ -578,12 +575,6 @@ function applyOwnerFrontlineImagePass(previousState) {
     const isListed = Boolean(referenceMatch?.owner);
     if (Boolean(planet.referenceListed) !== isListed) {
       planet.referenceListed = isListed;
-      changed = true;
-    }
-    const desiredOwner = referenceMatch?.owner || getHiddenPlanetFallbackOwner(planet);
-    if (!desiredOwner) continue;
-    if (planet.owner !== desiredOwner) {
-      planet.owner = desiredOwner;
       changed = true;
     }
   }

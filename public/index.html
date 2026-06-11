@@ -1645,6 +1645,7 @@ const economyViewState = {
   events: [],
   acp: { current: [], history: {} },
   intelligenceReports: [],
+  institutionalInvestors: [],
   institutionalTrades: [],
   sectorDemand: [],
   economySectors: [],
@@ -3071,9 +3072,9 @@ function applyArcgisPlanetImport(force = false) {
     const projected = projectArcgisToWorld(match.x, match.y, 'image');
     setPlanetWorldPosition(planet, projected.x, projected.y);
     if (!planet.region && match.region) planet.region = match.region;
-    if (!planet.sector && match.sector) planet.sector = match.sector;
     updatedCount += 1;
   });
+  syncManualSectorMembershipFromPositions();
   state.meta.arcgisImportVersion = ARCGIS_IMPORT_VERSION;
   rebuildIndexes();
   saveLocal();
@@ -8132,11 +8133,47 @@ function getManualSectorByIdentifier(identifier) {
   return getManualSectorById(identifier) || getManualSectorByName(identifier);
 }
 
+function polygonArea(points = []) {
+  if (!Array.isArray(points) || points.length < 3) return Number.POSITIVE_INFINITY;
+  let area = 0;
+  for (let i = 0, j = points.length - 1; i < points.length; j = i, i += 1) {
+    area += (Number(points[j].x || 0) * Number(points[i].y || 0)) - (Number(points[i].x || 0) * Number(points[j].y || 0));
+  }
+  return Math.abs(area / 2);
+}
+
+function resolveManualSectorForPlanetPosition(planet) {
+  if (!planet) return null;
+  const position = getImagePlanetPosition(planet);
+  const matches = ensureSectorStore()
+    .filter((sector) => Array.isArray(sector.points) && sector.points.length >= 3 && pointInPolygon(position, sector.points))
+    .map((sector) => {
+      const centroid = averagePoints(sector.points);
+      const distance = Math.hypot(Number(position.x || 0) - Number(centroid.x || 0), Number(position.y || 0) - Number(centroid.y || 0));
+      return { sector, area: polygonArea(sector.points), distance };
+    })
+    .sort((left, right) => left.area - right.area || left.distance - right.distance);
+  return matches[0]?.sector || null;
+}
+
+function syncManualSectorMembershipFromPositions() {
+  if (!Array.isArray(state?.planets)) return false;
+  let changed = false;
+  state.planets.forEach((planet) => {
+    const sector = resolveManualSectorForPlanetPosition(planet);
+    if (!sector?.name || planet.sector === sector.name) return;
+    planet.sector = sector.name;
+    changed = true;
+  });
+  if (changed) rebuildIndexes();
+  return changed;
+}
+
 function getManualSectorControlSummary(sector) {
   const summary = { total: 0, GAR: 0, KUS: 0, HUTT: 0, NEUTRAL: 0 };
   if (!sector?.points?.length) return summary;
   state.planets.forEach((planet) => {
-    if (!pointInPolygon({ x: planet.x, y: planet.y }, sector.points)) return;
+    if (!pointInPolygon(getImagePlanetPosition(planet), sector.points)) return;
     summary.total += 1;
     const owner = ownerClass(planet.owner);
     summary[owner] = (summary[owner] || 0) + 1;
@@ -8155,6 +8192,7 @@ function openSector(id) {
     if (selected?.type === 'sector') closeInfoPanel();
     return;
   }
+  if (syncManualSectorMembershipFromPositions()) saveLocal();
   const control = getManualSectorControlSummary(sector);
   selected = { type: 'sector', id: sector.id };
   refreshFleetSelectionState();
@@ -8187,6 +8225,7 @@ function saveSector(id) {
   if (!sector || !isAdminRole()) return;
   sector.name = document.getElementById('sectorName')?.value.trim() || sector.name;
   sector.description = document.getElementById('sectorDescription')?.value.trim() || '';
+  syncManualSectorMembershipFromPositions();
   tacticalHoverAreas = buildTacticalHoverAreas(null, viewMode === 'schematic' ? 'schematic' : 'image', viewMode);
   saveLocal();
   refreshSectorOverlayNow();
@@ -8198,6 +8237,7 @@ function saveSector(id) {
 function openPlanet(id) {
   const p = planetIndex.get(id);
   if (!p) return;
+  if (syncManualSectorMembershipFromPositions()) saveLocal();
   selected = { type: 'planet', id };
   refreshFleetSelectionState();
   refreshRouteSelectionState();
@@ -10889,6 +10929,22 @@ function renderEconomyView() {
         </select></div>
         <button class="primary" onclick="saveEconomyPolicy()">Politik speichern</button>
       </div>` : ''}
+    </div>
+    <div class="workspace-section">
+      <h3>Asset Manager</h3>
+      <div class="workspace-card">
+        <table class="data-table">
+          <thead><tr><th>Institution</th><th>Strategie</th><th>Cash</th><th>Aktienwert</th><th>Gesamtwert</th><th>Aktien</th></tr></thead>
+          <tbody>${(economyViewState.institutionalInvestors || []).map((investor) => `<tr>
+            <td><strong>${escapeLoginManagerText(investor.name)}</strong></td>
+            <td>${escapeLoginManagerText(investor.strategy || '-')}</td>
+            <td>${formatCredits(investor.creditBalance)}</td>
+            <td>${formatCredits(investor.holdingsValue)}</td>
+            <td>${formatCredits(investor.totalValue)}</td>
+            <td>${Number(investor.totalShares || 0).toLocaleString('de-DE')}</td>
+          </tr>`).join('') || '<tr><td colspan="6">Noch keine Asset Manager initialisiert. Server neu starten, damit die defensiven Migrationen laufen.</td></tr>'}</tbody>
+        </table>
+      </div>
     </div>
     <div class="workspace-section">
       <h3>Institutionelle Aktivität</h3>

@@ -1217,7 +1217,12 @@ function chooseInstitutionalShareholders(company, totalShares, investors) {
     kavamSalz: ['inst_trade_federation', 'inst_commerce_guild', 'inst_core_pension', 'inst_sector_authority']
   };
   const investorMap = new Map(investors.map((investor) => [investor.id, investor]));
-  const preferred = (preferredByResource[resourceKey] || [])
+  const faction = String(company.faction || '').trim();
+  const factionPreferred = faction === 'KUS'
+    ? ['inst_techno_union', 'inst_trade_federation', 'inst_corporate_alliance', 'inst_igbc']
+    : (faction === 'GAR' ? ['inst_republic_infra_fund', 'inst_core_pension', 'inst_sector_authority'] : []);
+  const preferredIds = [...new Set([...factionPreferred, ...(preferredByResource[resourceKey] || [])])];
+  const preferred = preferredIds
     .map((id) => investorMap.get(id))
     .filter(Boolean);
   const fallback = investors.filter((investor) => !preferred.some((entry) => entry.id === investor.id));
@@ -2578,6 +2583,19 @@ export function readMarketSnapshot(db, investorId = '', userId = '') {
     ORDER BY t.created_at DESC
     LIMIT 20
   `).all();
+  const institutionalInvestors = db.prepare(`
+    SELECT i.id, i.name, i.strategy, i.risk_tolerance AS riskTolerance,
+      i.corruption_affinity AS corruptionAffinity, i.credit_balance AS creditBalance,
+      COALESCE(SUM(h.shares), 0) AS totalShares,
+      ROUND(COALESCE(SUM(h.shares * c.current_price), 0), 2) AS holdingsValue,
+      ROUND(i.credit_balance + COALESCE(SUM(h.shares * c.current_price), 0), 2) AS totalValue,
+      i.updated_at AS updatedAt
+    FROM institutional_investors i
+    LEFT JOIN institutional_holdings h ON h.investor_id = i.id
+    LEFT JOIN market_companies c ON c.id = h.company_id
+    GROUP BY i.id
+    ORDER BY totalValue DESC, i.name COLLATE NOCASE
+  `).all();
   const factionAccounts = Object.fromEntries(db.prepare(`
     SELECT faction, credits, updated_at AS updatedAt
     FROM faction_accounts ORDER BY faction
@@ -2598,6 +2616,7 @@ export function readMarketSnapshot(db, investorId = '', userId = '') {
     factionAccounts,
     sectorDemand,
     intelligenceReports,
+    institutionalInvestors,
     institutionalTrades,
     acp
   };
