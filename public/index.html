@@ -880,6 +880,15 @@ body.nav-collapsed #mainNavToggle {
 .market-order-list .data-table td:last-child { font-weight:700; }
 .market-change-positive { color:#55d68b; }
 .market-change-negative { color:#ff6b6b; }
+.ownership-layout { display:grid; grid-template-columns:minmax(220px,300px) 1fr; gap:16px; align-items:center; }
+.ownership-pie { width:100%; max-width:280px; aspect-ratio:1; display:block; margin:auto; }
+.ownership-pie circle { fill:none; stroke-width:32; transform:rotate(-90deg); transform-origin:50% 50%; }
+.ownership-legend { display:grid; gap:8px; }
+.ownership-legend-row { display:grid; grid-template-columns:14px 1fr auto; gap:8px; align-items:center; font-size:13px; }
+.ownership-swatch { width:12px; height:12px; border-radius:50%; box-shadow:0 0 8px rgba(255,255,255,.12); }
+.trade-preview { margin-top:10px; padding:10px; border-radius:12px; background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.08); }
+.portfolio-row-details summary { cursor:pointer; color:#8dc8d8; font-weight:700; }
+@media (max-width:760px) { .ownership-layout { grid-template-columns:1fr; } }
 .project-progress { width:100%; height:10px; border-radius:999px; background:rgba(255,255,255,.08); overflow:hidden; margin:10px 0 6px; }
 .project-progress-fill { height:100%; border-radius:999px; background:linear-gradient(90deg, #4f86ff 0%, #73e0ff 100%); }
 .project-progress-fill.mine { background:linear-gradient(90deg, #f0d44b 0%, #f39a2d 100%); }
@@ -1630,6 +1639,8 @@ const economyViewState = {
   history: {},
   holdings: [],
   purchaseOrders: [],
+  portfolio: null,
+  portfolioHistory: [],
   leaderboard: [],
   events: [],
   acp: { current: [], history: {} },
@@ -9998,6 +10009,150 @@ function renderMarketOrderList(company) {
   </div>`;
 }
 
+function getPortfolioPosition(companyId) {
+  return (economyViewState.portfolio?.positions || []).find((position) => position.companyId === companyId) || null;
+}
+
+function renderSellPreview(company, quantity = 1) {
+  const qty = Math.max(1, Math.floor(Number(quantity || 1)));
+  const currentPrice = Number(company.currentPrice || 0);
+  const gross = currentPrice * qty;
+  const tax = gross * 0.02;
+  const net = gross - tax;
+  const position = getPortfolioPosition(company.id);
+  const costBasis = Number(position?.averageCost || currentPrice) * qty;
+  const estimatedProfit = net - costBasis;
+  return `<div class="trade-preview" id="sellPreview_${company.id}">
+    <p><strong>Brutto:</strong> ${formatCredits(gross)}</p>
+    <p><strong>Republikanische Handelssteuer 2%:</strong> ${formatCredits(tax)}</p>
+    <p><strong>Netto:</strong> ${formatCredits(net)}</p>
+    <p><strong>Geschätzter Gewinn/Verlust:</strong> <span class="${estimatedProfit >= 0 ? 'market-change-positive' : 'market-change-negative'}">${formatSignedCredits(estimatedProfit)}</span></p>
+  </div>`;
+}
+
+function renderOwnershipPie(company) {
+  const rows = Array.isArray(company.majorShareholders) ? company.majorShareholders : [];
+  if (!rows.length) return '<div class="muted-box">Noch keine Anteilseignerstruktur berechnet.</div>';
+  const colors = ['#73e0ff', '#f0d44b', '#ff8a65', '#9d8cff', '#55d68b', '#ff6b6b', '#c5e1ff', '#b9c4d6'];
+  let offset = 0;
+  const circumference = 100;
+  const circles = rows.map((row, index) => {
+    const length = Math.max(0, Number(row.percent || 0));
+    const dash = `${length} ${Math.max(0, circumference - length)}`;
+    const circle = `<circle cx="50" cy="50" r="34" stroke="${colors[index % colors.length]}" stroke-dasharray="${dash}" stroke-dashoffset="${-offset}"/>`;
+    offset += length;
+    return circle;
+  }).join('');
+  return `<div class="ownership-layout">
+    <svg class="ownership-pie" viewBox="0 0 100 100" aria-label="Anteilseigner-Kreisdiagramm">
+      <circle cx="50" cy="50" r="34" stroke="rgba(255,255,255,.08)"/>
+      ${circles}
+      <text x="50" y="48" text-anchor="middle" class="market-axis-label">${Number(company.totalShares || 0).toLocaleString('de-DE')}</text>
+      <text x="50" y="61" text-anchor="middle" class="market-axis-tick">Aktien</text>
+    </svg>
+    <div class="ownership-legend">
+      ${rows.map((row, index) => `<div class="ownership-legend-row">
+        <span class="ownership-swatch" style="background:${colors[index % colors.length]}"></span>
+        <span><strong>${escapeLoginManagerText(row.name)}</strong><br><small>${escapeLoginManagerText(row.type)} • ${Number(row.shares || 0).toLocaleString('de-DE')} Aktien</small></span>
+        <span>${Number(row.percent || 0).toFixed(2).replace('.', ',')} %</span>
+      </div>`).join('')}
+    </div>
+  </div>`;
+}
+
+function renderPortfolioValueChart() {
+  const rangeKey = economyViewState.marketRange || 'today';
+  const cutoff = getMarketRangeCutoff(rangeKey);
+  const points = (economyViewState.portfolioHistory || [])
+    .map((point) => ({
+      value: Number(point.totalValue || 0),
+      createdAt: point.createdAt,
+      time: Date.parse(point.createdAt)
+    }))
+    .filter((point) => Number.isFinite(point.value) && Number.isFinite(point.time) && point.time >= cutoff);
+  if (points.length < 2) return '<div class="muted-box">Noch nicht genügend Portfolio-Historie für diesen Zeitraum.</div>';
+  const values = points.map((point) => point.value);
+  const min = Math.min(...values), max = Math.max(...values), span = Math.max(1, max - min);
+  const minTime = Math.min(...points.map((point) => point.time));
+  const maxTime = Math.max(...points.map((point) => point.time));
+  const timeSpan = Math.max(1, maxTime - minTime);
+  const coords = points.map((point) => `${(70 + (((point.time - minTime) / timeSpan) * 790)).toFixed(1)},${(268 - (((point.value - min) / span) * 222)).toFixed(1)}`).join(' ');
+  const rising = values[values.length - 1] >= values[0];
+  return `<div class="market-detail-chart"><svg viewBox="0 0 900 320" preserveAspectRatio="none" aria-label="Portfolio-Wertverlauf">
+    <line x1="70" y1="46" x2="860" y2="46" stroke="rgba(255,255,255,.08)"/><line x1="70" y1="157" x2="860" y2="157" stroke="rgba(255,255,255,.08)"/><line x1="70" y1="268" x2="860" y2="268" stroke="rgba(255,255,255,.08)"/>
+    <line x1="70" y1="46" x2="70" y2="268" stroke="rgba(255,255,255,.18)"/><line x1="70" y1="268" x2="860" y2="268" stroke="rgba(255,255,255,.18)"/>
+    <text x="18" y="168" class="market-axis-label" transform="rotate(-90 18 168)">Gesamtwert</text>
+    <text x="442" y="314" text-anchor="middle" class="market-axis-label">Zeit</text>
+    <text x="62" y="50" text-anchor="end" class="market-axis-tick">${formatCredits(max)}</text>
+    <text x="62" y="161" text-anchor="end" class="market-axis-tick">${formatCredits(min + (span / 2))}</text>
+    <text x="62" y="272" text-anchor="end" class="market-axis-tick">${formatCredits(min)}</text>
+    <text x="70" y="292" text-anchor="middle" class="market-axis-tick">${formatMarketAxisDate(minTime, rangeKey)}</text>
+    <text x="860" y="292" text-anchor="middle" class="market-axis-tick">${formatMarketAxisDate(maxTime, rangeKey)}</text>
+    <polyline fill="none" stroke="${rising ? '#55d68b' : '#ff6b6b'}" stroke-width="4" points="${coords}"/>
+  </svg></div>`;
+}
+
+function renderPortfolioSection() {
+  const portfolio = economyViewState.portfolio;
+  if (!economyViewState.portfolioEnabled || !portfolio) {
+    workspacePanel.innerHTML = `<div class="workspace-head">
+      <div><h2>Portfolio</h2><p>Diese Rolle besitzt kein persönliches Portfolio.</p></div>
+      <div class="toolbar-row end"><button class="mini-btn" onclick="setEconomySection('overview')">Zur Übersicht</button><button class="mini-btn" onclick="setEconomySection('trade')">Aktienhandel</button></div>
+    </div>`;
+    return;
+  }
+  workspacePanel.innerHTML = `
+    <div class="workspace-head">
+      <div><h2>Portfolio</h2><p>Persönliche Bestände, FIFO-Kostenbasis, Steuern und Wertverlauf.</p></div>
+      <div class="toolbar-row end">
+        <button class="mini-btn" onclick="setEconomySection('overview')">Zur Übersicht</button>
+        <button class="mini-btn" onclick="setEconomySection('trade')">Aktienhandel</button>
+        <button class="mini-btn" onclick="fetchEconomyView()">Aktualisieren</button>
+      </div>
+    </div>
+    ${economyViewState.error ? `<div class="muted-box">${escapeLoginManagerText(economyViewState.error)}</div>` : ''}
+    <div class="workspace-grid">
+      <div class="stat-card"><strong>Creditguthaben</strong><span>${formatCredits(portfolio.cashBalance)}</span></div>
+      <div class="stat-card"><strong>Portfolio-Gesamtwert</strong><span>${formatCredits(portfolio.totalValue)}</span></div>
+      <div class="stat-card"><strong>Investiert gesamt</strong><span>${formatCredits(portfolio.investedTotal)}</span></div>
+      <div class="stat-card"><strong>Unrealisiert</strong><span class="${Number(portfolio.unrealizedProfit || 0) >= 0 ? 'market-change-positive' : 'market-change-negative'}">${formatSignedCredits(portfolio.unrealizedProfit)}</span></div>
+      <div class="stat-card"><strong>Realisiert</strong><span class="${Number(portfolio.realizedProfit || 0) >= 0 ? 'market-change-positive' : 'market-change-negative'}">${formatSignedCredits(portfolio.realizedProfit)}</span></div>
+      <div class="stat-card"><strong>Gezahlte Steuern</strong><span>${formatCredits(portfolio.taxesPaid)}</span></div>
+      <div class="stat-card"><strong>Holdings</strong><span>${portfolio.holdingCount || 0}</span></div>
+      <div class="stat-card"><strong>Ranglistenplatz</strong><span>${portfolio.rank || '-'}</span></div>
+    </div>
+    <div class="workspace-section"><h3>Portfolio-Wert</h3>${renderMarketRangeControls()}${renderPortfolioValueChart()}</div>
+    <div class="workspace-section">
+      <h3>Bestände</h3>
+      <div class="workspace-card">
+        <table class="data-table">
+          <thead><tr><th>Holding</th><th>Sektor</th><th>Ressourcen</th><th>Menge</th><th>Ø Einstieg</th><th>Kurs</th><th>Wert</th><th>G/V</th><th>Status</th><th></th></tr></thead>
+          <tbody>${(portfolio.positions || []).map((position) => {
+            const gainClass = Number(position.gainCredits || 0) >= 0 ? 'market-change-positive' : 'market-change-negative';
+            return `<tr>
+              <td><strong>${escapeLoginManagerText(position.name)}</strong><br><small>${escapeLoginManagerText(position.symbol || '')}</small>
+                <details class="portfolio-row-details"><summary>Käufe</summary>
+                  <table class="data-table">
+                    <tbody>${(position.orders || []).map((order) => `<tr><td>${formatMarketDateTime(order.createdAt)}</td><td>${Number(order.openQuantity || 0)} Stk.</td><td>${formatCredits(Number(order.unitPrice || 0) * Number(order.openQuantity || 0))}</td><td>${formatCredits(order.currentValue)}</td><td class="${Number(order.changeCredits || 0) >= 0 ? 'market-change-positive' : 'market-change-negative'}">${formatSignedCredits(order.changeCredits)}</td></tr>`).join('') || '<tr><td>Keine offenen Lots.</td></tr>'}</tbody>
+                  </table>
+                </details>
+              </td>
+              <td>${escapeLoginManagerText(position.sector || '-')}</td>
+              <td>${(position.resourceRefs || [position.resourceKey]).map((key) => escapeLoginManagerText(RESOURCE_LABELS[key] || key)).join(', ')}</td>
+              <td>${position.quantity}</td>
+              <td>${formatCredits(position.averageCost)}</td>
+              <td>${formatCredits(position.currentPrice)}</td>
+              <td>${formatCredits(position.currentValue)}</td>
+              <td class="${gainClass}">${formatSignedCredits(position.gainCredits)}<br><small>${formatSignedPercent(position.gainPercent)}</small></td>
+              <td>${escapeLoginManagerText(position.marketStatusLabel || position.marketStatus || 'Handelbar')}</td>
+              <td><button class="mini-btn" onclick="openMarketCompanyOverview('${position.companyId}')">Zur Holding</button></td>
+            </tr>`;
+          }).join('') || '<tr><td colspan="10">Noch keine Aktien im Portfolio.</td></tr>'}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
 function renderAcpChart(resourceKey) {
   const rangeKey = economyViewState.marketRange || 'today';
   const cutoff = getMarketRangeCutoff(rangeKey);
@@ -10037,6 +10192,13 @@ function updateMarketQuantity(kind, companyId, value) {
   const quantity = Math.max(1, Math.floor(Number(value || 1)));
   if (range) range.value = String(Math.min(quantity, Number(range.max || quantity)));
   if (output) output.value = range?.value || String(quantity);
+  if (kind === 'sell') {
+    const company = economyViewState.companies.find((entry) => entry.id === companyId);
+    const preview = document.getElementById(`sellPreview_${companyId}`);
+    if (company && preview) {
+      preview.outerHTML = renderSellPreview(company, range?.value || quantity);
+    }
+  }
 }
 
 async function readJsonResponse(response, fallbackMessage = 'Anfrage fehlgeschlagen.') {
@@ -10108,7 +10270,7 @@ async function sellMarketShare(companyId) {
     });
     const payload = await readJsonResponse(response, 'Aktienverkauf fehlgeschlagen.');
     if (!response.ok) throw new Error(payload.error || 'Aktienverkauf fehlgeschlagen.');
-    setStatus(`Aktie verkauft. ${formatCredits(payload.sale?.credited || 0)} wurden dem persönlichen Portfolio gutgeschrieben.`);
+    setStatus(`Aktie verkauft. Brutto ${formatCredits(payload.sale?.grossProceeds || 0)}, Steuer ${formatCredits(payload.sale?.taxAmount || 0)}, netto ${formatCredits(payload.sale?.netProceeds || payload.sale?.credited || 0)}.`);
     await fetchEconomyView();
   } catch (error) {
     setStatus(error.message);
@@ -10117,7 +10279,7 @@ async function sellMarketShare(companyId) {
 }
 
 function setEconomySection(section) {
-  economyViewState.activeSection = ['trade', 'detail', 'acp', 'sectorEconomy'].includes(section) ? section : 'overview';
+  economyViewState.activeSection = ['trade', 'detail', 'portfolio', 'acp', 'sectorEconomy'].includes(section) ? section : 'overview';
   renderEconomyView();
   if (economyViewState.activeSection === 'sectorEconomy') void fetchSectorEconomyList();
 }
@@ -10365,6 +10527,7 @@ function renderSectorEconomySection() {
       <div class="toolbar-row end">
         <button class="mini-btn" onclick="setEconomySection('overview')">Zur Übersicht</button>
         <button class="mini-btn" onclick="setEconomySection('trade')">Aktienhandel</button>
+        <button class="mini-btn" onclick="setEconomySection('portfolio')">Portfolio</button>
         <button class="mini-btn" onclick="fetchSectorEconomyList({ force: true })">Aktualisieren</button>
       </div>
     </div>
@@ -10471,6 +10634,10 @@ function renderEconomyView() {
     renderSectorEconomySection();
     return;
   }
+  if (economyViewState.activeSection === 'portfolio') {
+    renderPortfolioSection();
+    return;
+  }
   if (economyViewState.activeSection === 'detail') {
     const company = economyViewState.companies.find((entry) => entry.id === economyViewState.selectedCompanyId);
     if (!company) {
@@ -10484,14 +10651,15 @@ function renderEconomyView() {
       .filter((point) => Date.parse(point.recordedAt) >= rangeCutoff)
       .map((point) => Number(point.price || 0))
       .filter(Number.isFinite);
-    const buyMax = Math.min(10000, Math.floor(portfolioBalance / Math.max(0.01, Number(company.currentPrice || 0))));
+    const availableShares = Math.max(0, Number(company.freeFloatShares || 0));
+    const buyMax = Math.min(10000, availableShares, Math.floor(portfolioBalance / Math.max(0.01, Number(company.currentPrice || 0))));
     const change = Number(company.currentPrice || 0) - Number(company.previousPrice || 0);
     const rangeLabel = MARKET_RANGE_OPTIONS[economyViewState.marketRange || 'today']?.label || 'Heute';
     workspacePanel.innerHTML = `
       <div class="workspace-head">
         <div><h2>${escapeLoginManagerText(company.name)} <span class="badge">${escapeLoginManagerText(company.symbol)}</span></h2>
         <p>${escapeLoginManagerText(company.sector || company.faction)} • ${escapeLoginManagerText((company.resourceRefs || [company.resourceKey]).map((key) => RESOURCE_LABELS[key] || key).join(', ') || company.faction)} • ${escapeLoginManagerText(company.marketStatusLabel || 'Handelbar')}</p></div>
-        <div class="toolbar-row end"><button class="mini-btn" onclick="setEconomySection('trade')">Zurück zum Handel</button><button class="mini-btn" onclick="setEconomySection('sectorEconomy')">Sektor-Wirtschaft</button><button class="mini-btn" onclick="setEconomySection('acp')">ACP</button><button class="mini-btn" onclick="fetchEconomyView()">Aktualisieren</button></div>
+        <div class="toolbar-row end"><button class="mini-btn" onclick="setEconomySection('trade')">Zurück zum Handel</button><button class="mini-btn" onclick="setEconomySection('portfolio')">Portfolio</button><button class="mini-btn" onclick="setEconomySection('sectorEconomy')">Sektor-Wirtschaft</button><button class="mini-btn" onclick="setEconomySection('acp')">ACP</button><button class="mini-btn" onclick="fetchEconomyView()">Aktualisieren</button></div>
       </div>
       <div class="workspace-grid">
         <div class="stat-card"><strong>Aktueller Kurs</strong><span>${formatCredits(company.currentPrice)}</span></div>
@@ -10500,15 +10668,21 @@ function renderEconomyView() {
         <div class="stat-card"><strong>${escapeLoginManagerText(rangeLabel)} Tief</strong><span>${formatCredits(prices.length ? Math.min(...prices) : company.currentPrice)}</span></div>
         <div class="stat-card"><strong>Eigener Bestand</strong><span>${shares}</span></div>
         <div class="stat-card"><strong>Bestandswert</strong><span>${formatCredits(shares * Number(company.currentPrice || 0))}</span></div>
+        <div class="stat-card"><strong>Gesamtaktien</strong><span>${Number(company.totalShares || 0).toLocaleString('de-DE')}</span></div>
+        <div class="stat-card"><strong>Free Float</strong><span>${Number(company.freeFloatShares || 0).toLocaleString('de-DE')}</span></div>
+        <div class="stat-card"><strong>Marktkapitalisierung</strong><span>${formatCredits(company.marketCap)}</span></div>
+        <div class="stat-card"><strong>Kontrolle</strong><span>${escapeLoginManagerText(company.controllingShareholder || 'Streubesitz')}</span></div>
       </div>
       <div class="workspace-section"><h3>Kursverlauf</h3>${renderMarketRangeControls()}${renderMarketDetailChart(company.id)}</div>
+      <div class="workspace-section"><h3>Anteilseigner</h3><div class="workspace-card">${renderOwnershipPie(company)}</div></div>
       <div class="workspace-section workspace-columns">
-        <div class="workspace-card"><h3>Kaufen</h3><p>Verfügbar: ${formatCredits(portfolioBalance)} • Maximal ${buyMax} Aktie(n)</p>
+        <div class="workspace-card"><h3>Kaufen</h3><p>Verfügbar: ${formatCredits(portfolioBalance)} • Free Float: ${availableShares.toLocaleString('de-DE')} Aktie(n) • Maximal ${buyMax} Aktie(n)</p>
           ${economyViewState.portfolioEnabled && buyMax > 0 ? `<div class="trade-quantity"><input id="buyQuantity_${company.id}" type="range" min="1" max="${buyMax}" value="1" oninput="updateMarketQuantity('buy','${company.id}',this.value)"><output id="buyQuantityOutput_${company.id}">1</output></div>` : ''}
           <button class="mini-btn primary" onclick="buyMarketShare('${company.id}')" ${!economyViewState.canPurchase || (company.marketStatus && company.marketStatus !== 'tradeable') || company.isEmbargoed || (!economyViewState.consumerMode && buyMax < 1) || (economyViewState.consumerMode && cooldown > 0) ? 'disabled' : ''}>${economyViewState.consumerMode ? 'Nachfrage erzeugen' : 'Ausgewählte Menge kaufen'}</button>
         </div>
-        <div class="workspace-card"><h3>Verkaufen</h3><p>Eigener Bestand: ${shares} Aktie(n). Der Erlös wird sofort dem persönlichen Portfolio gutgeschrieben.</p>
+        <div class="workspace-card"><h3>Verkaufen</h3><p>Eigener Bestand: ${shares} Aktie(n). Verkäufe zahlen 2% Republikanische Handelssteuer.</p>
           ${economyViewState.portfolioEnabled && shares > 0 ? `<div class="trade-quantity"><input id="sellQuantity_${company.id}" type="range" min="1" max="${shares}" value="1" oninput="updateMarketQuantity('sell','${company.id}',this.value)"><output id="sellQuantityOutput_${company.id}">1</output></div>` : ''}
+          ${economyViewState.portfolioEnabled && shares > 0 ? renderSellPreview(company, 1) : ''}
           <button class="mini-btn danger" onclick="sellMarketShare('${company.id}')" ${!economyViewState.portfolioEnabled || shares < 1 ? 'disabled' : ''}>Ausgewählte Menge verkaufen</button>
         </div>
       </div>
@@ -10524,6 +10698,7 @@ function renderEconomyView() {
         </div>
         <div class="toolbar-row end">
           <button class="mini-btn" onclick="setEconomySection('overview')">Zur Übersicht</button>
+          <button class="mini-btn" onclick="setEconomySection('portfolio')">Portfolio</button>
           <button class="mini-btn" onclick="setEconomySection('sectorEconomy')">Sektor-Wirtschaft</button>
           <button class="mini-btn" onclick="setEconomySection('acp')">ACP</button>
           <button class="mini-btn" onclick="fetchEconomyView()">Aktualisieren</button>
@@ -10557,16 +10732,17 @@ function renderEconomyView() {
         <div class="project-grid">
           ${visibleCompanies.map((company) => {
             const shares = holdings.get(company.id) || 0;
-            const buyMax = Math.min(10000, Math.floor(portfolioBalance / Math.max(0.01, Number(company.currentPrice || 0))));
+            const availableShares = Math.max(0, Number(company.freeFloatShares || 0));
+            const buyMax = Math.min(10000, availableShares, Math.floor(portfolioBalance / Math.max(0.01, Number(company.currentPrice || 0))));
             const change = Number(company.currentPrice || 0) - Number(company.previousPrice || 0);
             return `<div class="project-card">
               <h4>${escapeLoginManagerText(company.name)} <span class="badge">${company.symbol}</span></h4>
               <p><strong>${formatCredits(company.currentPrice)}</strong> <span style="color:${change >= 0 ? '#55d68b' : '#ff6b6b'}">${change >= 0 ? '+' : ''}${change.toFixed(2)}</span></p>
               ${renderMarketSparkline(company.id)}
-              <p class="project-meta">${economyViewState.portfolioEnabled ? `Eigener Bestand: ${shares} Aktie(n) • ` : ''}${escapeLoginManagerText(company.sector || company.faction)} • ${escapeLoginManagerText(company.marketStatusLabel || 'Handelbar')}</p>
+              <p class="project-meta">${economyViewState.portfolioEnabled ? `Eigener Bestand: ${shares} Aktie(n) • ` : ''}Free Float: ${availableShares.toLocaleString('de-DE')} • ${escapeLoginManagerText(company.sector || company.faction)} • ${escapeLoginManagerText(company.marketStatusLabel || 'Handelbar')}</p>
               ${economyViewState.portfolioEnabled && buyMax > 0 ? `<div class="trade-quantity"><input id="buyQuantity_${company.id}" type="range" min="1" max="${buyMax}" value="1" oninput="updateMarketQuantity('buy','${company.id}',this.value)"><output id="buyQuantityOutput_${company.id}">1</output></div>` : ''}
               <div class="toolbar-row">
-                <button class="mini-btn primary" onclick="buyMarketShare('${company.id}')" ${!economyViewState.canPurchase || (company.marketStatus && company.marketStatus !== 'tradeable') || company.isEmbargoed || (economyViewState.consumerMode && cooldown > 0) || (economyViewState.portfolioEnabled && portfolioBalance < Number(company.currentPrice || 0)) || economyViewState.loading ? 'disabled' : ''}>${economyViewState.consumerMode ? 'Nachfrage erzeugen' : 'Kaufen'}</button>
+                <button class="mini-btn primary" onclick="buyMarketShare('${company.id}')" ${!economyViewState.canPurchase || (company.marketStatus && company.marketStatus !== 'tradeable') || company.isEmbargoed || (economyViewState.consumerMode && cooldown > 0) || (economyViewState.portfolioEnabled && buyMax < 1) || economyViewState.loading ? 'disabled' : ''}>${economyViewState.consumerMode ? 'Nachfrage erzeugen' : 'Kaufen'}</button>
                 ${economyViewState.portfolioEnabled ? `<button class="mini-btn danger" onclick="sellMarketShare('${company.id}')" ${shares < 1 || economyViewState.loading ? 'disabled' : ''}>Verkaufen</button>` : ''}
                 <button class="mini-btn" onclick="openMarketCompanyOverview('${company.id}')">Übersicht</button>
               </div>
@@ -10590,6 +10766,7 @@ function renderEconomyView() {
         <div class="toolbar-row end">
           <button class="mini-btn" onclick="setEconomySection('overview')">Zur Übersicht</button>
           <button class="mini-btn" onclick="setEconomySection('trade')">Aktienhandel</button>
+          <button class="mini-btn" onclick="setEconomySection('portfolio')">Portfolio</button>
           <button class="mini-btn" onclick="setEconomySection('sectorEconomy')">Sektor-Wirtschaft</button>
           <button class="mini-btn" onclick="fetchEconomyView()">Aktualisieren</button>
         </div>
@@ -10636,6 +10813,7 @@ function renderEconomyView() {
       </div>
       <div class="toolbar-row end">
         <button class="mini-btn primary" onclick="setEconomySection('trade')">Aktienhandel</button>
+        <button class="mini-btn" onclick="setEconomySection('portfolio')">Portfolio</button>
         <button class="mini-btn" onclick="setEconomySection('sectorEconomy')">Sektor-Wirtschaft</button>
         <button class="mini-btn" onclick="setEconomySection('acp')">ACP</button>
         <button class="mini-btn" onclick="fetchEconomyView()">Aktualisieren</button>
