@@ -6273,20 +6273,29 @@ function updateSessionDisplay() {
   if (logoutBtn) logoutBtn.textContent = 'Login';
 }
 
+function safeRefreshRoleChrome() {
+  try {
+    refreshRoleChrome();
+  } catch (error) {
+    console.error('Role chrome refresh failed', error);
+    updateSessionDisplay();
+  }
+}
+
 function continueAsGuest() {
   viewerModeActive = true;
   currentAuthenticatedUsername = '';
   serverSync.session = { id: null, username: '', role: 'Viewer' };
-  roleSelect.value = 'Viewer';
-  refreshRoleChrome();
+  if (roleSelect) roleSelect.value = 'Viewer';
   hideLoginModal();
+  safeRefreshRoleChrome();
   setStatus('Gastmodus aktiv.');
 }
 
 async function logoutCurrentUser() {
   if (!currentAuthenticatedUsername) {
     viewerModeActive = false;
-    refreshRoleChrome();
+    safeRefreshRoleChrome();
     showLoginModal();
     return;
   }
@@ -6300,8 +6309,8 @@ async function logoutCurrentUser() {
   viewerModeActive = false;
   currentAuthenticatedUsername = '';
   serverSync.session = { id: null, username: '', role: 'Viewer' };
-  roleSelect.value = 'Viewer';
-  refreshRoleChrome();
+  if (roleSelect) roleSelect.value = 'Viewer';
+  safeRefreshRoleChrome();
   showLoginModal();
   setStatus('Du wurdest ausgeloggt.');
 }
@@ -6325,9 +6334,9 @@ async function attemptLogin() {
     viewerModeActive = false;
     serverSync.session = payload.user || { id: null, username: '', role: 'Viewer' };
     currentAuthenticatedUsername = payload.user?.username || '';
-    roleSelect.value = payload.user?.role || 'Viewer';
-    refreshRoleChrome();
+    if (roleSelect) roleSelect.value = payload.user?.role || 'Viewer';
     hideLoginModal();
+    safeRefreshRoleChrome();
     if (loginModalPassword) loginModalPassword.value = '';
     destroyServerSocketConnection();
     clearServerReconnectTimer();
@@ -6347,8 +6356,8 @@ async function attemptLogin() {
     viewerModeActive = false;
     currentAuthenticatedUsername = '';
     serverSync.session = { id: null, username: '', role: 'Viewer' };
-    roleSelect.value = 'Viewer';
-    refreshRoleChrome();
+    if (roleSelect) roleSelect.value = 'Viewer';
+    safeRefreshRoleChrome();
     if (String(error.message || '').includes('Failed to fetch')) {
       disableLiveSync('Login fehlgeschlagen: Server nicht erreichbar. Lokaler Offline-Modus aktiv.');
       return;
@@ -6361,7 +6370,7 @@ function applyDefaultAnonymousRole() {
   if (currentAuthenticatedUsername) return;
   viewerModeActive = false;
   serverSync.session = { id: null, username: '', role: 'Viewer' };
-  roleSelect.value = 'Viewer';
+  if (roleSelect) roleSelect.value = 'Viewer';
 }
 
 function getRoleFaction(role = currentRole()) {
@@ -7650,93 +7659,93 @@ function renderInfluenceClouds() {
   const width = influenceCanvas.width || WORLD_SIZE;
   const height = influenceCanvas.height || WORLD_SIZE;
   influenceCtx.clearRect(0, 0, width, height);
-<<<<<<< Updated upstream
-  if (!layers.influence) return;
-  if (!tacticalBaseReady && viewMode !== 'schematic') {
-    scheduleTacticalBaseBuild();
-    return;
-  }
-  const adjacency = getInfluenceAdjacency();
-  const drawCloudPass = (predicate, strokeStyle, lineWidth, blur, alpha) => {
-    influenceCtx.save();
-    influenceCtx.globalAlpha = alpha;
-    influenceCtx.filter = `blur(${blur}px)`;
-    influenceCtx.lineCap = 'round';
-    influenceCtx.lineJoin = 'round';
-    influenceCtx.strokeStyle = strokeStyle;
-    influenceCtx.lineWidth = lineWidth;
-    tacticalTravelEdges.forEach((edge) => {
-      const start = planetIndex.get(edge.startPlanetId);
-      const end = planetIndex.get(edge.endPlanetId);
-      if (!start || !end || !predicate(start, end, edge)) return;
-      canvasPathFromPoints(influenceCtx, edge.path);
-      influenceCtx.stroke();
-    });
-    influenceCtx.restore();
-  };
+  if (layers.influence) {
+    if (!tacticalBaseReady && viewMode !== 'schematic') {
+      scheduleTacticalBaseBuild();
+    } else {
+      const adjacency = getInfluenceAdjacency();
+      const drawCloudPass = (predicate, strokeStyle, lineWidth, blur, alpha) => {
+        influenceCtx.save();
+        influenceCtx.globalAlpha = alpha;
+        influenceCtx.filter = `blur(${blur}px)`;
+        influenceCtx.lineCap = 'round';
+        influenceCtx.lineJoin = 'round';
+        influenceCtx.strokeStyle = strokeStyle;
+        influenceCtx.lineWidth = lineWidth;
+        tacticalTravelEdges.forEach((edge) => {
+          const start = planetIndex.get(edge.startPlanetId);
+          const end = planetIndex.get(edge.endPlanetId);
+          if (!start || !end || !predicate(start, end, edge)) return;
+          canvasPathFromPoints(influenceCtx, edge.path);
+          influenceCtx.stroke();
+        });
+        influenceCtx.restore();
+      };
 
-  drawCloudPass((a, b) => getPlanetInfluenceFaction(a) === 'GAR' && getPlanetInfluenceFaction(b) === 'GAR', 'rgba(31,124,255,.95)', 70, 18, 0.28);
-  drawCloudPass((a, b) => getPlanetInfluenceFaction(a) === 'KUS' && getPlanetInfluenceFaction(b) === 'KUS', 'rgba(208,54,50,.95)', 70, 18, 0.28);
-  drawCloudPass((a, b) => getPlanetInfluenceFaction(a) === 'HUTT' && getPlanetInfluenceFaction(b) === 'HUTT', 'rgba(31,107,72,.92)', 66, 18, 0.26);
-  if (layers.contested) {
-    drawCloudPass((a, b) => {
-      const visual = getHyperlaneVisualState(a, b, adjacency);
-      return visual.contested;
-    }, 'rgba(156,67,255,.88)', 54, 16, 0.22);
-  }
-
-  state.planets.forEach((planet) => {
-    const position = getPlanetDisplayPosition(planet);
-    const influenceOwner = getPlanetInfluenceFaction(planet);
-    if (influenceOwner === 'GAR') {
-      drawInfluencePlanetHalo(influenceCtx, position.x, position.y, 'rgba(115,184,255,.5)', 'rgba(31,124,255,.2)', 68);
-      return;
-    }
-    if (influenceOwner === 'KUS') {
-      drawInfluencePlanetHalo(influenceCtx, position.x, position.y, 'rgba(255,126,126,.46)', 'rgba(208,54,50,.18)', 68);
-      return;
-    }
-    if (influenceOwner === 'HUTT') {
-      drawInfluencePlanetHalo(influenceCtx, position.x, position.y, 'rgba(68,170,118,.42)', 'rgba(31,107,72,.18)', 62);
-      return;
-    }
-    if (layers.contested) {
-      const status = getNeutralInfluenceStatus(planet, adjacency);
-      if (status === 'CONTESTED') {
-        drawInfluencePlanetHalo(influenceCtx, position.x, position.y, 'rgba(205,150,255,.42)', 'rgba(156,67,255,.16)', 60);
-      } else if (status === 'GAR_PRESSURE') {
-        drawInfluencePlanetHalo(influenceCtx, position.x, position.y, 'rgba(133,190,255,.22)', 'rgba(122,140,160,.1)', 48);
-      } else if (status === 'KUS_PRESSURE') {
-        drawInfluencePlanetHalo(influenceCtx, position.x, position.y, 'rgba(255,138,138,.22)', 'rgba(152,132,144,.1)', 48);
-      } else if (status === 'HUTT_PRESSURE') {
-        drawInfluencePlanetHalo(influenceCtx, position.x, position.y, 'rgba(68,170,118,.24)', 'rgba(31,107,72,.12)', 48);
-      } else {
-        drawInfluencePlanetHalo(influenceCtx, position.x, position.y, 'rgba(255,228,112,.14)', 'rgba(178,178,178,.08)', 40);
+      drawCloudPass((a, b) => getPlanetInfluenceFaction(a) === 'GAR' && getPlanetInfluenceFaction(b) === 'GAR', 'rgba(31,124,255,.95)', 70, 18, 0.28);
+      drawCloudPass((a, b) => getPlanetInfluenceFaction(a) === 'KUS' && getPlanetInfluenceFaction(b) === 'KUS', 'rgba(208,54,50,.95)', 70, 18, 0.28);
+      drawCloudPass((a, b) => getPlanetInfluenceFaction(a) === 'HUTT' && getPlanetInfluenceFaction(b) === 'HUTT', 'rgba(31,107,72,.92)', 66, 18, 0.26);
+      if (layers.contested) {
+        drawCloudPass((a, b) => {
+          const visual = getHyperlaneVisualState(a, b, adjacency);
+          return visual.contested;
+        }, 'rgba(156,67,255,.88)', 54, 16, 0.22);
       }
+
+      state.planets.forEach((planet) => {
+        const position = getPlanetDisplayPosition(planet);
+        const influenceOwner = getPlanetInfluenceFaction(planet);
+        if (influenceOwner === 'GAR') {
+          drawInfluencePlanetHalo(influenceCtx, position.x, position.y, 'rgba(115,184,255,.5)', 'rgba(31,124,255,.2)', 68);
+          return;
+        }
+        if (influenceOwner === 'KUS') {
+          drawInfluencePlanetHalo(influenceCtx, position.x, position.y, 'rgba(255,126,126,.46)', 'rgba(208,54,50,.18)', 68);
+          return;
+        }
+        if (influenceOwner === 'HUTT') {
+          drawInfluencePlanetHalo(influenceCtx, position.x, position.y, 'rgba(68,170,118,.42)', 'rgba(31,107,72,.18)', 62);
+          return;
+        }
+        if (layers.contested) {
+          const status = getNeutralInfluenceStatus(planet, adjacency);
+          if (status === 'CONTESTED') {
+            drawInfluencePlanetHalo(influenceCtx, position.x, position.y, 'rgba(205,150,255,.42)', 'rgba(156,67,255,.16)', 60);
+          } else if (status === 'GAR_PRESSURE') {
+            drawInfluencePlanetHalo(influenceCtx, position.x, position.y, 'rgba(133,190,255,.22)', 'rgba(122,140,160,.1)', 48);
+          } else if (status === 'KUS_PRESSURE') {
+            drawInfluencePlanetHalo(influenceCtx, position.x, position.y, 'rgba(255,138,138,.22)', 'rgba(152,132,144,.1)', 48);
+          } else if (status === 'HUTT_PRESSURE') {
+            drawInfluencePlanetHalo(influenceCtx, position.x, position.y, 'rgba(68,170,118,.24)', 'rgba(31,107,72,.12)', 48);
+          } else {
+            drawInfluencePlanetHalo(influenceCtx, position.x, position.y, 'rgba(255,228,112,.14)', 'rgba(178,178,178,.08)', 40);
+          }
+        }
+      });
     }
-=======
-  if (!layers.sectorLabels) return;
-  const sectors = ensureSectorStore().filter((sector) => Array.isArray(sector?.points) && sector.points.length >= 3);
-  if (!sectors.length) return;
-  sectors.forEach((sector) => {
-    const summary = getManualSectorControlSummary(sector);
-    if (!summary.total) return;
-    const influenceState = getSectorInfluenceState(summary);
-    const palette = getSectorInfluencePalette(influenceState.dominantOwner || 'NEUTRAL');
-    const fill = palette.fill;
-    const edge = palette.edge;
-    if (!fill || !edge || !traceSectorPolygonPath(influenceCtx, sector.points)) return;
-    influenceCtx.save();
-    influenceCtx.fillStyle = fill;
-    influenceCtx.strokeStyle = edge;
-    influenceCtx.lineWidth = 3;
-    influenceCtx.shadowColor = edge;
-    influenceCtx.shadowBlur = 12;
-    influenceCtx.fill();
-    influenceCtx.stroke();
-    influenceCtx.restore();
->>>>>>> Stashed changes
-  });
+  }
+
+  if (layers.sectorLabels) {
+    const sectors = ensureSectorStore().filter((sector) => Array.isArray(sector?.points) && sector.points.length >= 3);
+    sectors.forEach((sector) => {
+      const summary = getManualSectorControlSummary(sector);
+      if (!summary.total) return;
+      const influenceState = getSectorInfluenceState(summary);
+      const palette = getSectorInfluencePalette(influenceState.dominantOwner || 'NEUTRAL');
+      const fill = palette.fill;
+      const edge = palette.edge;
+      if (!fill || !edge || !traceSectorPolygonPath(influenceCtx, sector.points)) return;
+      influenceCtx.save();
+      influenceCtx.fillStyle = fill;
+      influenceCtx.strokeStyle = edge;
+      influenceCtx.lineWidth = 3;
+      influenceCtx.shadowColor = edge;
+      influenceCtx.shadowBlur = 12;
+      influenceCtx.fill();
+      influenceCtx.stroke();
+      influenceCtx.restore();
+    });
+  }
 }
 
 function createTacticalSectionCanvas(width, height) {
@@ -8606,8 +8615,6 @@ function getManualSectorControlSummary(sector) {
   return summary;
 }
 
-<<<<<<< Updated upstream
-=======
 function getSectorInfluenceEntries(summary) {
   return ['GAR', 'KUS', 'HUTT', 'NEUTRAL']
     .map((owner) => ({ owner, count: Number(summary?.[owner] || 0) }))
@@ -8796,7 +8803,6 @@ function formatElapsedSince(timestamp) {
   return `vor ${days} Tag${days === 1 ? '' : 'en'}`;
 }
 
->>>>>>> Stashed changes
 function formatSectorControlPercent(summary, owner) {
   if (!summary.total) return '0.0%';
   return `${(((summary[owner] || 0) / summary.total) * 100).toFixed(1)}%`;
@@ -12431,29 +12437,35 @@ orientationDismissBtn?.addEventListener('click', () => {
   mobileOrientationDismissed = true;
   syncMobileOrientationUi();
 });
-loginBtn.onclick = attemptLogin;
-guestContinueBtn.onclick = continueAsGuest;
-logoutBtn.onclick = logoutCurrentUser;
-loginModalPassword.addEventListener('keydown', (event) => {
+loginBtn?.addEventListener('click', attemptLogin);
+guestContinueBtn?.addEventListener('click', continueAsGuest);
+logoutBtn?.addEventListener('click', logoutCurrentUser);
+loginModalPassword?.addEventListener('keydown', (event) => {
   if (event.key === 'Enter') {
     event.preventDefault();
     attemptLogin();
   }
 });
-loginModalUser.addEventListener('keydown', (event) => {
+loginModalUser?.addEventListener('keydown', (event) => {
   if (event.key === 'Enter') {
     event.preventDefault();
     attemptLogin();
   }
 });
-applyDefaultAnonymousRole();
-loadClientUiPrefs();
-syncLayerCheckboxes();
-applyAudioMuteState();
-setNavCollapsed(false);
-refreshRoleChrome();
-bootstrapFromServer();
-syncMobileOrientationUi();
+try {
+  applyDefaultAnonymousRole();
+  loadClientUiPrefs();
+  syncLayerCheckboxes();
+  applyAudioMuteState();
+  setNavCollapsed(false);
+  safeRefreshRoleChrome();
+  bootstrapFromServer();
+  syncMobileOrientationUi();
+} catch (error) {
+  console.error('Initial app startup failed', error);
+  continueAsGuest();
+  setStatus('Initialisierung teilweise fehlgeschlagen; Gastmodus aktiv.');
+}
 window.addEventListener('resize', syncMobileOrientationUi);
 window.addEventListener('orientationchange', syncMobileOrientationUi);
 document.addEventListener('visibilitychange', () => {
