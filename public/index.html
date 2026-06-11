@@ -7221,84 +7221,28 @@ function getHyperlaneVisualState(a, b, adjacency) {
   return { color: 'rgba(170,176,188,.32)', contested: false };
 }
 
-function drawInfluencePlanetHalo(ctx, x, y, innerColor, outerColor, radius) {
-  const gradient = ctx.createRadialGradient(x, y, radius * 0.08, x, y, radius);
-  gradient.addColorStop(0, innerColor);
-  gradient.addColorStop(0.55, outerColor);
-  gradient.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.beginPath();
-  ctx.fillStyle = gradient;
-  ctx.arc(x, y, radius, 0, Math.PI * 2);
-  ctx.fill();
-}
-
 function renderInfluenceClouds() {
   const width = influenceCanvas.width || WORLD_SIZE;
   const height = influenceCanvas.height || WORLD_SIZE;
   influenceCtx.clearRect(0, 0, width, height);
   if (!layers.influence) return;
-  if (!tacticalBaseReady && viewMode !== 'schematic') {
-    scheduleTacticalBaseBuild();
-    return;
-  }
-  const adjacency = getInfluenceAdjacency();
-  const drawCloudPass = (predicate, strokeStyle, lineWidth, blur, alpha) => {
+  const sectors = ensureSectorStore().filter((sector) => Array.isArray(sector?.points) && sector.points.length >= 3);
+  if (!sectors.length) return;
+  sectors.forEach((sector) => {
+    const summary = getManualSectorControlSummary(sector);
+    if (!summary.total) return;
+    const fill = buildSectorInfluenceFill(influenceCtx, sector, summary);
+    const edge = getSectorInfluenceEdge(summary);
+    if (!fill || !edge || !traceSectorPolygonPath(influenceCtx, sector.points)) return;
     influenceCtx.save();
-    influenceCtx.globalAlpha = alpha;
-    influenceCtx.filter = `blur(${blur}px)`;
-    influenceCtx.lineCap = 'round';
-    influenceCtx.lineJoin = 'round';
-    influenceCtx.strokeStyle = strokeStyle;
-    influenceCtx.lineWidth = lineWidth;
-    tacticalTravelEdges.forEach((edge) => {
-      const start = planetIndex.get(edge.startPlanetId);
-      const end = planetIndex.get(edge.endPlanetId);
-      if (!start || !end || !predicate(start, end, edge)) return;
-      canvasPathFromPoints(influenceCtx, edge.path);
-      influenceCtx.stroke();
-    });
+    influenceCtx.fillStyle = fill;
+    influenceCtx.strokeStyle = edge;
+    influenceCtx.lineWidth = 2.2;
+    influenceCtx.shadowColor = edge;
+    influenceCtx.shadowBlur = 12;
+    influenceCtx.fill();
+    influenceCtx.stroke();
     influenceCtx.restore();
-  };
-
-  drawCloudPass((a, b) => getPlanetInfluenceFaction(a) === 'GAR' && getPlanetInfluenceFaction(b) === 'GAR', 'rgba(31,124,255,.95)', 70, 18, 0.28);
-  drawCloudPass((a, b) => getPlanetInfluenceFaction(a) === 'KUS' && getPlanetInfluenceFaction(b) === 'KUS', 'rgba(208,54,50,.95)', 70, 18, 0.28);
-  drawCloudPass((a, b) => getPlanetInfluenceFaction(a) === 'HUTT' && getPlanetInfluenceFaction(b) === 'HUTT', 'rgba(31,107,72,.92)', 66, 18, 0.26);
-  if (layers.contested) {
-    drawCloudPass((a, b) => {
-      const visual = getHyperlaneVisualState(a, b, adjacency);
-      return visual.contested;
-    }, 'rgba(156,67,255,.88)', 54, 16, 0.22);
-  }
-
-  state.planets.forEach((planet) => {
-    const position = getPlanetDisplayPosition(planet);
-    const influenceOwner = getPlanetInfluenceFaction(planet);
-    if (influenceOwner === 'GAR') {
-      drawInfluencePlanetHalo(influenceCtx, position.x, position.y, 'rgba(115,184,255,.5)', 'rgba(31,124,255,.2)', 68);
-      return;
-    }
-    if (influenceOwner === 'KUS') {
-      drawInfluencePlanetHalo(influenceCtx, position.x, position.y, 'rgba(255,126,126,.46)', 'rgba(208,54,50,.18)', 68);
-      return;
-    }
-    if (influenceOwner === 'HUTT') {
-      drawInfluencePlanetHalo(influenceCtx, position.x, position.y, 'rgba(68,170,118,.42)', 'rgba(31,107,72,.18)', 62);
-      return;
-    }
-    if (layers.contested) {
-      const status = getNeutralInfluenceStatus(planet, adjacency);
-      if (status === 'CONTESTED') {
-        drawInfluencePlanetHalo(influenceCtx, position.x, position.y, 'rgba(205,150,255,.42)', 'rgba(156,67,255,.16)', 60);
-      } else if (status === 'GAR_PRESSURE') {
-        drawInfluencePlanetHalo(influenceCtx, position.x, position.y, 'rgba(133,190,255,.22)', 'rgba(122,140,160,.1)', 48);
-      } else if (status === 'KUS_PRESSURE') {
-        drawInfluencePlanetHalo(influenceCtx, position.x, position.y, 'rgba(255,138,138,.22)', 'rgba(152,132,144,.1)', 48);
-      } else if (status === 'HUTT_PRESSURE') {
-        drawInfluencePlanetHalo(influenceCtx, position.x, position.y, 'rgba(68,170,118,.24)', 'rgba(31,107,72,.12)', 48);
-      } else {
-        drawInfluencePlanetHalo(influenceCtx, position.x, position.y, 'rgba(255,228,112,.14)', 'rgba(178,178,178,.08)', 40);
-      }
-    }
   });
 }
 
@@ -8131,6 +8075,64 @@ function getManualSectorControlSummary(sector) {
     summary[owner] = (summary[owner] || 0) + 1;
   });
   return summary;
+}
+
+function getSectorInfluenceEntries(summary) {
+  return ['GAR', 'KUS', 'HUTT', 'NEUTRAL']
+    .map((owner) => ({ owner, count: Number(summary?.[owner] || 0) }))
+    .filter((entry) => entry.count > 0)
+    .sort((a, b) => b.count - a.count);
+}
+
+function getSectorInfluencePalette(owner) {
+  if (owner === 'GAR') return { fill: 'rgba(31,124,255,.24)', edge: 'rgba(124,190,255,.88)' };
+  if (owner === 'KUS') return { fill: 'rgba(208,54,50,.24)', edge: 'rgba(255,142,142,.88)' };
+  if (owner === 'HUTT') return { fill: 'rgba(31,107,72,.24)', edge: 'rgba(120,214,163,.84)' };
+  return { fill: 'rgba(142,152,170,.22)', edge: 'rgba(214,222,236,.8)' };
+}
+
+function buildSectorInfluenceFill(ctx, sector, summary) {
+  const entries = getSectorInfluenceEntries(summary);
+  if (!entries.length) return null;
+  const points = Array.isArray(sector?.points) ? sector.points : [];
+  if (!points.length) return null;
+  if (entries.length === 1) return getSectorInfluencePalette(entries[0].owner).fill;
+  const bounds = points.reduce((acc, point) => ({
+    minX: Math.min(acc.minX, point.x),
+    minY: Math.min(acc.minY, point.y),
+    maxX: Math.max(acc.maxX, point.x),
+    maxY: Math.max(acc.maxY, point.y)
+  }), { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity });
+  const gradient = ctx.createLinearGradient(bounds.minX, bounds.minY, bounds.maxX, bounds.maxY);
+  let cursor = 0;
+  entries.forEach((entry, index) => {
+    const share = entry.count / Math.max(1, summary.total);
+    const nextCursor = index === entries.length - 1 ? 1 : Math.min(1, cursor + share);
+    const fill = getSectorInfluencePalette(entry.owner).fill;
+    gradient.addColorStop(cursor, fill);
+    gradient.addColorStop(nextCursor, fill);
+    cursor = nextCursor;
+  });
+  return gradient;
+}
+
+function getSectorInfluenceEdge(summary) {
+  const entries = getSectorInfluenceEntries(summary);
+  if (!entries.length) return null;
+  const activeFactions = entries.filter((entry) => entry.owner !== 'NEUTRAL');
+  if (activeFactions.length >= 2) return 'rgba(182,112,255,.9)';
+  return getSectorInfluencePalette(entries[0].owner).edge;
+}
+
+function traceSectorPolygonPath(ctx, points = []) {
+  if (!points.length) return false;
+  ctx.beginPath();
+  ctx.moveTo(points[0].x, points[0].y);
+  for (let index = 1; index < points.length; index += 1) {
+    ctx.lineTo(points[index].x, points[index].y);
+  }
+  ctx.closePath();
+  return true;
 }
 
 function formatSectorControlPercent(summary, owner) {
