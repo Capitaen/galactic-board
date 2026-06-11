@@ -123,6 +123,11 @@ function getLegacySectorNames(sectorName, previousSectorName = '') {
 }
 
 const INSTITUTIONAL_INVESTOR_SEEDS = [
+  { id: 'inst_igbc', name: 'InterGalactic Banking Clan', strategy: 'liquidity_trap', riskTolerance: 0.82, corruptionAffinity: 0.82, creditBalance: 880000 },
+  { id: 'inst_commerce_guild', name: 'Commerce Guild', strategy: 'sector_monopoly_building', riskTolerance: 0.71, corruptionAffinity: 0.72, creditBalance: 640000 },
+  { id: 'inst_techno_union', name: 'Techno Union', strategy: 'front_run_policy', riskTolerance: 0.76, corruptionAffinity: 0.76, creditBalance: 720000 },
+  { id: 'inst_trade_federation', name: 'Trade Federation', strategy: 'embargo_profiteering', riskTolerance: 0.78, corruptionAffinity: 0.84, creditBalance: 790000 },
+  { id: 'inst_corporate_alliance', name: 'Corporate Alliance', strategy: 'hostile_takeover', riskTolerance: 0.86, corruptionAffinity: 0.78, creditBalance: 830000 },
   { id: 'inst_republic_infra_fund', name: 'Republic Infrastructure Fund', strategy: 'infrastructure', riskTolerance: 0.62, corruptionAffinity: 0.7, creditBalance: 420000 },
   { id: 'inst_core_pension', name: 'Core Worlds Pension Trust', strategy: 'stability', riskTolerance: 0.35, corruptionAffinity: 0.2, creditBalance: 355000 },
   { id: 'inst_banking_consortium', name: 'Galactic Banking Consortium', strategy: 'speculation', riskTolerance: 0.74, corruptionAffinity: 0.55, creditBalance: 520000 },
@@ -459,6 +464,13 @@ export function createDb(projectRoot) {
       base_price REAL NOT NULL,
       current_price REAL NOT NULL,
       previous_price REAL NOT NULL,
+      total_shares INTEGER,
+      free_float_shares INTEGER,
+      locked_institutional_shares INTEGER,
+      market_cap REAL,
+      major_shareholders_json TEXT,
+      controlling_shareholder TEXT,
+      ownership_updated_at INTEGER,
       updated_at TEXT NOT NULL
     );
 
@@ -486,6 +498,33 @@ export function createDb(projectRoot) {
       quantity INTEGER NOT NULL,
       unit_price REAL NOT NULL,
       total_value REAL NOT NULL,
+      remaining_quantity INTEGER,
+      realized_profit REAL NOT NULL DEFAULT 0,
+      closed_at TEXT,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS market_taxes (
+      id TEXT PRIMARY KEY,
+      investor_id TEXT NOT NULL,
+      company_id TEXT NOT NULL,
+      quantity INTEGER NOT NULL,
+      gross_proceeds REAL NOT NULL,
+      tax_amount REAL NOT NULL,
+      net_proceeds REAL NOT NULL,
+      tax_rate REAL NOT NULL,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS portfolio_history (
+      id TEXT PRIMARY KEY,
+      investor_id TEXT NOT NULL,
+      total_value REAL NOT NULL,
+      cash_balance REAL NOT NULL,
+      holdings_value REAL NOT NULL,
+      realized_profit REAL NOT NULL,
+      unrealized_profit REAL NOT NULL,
+      taxes_paid REAL NOT NULL,
       created_at TEXT NOT NULL
     );
 
@@ -604,6 +643,15 @@ export function createDb(projectRoot) {
       updated_at TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS institutional_holdings (
+      investor_id TEXT NOT NULL,
+      company_id TEXT NOT NULL,
+      shares INTEGER NOT NULL DEFAULT 0,
+      average_cost REAL NOT NULL DEFAULT 0,
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (investor_id, company_id)
+    );
+
     CREATE TABLE IF NOT EXISTS institutional_trades (
       id TEXT PRIMARY KEY,
       investor_id TEXT NOT NULL,
@@ -652,6 +700,12 @@ export function createDb(projectRoot) {
 
     CREATE INDEX IF NOT EXISTS idx_institutional_trades_created_at
       ON institutional_trades (created_at DESC);
+
+    CREATE INDEX IF NOT EXISTS idx_market_taxes_investor_created_at
+      ON market_taxes (investor_id, created_at DESC);
+
+    CREATE INDEX IF NOT EXISTS idx_portfolio_history_investor_created_at
+      ON portfolio_history (investor_id, created_at DESC);
 
     CREATE INDEX IF NOT EXISTS idx_market_intelligence_reports_created_at
       ON market_intelligence_reports (created_at DESC);
@@ -707,6 +761,42 @@ export function createDb(projectRoot) {
   if (!marketCompanyColumns.has('merged_name')) {
     db.exec('ALTER TABLE market_companies ADD COLUMN merged_name TEXT');
   }
+  if (!marketCompanyColumns.has('total_shares')) {
+    db.exec('ALTER TABLE market_companies ADD COLUMN total_shares INTEGER');
+  }
+  if (!marketCompanyColumns.has('free_float_shares')) {
+    db.exec('ALTER TABLE market_companies ADD COLUMN free_float_shares INTEGER');
+  }
+  if (!marketCompanyColumns.has('locked_institutional_shares')) {
+    db.exec('ALTER TABLE market_companies ADD COLUMN locked_institutional_shares INTEGER');
+  }
+  if (!marketCompanyColumns.has('market_cap')) {
+    db.exec('ALTER TABLE market_companies ADD COLUMN market_cap REAL');
+  }
+  if (!marketCompanyColumns.has('major_shareholders_json')) {
+    db.exec('ALTER TABLE market_companies ADD COLUMN major_shareholders_json TEXT');
+  }
+  if (!marketCompanyColumns.has('controlling_shareholder')) {
+    db.exec('ALTER TABLE market_companies ADD COLUMN controlling_shareholder TEXT');
+  }
+  if (!marketCompanyColumns.has('ownership_updated_at')) {
+    db.exec('ALTER TABLE market_companies ADD COLUMN ownership_updated_at INTEGER');
+  }
+  const marketOrderColumns = new Set(db.prepare('PRAGMA table_info(market_orders)').all().map((column) => column.name));
+  if (!marketOrderColumns.has('remaining_quantity')) {
+    db.exec('ALTER TABLE market_orders ADD COLUMN remaining_quantity INTEGER');
+  }
+  if (!marketOrderColumns.has('realized_profit')) {
+    db.exec('ALTER TABLE market_orders ADD COLUMN realized_profit REAL NOT NULL DEFAULT 0');
+  }
+  if (!marketOrderColumns.has('closed_at')) {
+    db.exec('ALTER TABLE market_orders ADD COLUMN closed_at TEXT');
+  }
+  db.prepare(`
+    UPDATE market_orders
+    SET remaining_quantity = quantity
+    WHERE remaining_quantity IS NULL
+  `).run();
   const sectorEconomyColumns = new Set(db.prepare('PRAGMA table_info(sector_economy_state)').all().map((column) => column.name));
   if (!sectorEconomyColumns.has('control_status')) {
     db.exec("ALTER TABLE sector_economy_state ADD COLUMN control_status TEXT NOT NULL DEFAULT 'Neutral'");
@@ -999,6 +1089,7 @@ export function createDb(projectRoot) {
       migrationTime
     );
   });
+  initializeMarketOwnership(db, campaignState, migrationTime);
 
   const now = new Date().toISOString();
   const defaultAdmin = db.prepare('SELECT id FROM users WHERE lower(username) = lower(?)').get('admin');
@@ -1047,6 +1138,437 @@ function safeJsonParse(rawJson, fallback) {
   } catch {
     return fallback;
   }
+}
+
+function roundShares(value) {
+  return Math.max(0, Math.round(Number(value || 0)));
+}
+
+function buildCompanyScaleContext(state) {
+  const context = new Map();
+  try {
+    const sectors = buildSectorMembership(state, buildCanonicalManualSectors(state));
+    sectors.forEach((sector) => {
+      const production = Object.values(sector.slotSummary?.production || {})
+        .reduce((sum, value) => sum + Number(value || 0), 0);
+      const infrastructure = Number(sector.slotSummary?.civilianSlots || 0)
+        + Number(sector.slotSummary?.militarySlots || 0)
+        + Number(sector.slotSummary?.developmentSlots || 0)
+        + Number(sector.slotSummary?.activeMineProjects || 0)
+        + Number(sector.slotSummary?.activeShipProjects || 0);
+      const regionCounts = new Map();
+      (sector.planets || []).forEach((planet) => {
+        const region = String(planet?.region || '').trim() || 'Unknown';
+        regionCounts.set(region, (regionCounts.get(region) || 0) + 1);
+      });
+      const dominantRegion = [...regionCounts.entries()]
+        .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))[0]?.[0] || '';
+      const metric = {
+        planetCount: (sector.planets || []).length,
+        production,
+        infrastructure,
+        dominantRegion
+      };
+      context.set(String(sector.id || ''), metric);
+      context.set(String(sector.name || ''), metric);
+    });
+  } catch {
+    return context;
+  }
+  return context;
+}
+
+function estimateCompanyTotalShares(company, scaleContext = new Map()) {
+  const currentPrice = Math.max(1, Number(company.current_price || company.currentPrice || company.base_price || company.basePrice || 100));
+  if (!String(company.id || '').startsWith('sector_holding_')) {
+    const mega = ['kuat', 'rothana', 'banking_clan'].includes(company.id) || currentPrice >= 800;
+    const base = mega ? 1000000 : 420000;
+    const noise = 1 + stableNoise(`shares:${company.id}`, 0.28);
+    return Math.round((base * noise) / 1000) * 1000;
+  }
+  const metric = scaleContext.get(String(company.sector_id || company.sectorId || ''))
+    || scaleContext.get(String(company.sector || ''))
+    || {};
+  const region = String(metric.dominantRegion || '').toLowerCase();
+  const production = Number(metric.production || 0);
+  const infrastructure = Number(metric.infrastructure || 0);
+  const planetCount = Number(metric.planetCount || 0);
+  const score = planetCount + (production * 2.4) + (infrastructure * 3.2) + (currentPrice / 55);
+  let min = 75000;
+  let max = 150000;
+  if (region.includes('core') || region.includes('colonies') || score >= 95) {
+    min = score >= 160 ? 1000000 : 300000;
+    max = score >= 160 ? 1600000 : 750000;
+  } else if (region.includes('outer') || region.includes('wild') || score < 45) {
+    min = 15000;
+    max = 40000;
+  }
+  const position = clamp(0.42 + stableNoise(`shares:${company.id}:${company.sector}:${company.resource_key}`, 0.36), 0.05, 0.95);
+  return Math.round((min + ((max - min) * position)) / 100) * 100;
+}
+
+function chooseInstitutionalShareholders(company, totalShares, investors) {
+  const resourceKey = String(company.resource_key || company.resourceKey || '');
+  const preferredByResource = {
+    quadraniumErz: ['inst_corporate_alliance', 'inst_commerce_guild', 'inst_igbc', 'inst_republic_infra_fund'],
+    agrinium: ['inst_techno_union', 'inst_corporate_alliance', 'inst_igbc', 'inst_banking_consortium'],
+    tibannaGas: ['inst_trade_federation', 'inst_logistics_cartel', 'inst_commerce_guild', 'inst_igbc'],
+    baradium: ['inst_techno_union', 'inst_trade_federation', 'inst_corporate_alliance', 'inst_reconstruction'],
+    kavamSalz: ['inst_trade_federation', 'inst_commerce_guild', 'inst_core_pension', 'inst_sector_authority']
+  };
+  const investorMap = new Map(investors.map((investor) => [investor.id, investor]));
+  const faction = String(company.faction || '').trim();
+  const factionPreferred = faction === 'KUS'
+    ? ['inst_techno_union', 'inst_trade_federation', 'inst_corporate_alliance', 'inst_igbc']
+    : (faction === 'GAR' ? ['inst_republic_infra_fund', 'inst_core_pension', 'inst_sector_authority'] : []);
+  const preferredIds = [...new Set([...factionPreferred, ...(preferredByResource[resourceKey] || [])])];
+  const preferred = preferredIds
+    .map((id) => investorMap.get(id))
+    .filter(Boolean);
+  const fallback = investors.filter((investor) => !preferred.some((entry) => entry.id === investor.id));
+  const selected = [...preferred, ...fallback].slice(0, 5);
+  const lockedPercent = clamp(0.44 + stableNoise(`locked:${company.id}`, 0.18), 0.32, 0.72);
+  let remaining = Math.floor(totalShares * lockedPercent);
+  return selected.map((investor, index) => {
+    const weight = clamp(0.34 - (index * 0.055) + stableNoise(`${company.id}:${investor.id}:weight`, 0.04), 0.08, 0.36);
+    const shares = index === selected.length - 1
+      ? remaining
+      : Math.min(remaining, Math.floor(totalShares * weight));
+    remaining -= shares;
+    return { investor, shares: Math.max(0, shares) };
+  }).filter((entry) => entry.shares > 0);
+}
+
+function initializeMarketOwnership(db, state, recordedAt = new Date().toISOString()) {
+  const scaleContext = buildCompanyScaleContext(state || {});
+  const investors = db.prepare('SELECT id, name FROM institutional_investors ORDER BY id').all();
+  const companies = db.prepare('SELECT * FROM market_companies').all();
+  const playerSharesStatement = db.prepare('SELECT COALESCE(SUM(shares), 0) AS shares FROM market_holdings WHERE company_id = ?');
+  const instSharesStatement = db.prepare('SELECT COALESCE(SUM(shares), 0) AS shares FROM institutional_holdings WHERE company_id = ?');
+  const insertInstHolding = db.prepare(`
+    INSERT INTO institutional_holdings (investor_id, company_id, shares, average_cost, updated_at)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(investor_id, company_id) DO UPDATE SET
+      shares = institutional_holdings.shares + excluded.shares,
+      average_cost = CASE
+        WHEN institutional_holdings.shares + excluded.shares <= 0 THEN excluded.average_cost
+        ELSE ((institutional_holdings.average_cost * institutional_holdings.shares) + (excluded.average_cost * excluded.shares))
+          / (institutional_holdings.shares + excluded.shares)
+      END,
+      updated_at = excluded.updated_at
+  `);
+  db.transaction(() => {
+    companies.forEach((company) => {
+      const playerShares = roundShares(playerSharesStatement.get(company.id)?.shares);
+      const existingInstShares = roundShares(instSharesStatement.get(company.id)?.shares);
+      const estimatedShares = estimateCompanyTotalShares(company, scaleContext);
+      const totalShares = Math.max(
+        roundShares(company.total_shares),
+        estimatedShares,
+        playerShares + existingInstShares + 1000
+      );
+      db.prepare(`
+        UPDATE market_companies
+        SET total_shares = COALESCE(total_shares, ?),
+          free_float_shares = COALESCE(free_float_shares, ?),
+          locked_institutional_shares = COALESCE(locked_institutional_shares, ?),
+          market_cap = COALESCE(market_cap, ?),
+          ownership_updated_at = COALESCE(ownership_updated_at, ?)
+        WHERE id = ?
+      `).run(
+        totalShares,
+        Math.max(0, totalShares - playerShares - existingInstShares),
+        existingInstShares,
+        round2(totalShares * Number(company.current_price || company.base_price || 0)),
+        Date.parse(recordedAt) || Date.now(),
+        company.id
+      );
+      if (existingInstShares <= 0 && investors.length) {
+        chooseInstitutionalShareholders(company, totalShares, investors).forEach(({ investor, shares }) => {
+          insertInstHolding.run(investor.id, company.id, shares, Number(company.current_price || company.base_price || 1), recordedAt);
+        });
+      }
+      updateOwnershipStructure(db, company.id, Date.parse(recordedAt) || Date.now());
+    });
+  })();
+}
+
+function getCompanyOwnershipRows(db, companyId) {
+  const company = db.prepare('SELECT * FROM market_companies WHERE id = ?').get(companyId);
+  if (!company) return null;
+  const institutions = db.prepare(`
+    SELECT i.name, h.shares
+    FROM institutional_holdings h
+    JOIN institutional_investors i ON i.id = h.investor_id
+    WHERE h.company_id = ? AND h.shares > 0
+    ORDER BY h.shares DESC, i.name COLLATE NOCASE
+  `).all(companyId);
+  const playerShares = roundShares(db.prepare(`
+    SELECT COALESCE(SUM(shares), 0) AS shares
+    FROM market_holdings
+    WHERE company_id = ?
+  `).get(companyId)?.shares);
+  const institutionalShares = roundShares(institutions.reduce((sum, entry) => sum + Number(entry.shares || 0), 0));
+  const totalShares = Math.max(roundShares(company.total_shares), institutionalShares + playerShares + roundShares(company.free_float_shares));
+  const freeFloatShares = Math.max(0, totalShares - institutionalShares - playerShares);
+  const rows = institutions.map((entry) => ({
+    name: entry.name,
+    type: 'institution',
+    shares: roundShares(entry.shares),
+    percent: totalShares > 0 ? round2((Number(entry.shares || 0) / totalShares) * 100) : 0
+  }));
+  if (playerShares > 0) {
+    rows.push({
+      name: 'Players',
+      type: 'players',
+      shares: playerShares,
+      percent: totalShares > 0 ? round2((playerShares / totalShares) * 100) : 0
+    });
+  }
+  rows.push({
+    name: 'Free Float',
+    type: 'free_float',
+    shares: freeFloatShares,
+    percent: totalShares > 0 ? round2((freeFloatShares / totalShares) * 100) : 0
+  });
+  rows.sort((left, right) => right.shares - left.shares || left.name.localeCompare(right.name));
+  const controlling = rows
+    .filter((row) => row.type !== 'free_float')
+    .sort((left, right) => right.shares - left.shares)[0];
+  return {
+    company,
+    rows,
+    totalShares,
+    freeFloatShares,
+    institutionalShares,
+    playerShares,
+    controllingShareholder: controlling?.percent >= 25 ? controlling.name : ''
+  };
+}
+
+function updateOwnershipStructure(db, companyId, now = Date.now()) {
+  const ownership = getCompanyOwnershipRows(db, companyId);
+  if (!ownership) return null;
+  const marketCap = round2(ownership.totalShares * Number(ownership.company.current_price || 0));
+  db.prepare(`
+    UPDATE market_companies
+    SET total_shares = ?, free_float_shares = ?, locked_institutional_shares = ?,
+      market_cap = ?, major_shareholders_json = ?, controlling_shareholder = ?,
+      ownership_updated_at = ?
+    WHERE id = ?
+  `).run(
+    ownership.totalShares,
+    ownership.freeFloatShares,
+    ownership.institutionalShares,
+    marketCap,
+    JSON.stringify(ownership.rows),
+    ownership.controllingShareholder || null,
+    now,
+    companyId
+  );
+  return { ...ownership, marketCap };
+}
+
+function getAvailableFreeFloatShares(db, companyId) {
+  updateOwnershipStructure(db, companyId);
+  const row = db.prepare(`
+    SELECT free_float_shares AS freeFloatShares
+    FROM market_companies
+    WHERE id = ?
+  `).get(companyId);
+  return Math.max(0, roundShares(row?.freeFloatShares));
+}
+
+function getPortfolioMetrics(db, investorId) {
+  const investor = getOrCreateMarketInvestor(db, investorId);
+  const positions = db.prepare(`
+    SELECT h.company_id AS companyId, h.shares,
+      c.name, c.symbol, c.sector, c.resource_key AS resourceKey, c.resource_refs_json AS resourceRefsJson,
+      c.current_price AS currentPrice, c.market_status AS marketStatus
+    FROM market_holdings h
+    JOIN market_companies c ON c.id = h.company_id
+    WHERE h.investor_id = ? AND h.shares > 0
+    ORDER BY c.name COLLATE NOCASE
+  `).all(investorId);
+  const orders = db.prepare(`
+    SELECT id, company_id AS companyId, quantity, remaining_quantity AS remainingQuantity,
+      unit_price AS unitPrice, total_value AS totalValue, realized_profit AS realizedProfit,
+      closed_at AS closedAt, created_at AS createdAt
+    FROM market_orders
+    WHERE investor_id = ?
+    ORDER BY created_at ASC
+  `).all(investorId);
+  const orderGroups = new Map();
+  orders.forEach((order) => {
+    if (!orderGroups.has(order.companyId)) orderGroups.set(order.companyId, []);
+    orderGroups.get(order.companyId).push(order);
+  });
+  let holdingsValue = 0;
+  let openCostBasis = 0;
+  const rows = positions.map((position) => {
+    const currentPrice = Number(position.currentPrice || 0);
+    const quantity = roundShares(position.shares);
+    const currentValue = round2(quantity * currentPrice);
+    const openOrders = (orderGroups.get(position.companyId) || []).filter((order) => Number(order.remainingQuantity || 0) > 0);
+    const costBasis = round2(openOrders.reduce((sum, order) => (
+      sum + (Number(order.remainingQuantity || 0) * Number(order.unitPrice || 0))
+    ), 0));
+    const effectiveCostBasis = costBasis > 0 ? costBasis : round2(quantity * currentPrice);
+    const avgCost = quantity > 0 ? round2(effectiveCostBasis / quantity) : 0;
+    const gainCredits = round2(currentValue - effectiveCostBasis);
+    holdingsValue += currentValue;
+    openCostBasis += effectiveCostBasis;
+    return {
+      companyId: position.companyId,
+      name: position.name,
+      symbol: position.symbol,
+      sector: position.sector,
+      resourceKey: position.resourceKey,
+      resourceRefs: parseResourceRefs(position),
+      quantity,
+      averageCost: avgCost,
+      currentPrice: round2(currentPrice),
+      currentValue,
+      costBasis: effectiveCostBasis,
+      gainCredits,
+      gainPercent: effectiveCostBasis > 0 ? round2((gainCredits / effectiveCostBasis) * 100) : 0,
+      marketStatus: normalizeMarketStatus(position.marketStatus),
+      marketStatusLabel: displayMarketStatus(position.marketStatus),
+      orders: (orderGroups.get(position.companyId) || []).map((order) => {
+        const orderQuantity = Number(order.remainingQuantity ?? order.quantity ?? 0);
+        const orderCost = round2(orderQuantity * Number(order.unitPrice || 0));
+        const orderValue = round2(orderQuantity * currentPrice);
+        return {
+          ...order,
+          openQuantity: orderQuantity,
+          currentValue: orderValue,
+          changeCredits: round2(orderValue - orderCost),
+          changePercent: orderCost > 0 ? round2(((orderValue - orderCost) / orderCost) * 100) : 0
+        };
+      })
+    };
+  });
+  const realizedProfit = round2(orders.reduce((sum, order) => sum + Number(order.realizedProfit || 0), 0));
+  const taxesPaid = round2(db.prepare(`
+    SELECT COALESCE(SUM(tax_amount), 0) AS taxes
+    FROM market_taxes
+    WHERE investor_id = ?
+  `).get(investorId)?.taxes);
+  const investedTotal = round2(orders.reduce((sum, order) => sum + Number(order.totalValue || 0), 0));
+  const cashBalance = round2(Number(investor.balance || 0));
+  holdingsValue = round2(holdingsValue);
+  const totalValue = round2(cashBalance + holdingsValue);
+  const unrealizedProfit = round2(holdingsValue - openCostBasis);
+  const leaderboard = db.prepare(`
+    SELECT i.id,
+      ROUND(i.balance + COALESCE(SUM(h.shares * c.current_price), 0), 2) AS portfolioValue
+    FROM market_investors i
+    LEFT JOIN market_holdings h ON h.investor_id = i.id
+    LEFT JOIN market_companies c ON c.id = h.company_id
+    WHERE i.portfolio_enabled = 1
+    GROUP BY i.id
+    ORDER BY portfolioValue DESC
+  `).all();
+  const rank = leaderboard.findIndex((entry) => entry.id === investorId) + 1;
+  return {
+    investor: {
+      id: investor.id,
+      alias: investor.alias,
+      balance: cashBalance,
+      portfolioEnabled: Boolean(investor.portfolio_enabled)
+    },
+    cashBalance,
+    holdingsValue,
+    totalValue,
+    investedTotal,
+    unrealizedProfit,
+    realizedProfit,
+    taxesPaid,
+    holdingCount: rows.length,
+    rank: rank || null,
+    positions: rows
+  };
+}
+
+function writePortfolioSnapshot(db, investorId, createdAt = new Date().toISOString()) {
+  if (!investorId) return null;
+  const metrics = getPortfolioMetrics(db, investorId);
+  db.prepare(`
+    INSERT INTO portfolio_history (
+      id, investor_id, total_value, cash_balance, holdings_value,
+      realized_profit, unrealized_profit, taxes_paid, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    crypto.randomUUID(),
+    investorId,
+    metrics.totalValue,
+    metrics.cashBalance,
+    metrics.holdingsValue,
+    metrics.realizedProfit,
+    metrics.unrealizedProfit,
+    metrics.taxesPaid,
+    createdAt
+  );
+  return metrics;
+}
+
+function ensureRecentPortfolioSnapshot(db, investorId, maxAgeMs = 10 * 60 * 1000) {
+  if (!investorId) return null;
+  const latest = db.prepare(`
+    SELECT created_at AS createdAt
+    FROM portfolio_history
+    WHERE investor_id = ?
+    ORDER BY created_at DESC
+    LIMIT 1
+  `).get(investorId);
+  if (!latest || Date.now() - Date.parse(latest.createdAt) > maxAgeMs) {
+    return writePortfolioSnapshot(db, investorId);
+  }
+  return getPortfolioMetrics(db, investorId);
+}
+
+export function readPortfolio(db, investorId, userId = '') {
+  getOrCreateMarketInvestor(db, investorId, userId);
+  return ensureRecentPortfolioSnapshot(db, investorId);
+}
+
+export function readPortfolioHistory(db, investorId, range = 'today') {
+  ensureRecentPortfolioSnapshot(db, investorId);
+  const rangeMs = ({
+    today: 24 * 60 * 60 * 1000,
+    week: 7 * 24 * 60 * 60 * 1000,
+    month: 31 * 24 * 60 * 60 * 1000,
+    sixMonths: 183 * 24 * 60 * 60 * 1000
+  })[range] || (24 * 60 * 60 * 1000);
+  const cutoff = new Date(Date.now() - rangeMs).toISOString();
+  return db.prepare(`
+    SELECT total_value AS totalValue, cash_balance AS cashBalance,
+      holdings_value AS holdingsValue, realized_profit AS realizedProfit,
+      unrealized_profit AS unrealizedProfit, taxes_paid AS taxesPaid,
+      created_at AS createdAt
+    FROM portfolio_history
+    WHERE investor_id = ? AND created_at >= ?
+    ORDER BY created_at ASC
+  `).all(investorId, cutoff);
+}
+
+export function readCompanyOwnership(db, companyId) {
+  const ownership = updateOwnershipStructure(db, companyId);
+  if (!ownership) {
+    const error = new Error('Unternehmen nicht gefunden.');
+    error.status = 404;
+    throw error;
+  }
+  return {
+    companyId,
+    totalShares: ownership.totalShares,
+    freeFloatShares: ownership.freeFloatShares,
+    lockedInstitutionalShares: ownership.institutionalShares,
+    playerShares: ownership.playerShares,
+    marketCap: ownership.marketCap,
+    controllingShareholder: ownership.controllingShareholder || '',
+    shareholders: ownership.rows
+  };
 }
 export function readCampaignState(db) {
   const row = db.prepare(
@@ -1756,6 +2278,7 @@ export function applyDemandToMiningHolding(db, sectorName, resourceType, demandD
     INSERT INTO market_history (id, company_id, price, recorded_at)
     VALUES (?, ?, ?, ?)
   `).run(crypto.randomUUID(), company.id, nextPrice, recordedAt);
+  updateOwnershipStructure(db, company.id, Date.parse(recordedAt) || Date.now());
   return { companyId: company.id, nextPrice };
 }
 
@@ -1780,7 +2303,9 @@ export function runInstitutionalInvestorTick(state, options = {}) {
   `).all();
   if (!demandRows.length) return { ran: false, reason: 'no-demand' };
   const companies = db.prepare(`
-    SELECT id, name, sector, resource_key AS resourceKey, current_price AS currentPrice
+    SELECT id, name, sector, resource_key AS resourceKey,
+      current_price AS currentPrice, base_price AS basePrice,
+      bankruptcy_risk AS bankruptcyRisk, market_status AS marketStatus
     FROM market_companies
     WHERE id LIKE 'sector_holding_%'
       AND COALESCE(is_embargoed, 0) = 0
@@ -1788,11 +2313,39 @@ export function runInstitutionalInvestorTick(state, options = {}) {
       AND acquired_by_company_id IS NULL
   `).all();
   const companyMap = new Map(companies.map((company) => [`${company.sector}::${company.resourceKey}`, company]));
+  const recentPlayerDemand = new Map(db.prepare(`
+    SELECT company_id AS companyId, COALESCE(SUM(quantity), 0) AS quantity
+    FROM market_orders
+    WHERE created_at >= ?
+    GROUP BY company_id
+  `).all(new Date(now - (2 * 60 * 60 * 1000)).toISOString()).map((row) => [row.companyId, Number(row.quantity || 0)]));
   const investors = db.prepare(`
     SELECT id, name, strategy, risk_tolerance AS riskTolerance,
       corruption_affinity AS corruptionAffinity, credit_balance AS creditBalance
     FROM institutional_investors
   `).all();
+  const getInstHolding = db.prepare(`
+    SELECT shares, average_cost AS averageCost
+    FROM institutional_holdings
+    WHERE investor_id = ? AND company_id = ?
+  `);
+  const addInstHolding = db.prepare(`
+    INSERT INTO institutional_holdings (investor_id, company_id, shares, average_cost, updated_at)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(investor_id, company_id) DO UPDATE SET
+      average_cost = CASE
+        WHEN institutional_holdings.shares + excluded.shares <= 0 THEN excluded.average_cost
+        ELSE ((institutional_holdings.average_cost * institutional_holdings.shares) + (excluded.average_cost * excluded.shares))
+          / (institutional_holdings.shares + excluded.shares)
+      END,
+      shares = institutional_holdings.shares + excluded.shares,
+      updated_at = excluded.updated_at
+  `);
+  const reduceInstHolding = db.prepare(`
+    UPDATE institutional_holdings
+    SET shares = MAX(0, shares - ?), updated_at = ?
+    WHERE investor_id = ? AND company_id = ?
+  `);
   const insertTrade = db.prepare(`
     INSERT INTO institutional_trades (
       id, investor_id, company_id, sector_id, resource_type, action, quantity, price, reason,
@@ -1823,10 +2376,30 @@ export function runInstitutionalInvestorTick(state, options = {}) {
         .sort((left, right) => right.trendScore - left.trendScore);
       const pick = ranked[index % Math.max(1, ranked.length)];
       if (!pick) return;
-      const wantsToSell = pick.marketMultiplier < 0.92 && investor.strategy !== 'recovery';
-      const quantity = Math.max(1, Math.round((investor.riskTolerance * 18) + (pick.marketMultiplier * 8)));
+      const priceRatio = Number(pick.company.currentPrice || 0) / Math.max(1, Number(pick.company.basePrice || 1));
+      const retailDemand = Number(recentPlayerDemand.get(pick.company.id) || 0);
+      const distress = Number(pick.company.bankruptcyRisk || 0);
+      let strategyAction = pick.marketMultiplier > 1.12 ? 'front_run_policy' : 'sector_monopoly_building';
+      if (retailDemand >= 50 && priceRatio >= 1.08) strategyAction = 'sell_into_retail_hype';
+      else if (distress >= 0.72 || normalizeMarketStatus(pick.company.marketStatus) === 'insolvent') strategyAction = 'acquire_distressed_assets';
+      else if (pick.marketMultiplier < 0.9 || priceRatio < 0.9) strategyAction = 'buy_the_dip';
+      else if (Number(pick.importDependency || 0) > 0.5) strategyAction = 'liquidity_trap';
+      else if (Number(pick.exportStrength || 0) > 0.55) strategyAction = 'war_profiteering';
+      if (investor.strategy === 'hostile_takeover' && (distress >= 0.55 || priceRatio < 0.96)) strategyAction = 'hostile_takeover';
+      if (investor.strategy === 'embargo_profiteering' && Number(pick.importDependency || 0) > 0.45) strategyAction = 'embargo_profiteering';
+      const wantsToSell = strategyAction === 'sell_into_retail_hype';
+      let quantity = Math.max(1, Math.round((investor.riskTolerance * 35) + (Math.abs(pick.marketMultiplier - 1) * 120) + (retailDemand / 6)));
+      if (['hostile_takeover', 'acquire_distressed_assets'].includes(strategyAction)) quantity = Math.round(quantity * 2.8);
       const tradePrice = Number(pick.company.currentPrice || 0);
-      const value = tradePrice * quantity;
+      const instHolding = getInstHolding.get(investor.id, pick.company.id);
+      if (wantsToSell) {
+        quantity = Math.min(quantity, roundShares(instHolding?.shares));
+        if (quantity <= 0) return;
+      } else {
+        quantity = Math.min(quantity, getAvailableFreeFloatShares(db, pick.company.id));
+        if (quantity <= 0) return;
+      }
+      const value = round2(tradePrice * quantity);
       let nextBalance = Number(investor.creditBalance || 0);
       if (!wantsToSell && nextBalance < value) return;
       const corruptionOpportunityScore = calculateCorruptionOpportunity(
@@ -1835,6 +2408,11 @@ export function runInstitutionalInvestorTick(state, options = {}) {
         pick.resourceType
       ) * Number(investor.corruptionAffinity || 0.5);
       nextBalance = wantsToSell ? nextBalance + value : nextBalance - value;
+      if (wantsToSell) {
+        reduceInstHolding.run(quantity, recordedAt, investor.id, pick.company.id);
+      } else {
+        addInstHolding.run(investor.id, pick.company.id, quantity, tradePrice, recordedAt);
+      }
       updateInvestor.run(round2(nextBalance), recordedAt, investor.id);
       insertTrade.run(
         crypto.randomUUID(),
@@ -1849,6 +2427,19 @@ export function runInstitutionalInvestorTick(state, options = {}) {
         round2(corruptionOpportunityScore),
         recordedAt
       );
+      const ownership = updateOwnershipStructure(db, pick.company.id, now);
+      if (ownership?.controllingShareholder === investor.name) {
+        const controlPercent = ownership.rows.find((row) => row.name === investor.name)?.percent || 0;
+        if (controlPercent >= 51) {
+          insertMarketEvent(db, {
+            eventType: 'institutional_takeover',
+            title: 'Institutionelle Kontrollmehrheit',
+            description: `${investor.name} sichert sich Kontrollanteil an ${pick.company.name}.`,
+            impact: controlPercent >= 75 ? -0.02 : 0.01,
+            startedAt: recordedAt
+          });
+        }
+      }
       if (corruptionOpportunityScore >= 0.45) {
         insertCorruptionLog.run(
           crypto.randomUUID(),
@@ -1882,6 +2473,7 @@ export function runInstitutionalInvestorTick(state, options = {}) {
 }
 
 export function readMarketSnapshot(db, investorId = '', userId = '') {
+  const portfolio = investorId ? ensureRecentPortfolioSnapshot(db, investorId) : null;
   const companies = db.prepare(`
     SELECT id, symbol, name, faction, base_price AS basePrice,
       sector, sector_id AS sectorId, resource_key AS resourceKey, resource_refs_json AS resourceRefsJson,
@@ -1889,11 +2481,16 @@ export function readMarketSnapshot(db, investorId = '', userId = '') {
       debt_index AS debtIndex, confidence_index AS confidenceIndex,
       is_embargoed AS isEmbargoed, acquired_by_company_id AS acquiredByCompanyId,
       merged_name AS mergedName, current_price AS currentPrice,
-      previous_price AS previousPrice, updated_at AS updatedAt
+      previous_price AS previousPrice, total_shares AS totalShares,
+      free_float_shares AS freeFloatShares, locked_institutional_shares AS lockedInstitutionalShares,
+      market_cap AS marketCap, major_shareholders_json AS majorShareholdersJson,
+      controlling_shareholder AS controllingShareholder, ownership_updated_at AS ownershipUpdatedAt,
+      updated_at AS updatedAt
     FROM market_companies ORDER BY symbol
   `).all().map((company) => ({
     ...company,
     resourceRefs: parseResourceRefs(company),
+    majorShareholders: safeJsonParse(company.majorShareholdersJson, []),
     marketStatusLabel: displayMarketStatus(company.marketStatus),
     isEmbargoed: Boolean(company.isEmbargoed)
   }));
@@ -1936,11 +2533,13 @@ export function readMarketSnapshot(db, investorId = '', userId = '') {
   const investor = investorId ? getOrCreateMarketInvestor(db, investorId, userId) : null;
   const purchaseOrders = investorId ? db.prepare(`
     SELECT id, company_id AS companyId, quantity, unit_price AS unitPrice,
-      total_value AS totalValue, created_at AS createdAt
+      total_value AS totalValue, remaining_quantity AS remainingQuantity,
+      realized_profit AS realizedProfit, closed_at AS closedAt, created_at AS createdAt
     FROM market_orders
     WHERE investor_id = ?
     ORDER BY created_at ASC
   `).all(investorId) : [];
+  const portfolioHistory = investorId ? readPortfolioHistory(db, investorId, 'sixMonths') : [];
   const leaderboard = db.prepare(`
     SELECT i.alias,
       ROUND(i.balance + COALESCE(SUM(h.shares * c.current_price), 0), 2) AS portfolioValue,
@@ -1984,6 +2583,19 @@ export function readMarketSnapshot(db, investorId = '', userId = '') {
     ORDER BY t.created_at DESC
     LIMIT 20
   `).all();
+  const institutionalInvestors = db.prepare(`
+    SELECT i.id, i.name, i.strategy, i.risk_tolerance AS riskTolerance,
+      i.corruption_affinity AS corruptionAffinity, i.credit_balance AS creditBalance,
+      COALESCE(SUM(h.shares), 0) AS totalShares,
+      ROUND(COALESCE(SUM(h.shares * c.current_price), 0), 2) AS holdingsValue,
+      ROUND(i.credit_balance + COALESCE(SUM(h.shares * c.current_price), 0), 2) AS totalValue,
+      i.updated_at AS updatedAt
+    FROM institutional_investors i
+    LEFT JOIN institutional_holdings h ON h.investor_id = i.id
+    LEFT JOIN market_companies c ON c.id = h.company_id
+    GROUP BY i.id
+    ORDER BY totalValue DESC, i.name COLLATE NOCASE
+  `).all();
   const factionAccounts = Object.fromEntries(db.prepare(`
     SELECT faction, credits, updated_at AS updatedAt
     FROM faction_accounts ORDER BY faction
@@ -1995,6 +2607,8 @@ export function readMarketSnapshot(db, investorId = '', userId = '') {
     topLastHour,
     holdings,
     purchaseOrders,
+    portfolio,
+    portfolioHistory,
     investor,
     leaderboard,
     events,
@@ -2002,6 +2616,7 @@ export function readMarketSnapshot(db, investorId = '', userId = '') {
     factionAccounts,
     sectorDemand,
     intelligenceReports,
+    institutionalInvestors,
     institutionalTrades,
     acp
   };
@@ -2213,7 +2828,11 @@ function getSectorHoldings(db, sectorId, economy) {
       market_status AS marketStatus, bankruptcy_risk AS bankruptcyRisk,
       debt_index AS debtIndex, confidence_index AS confidenceIndex,
       is_embargoed AS isEmbargoed, acquired_by_company_id AS acquiredByCompanyId,
-      merged_name AS mergedName, updated_at AS updatedAt
+      merged_name AS mergedName, total_shares AS totalShares,
+      free_float_shares AS freeFloatShares, locked_institutional_shares AS lockedInstitutionalShares,
+      market_cap AS marketCap, major_shareholders_json AS majorShareholdersJson,
+      controlling_shareholder AS controllingShareholder, ownership_updated_at AS ownershipUpdatedAt,
+      updated_at AS updatedAt
     FROM market_companies
     WHERE sector_id = ? AND id LIKE 'sector_holding_%'
     ORDER BY name COLLATE NOCASE
@@ -2246,6 +2865,12 @@ function getSectorHoldings(db, sectorId, economy) {
       dailyChangePercent: previous > 0 ? round2(((current - previous) / previous) * 100) : 0,
       economyState: economy?.economyState || 'Normal',
       bankruptcyRisk: round2(Number(company.bankruptcyRisk || 0)),
+      totalShares: roundShares(company.totalShares),
+      freeFloatShares: roundShares(company.freeFloatShares),
+      lockedInstitutionalShares: roundShares(company.lockedInstitutionalShares),
+      marketCap: round2(company.marketCap),
+      majorShareholders: safeJsonParse(company.majorShareholdersJson, []),
+      controllingShareholder: company.controllingShareholder || '',
       marketStatus,
       marketStatusLabel: displayMarketStatus(marketStatus),
       isEmbargoed: marketStatus === 'embargo',
@@ -2732,6 +3357,13 @@ export function purchaseMarketDemand(db, { investorId, userId, consumerKey, comp
     if (investorId) {
       const investor = getOrCreateMarketInvestor(db, investorId, userId);
       const totalCost = Math.round(Number(company.current_price || 0) * effectiveQuantity * 100) / 100;
+      const availableShares = getAvailableFreeFloatShares(db, companyId);
+      if (availableShares < effectiveQuantity) {
+        const error = new Error('Nicht genügend frei handelbare Aktien verfügbar.');
+        error.status = 409;
+        error.availableShares = availableShares;
+        throw error;
+      }
       if (Number(investor.balance || 0) < totalCost) {
         const error = new Error('Nicht genug Credits im persönlichen Portfolio.');
         error.status = 409;
@@ -2748,9 +3380,11 @@ export function purchaseMarketDemand(db, { investorId, userId, consumerKey, comp
         WHERE id = ?
       `).run(totalCost, purchasedAt, investorId);
       db.prepare(`
-        INSERT INTO market_orders (id, investor_id, company_id, quantity, unit_price, total_value, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `).run(crypto.randomUUID(), investorId, companyId, effectiveQuantity, company.current_price, totalCost, purchasedAt);
+        INSERT INTO market_orders (
+          id, investor_id, company_id, quantity, unit_price, total_value,
+          remaining_quantity, realized_profit, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)
+      `).run(crypto.randomUUID(), investorId, companyId, effectiveQuantity, company.current_price, totalCost, effectiveQuantity, purchasedAt);
     } else {
       purchaseType = 'consumer';
       const activity = db.prepare(`
@@ -2782,12 +3416,15 @@ export function purchaseMarketDemand(db, { investorId, userId, consumerKey, comp
       INSERT INTO market_history (id, company_id, price, recorded_at)
       VALUES (?, ?, ?, ?)
     `).run(crypto.randomUUID(), companyId, nextPrice, purchasedAt);
+    updateOwnershipStructure(db, companyId, now);
+    if (investorId) writePortfolioSnapshot(db, investorId, purchasedAt);
 
     return {
       companyId,
       price: company.current_price,
       quantity: effectiveQuantity,
       totalCost: investorId ? Math.round(company.current_price * effectiveQuantity * 100) / 100 : 0,
+      availableShares: investorId ? getAvailableFreeFloatShares(db, companyId) : null,
       purchasedAt,
       purchaseType,
       nextPurchaseAt
@@ -2829,6 +3466,65 @@ export function sellMarketShare(db, { investorId, companyId, quantity = 1 }, now
     }
 
     const soldAt = new Date(now).toISOString();
+    const grossProceeds = round2(Number(company.current_price || 0) * requestedQuantity);
+    const taxRate = 0.02;
+    const taxAmount = round2(grossProceeds * taxRate);
+    const netProceeds = round2(grossProceeds - taxAmount);
+    let remainingToClose = requestedQuantity;
+    let soldCostBasis = 0;
+    const openOrders = db.prepare(`
+      SELECT id, remaining_quantity AS remainingQuantity, unit_price AS unitPrice,
+        realized_profit AS realizedProfit
+      FROM market_orders
+      WHERE investor_id = ? AND company_id = ? AND COALESCE(remaining_quantity, quantity) > 0
+      ORDER BY created_at ASC
+    `).all(investorId, companyId);
+    const updateOrderLot = db.prepare(`
+      UPDATE market_orders
+      SET remaining_quantity = ?, realized_profit = realized_profit + ?, closed_at = ?
+      WHERE id = ?
+    `);
+    openOrders.forEach((order) => {
+      if (remainingToClose <= 0) return;
+      const lotQuantity = roundShares(order.remainingQuantity);
+      const closedQuantity = Math.min(lotQuantity, remainingToClose);
+      const lotCost = round2(closedQuantity * Number(order.unitPrice || 0));
+      const lotGross = round2(closedQuantity * Number(company.current_price || 0));
+      const lotTax = round2(taxAmount * (closedQuantity / requestedQuantity));
+      const lotRealizedProfit = round2((lotGross - lotTax) - lotCost);
+      const nextRemaining = lotQuantity - closedQuantity;
+      soldCostBasis += lotCost;
+      remainingToClose -= closedQuantity;
+      updateOrderLot.run(
+        nextRemaining,
+        lotRealizedProfit,
+        nextRemaining <= 0 ? soldAt : null,
+        order.id
+      );
+    });
+    if (remainingToClose > 0) {
+      const fallbackCost = round2(remainingToClose * Number(company.current_price || 0));
+      const fallbackTax = round2(taxAmount * (remainingToClose / requestedQuantity));
+      const fallbackRealized = round2((round2(remainingToClose * Number(company.current_price || 0)) - fallbackTax) - fallbackCost);
+      soldCostBasis += fallbackCost;
+      db.prepare(`
+        INSERT INTO market_orders (
+          id, investor_id, company_id, quantity, unit_price, total_value,
+          remaining_quantity, realized_profit, closed_at, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?)
+      `).run(
+        crypto.randomUUID(),
+        investorId,
+        companyId,
+        remainingToClose,
+        Number(company.current_price || 0),
+        fallbackCost,
+        fallbackRealized,
+        soldAt,
+        soldAt
+      );
+    }
+    const realizedProfit = round2(netProceeds - soldCostBasis);
     if (holding.shares === requestedQuantity) {
       db.prepare(`
         DELETE FROM market_holdings
@@ -2841,12 +3537,34 @@ export function sellMarketShare(db, { investorId, companyId, quantity = 1 }, now
         WHERE investor_id = ? AND company_id = ?
       `).run(requestedQuantity, investorId, companyId);
     }
-    const totalCredit = Math.round(Number(company.current_price || 0) * requestedQuantity * 100) / 100;
     db.prepare(`
       UPDATE market_investors
       SET balance = balance + ?
       WHERE id = ?
-    `).run(totalCredit, investorId);
+    `).run(netProceeds, investorId);
+    db.prepare(`
+      INSERT INTO market_taxes (
+        id, investor_id, company_id, quantity, gross_proceeds, tax_amount,
+        net_proceeds, tax_rate, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      crypto.randomUUID(),
+      investorId,
+      companyId,
+      requestedQuantity,
+      grossProceeds,
+      taxAmount,
+      netProceeds,
+      taxRate,
+      soldAt
+    );
+    db.prepare(`
+      INSERT INTO faction_accounts (faction, credits, updated_at)
+      VALUES ('GAR', ?, ?)
+      ON CONFLICT(faction) DO UPDATE SET
+        credits = credits + excluded.credits,
+        updated_at = excluded.updated_at
+    `).run(taxAmount, soldAt);
 
     const priceImpact = Math.max(0.75, 1 - (0.0125 * Math.sqrt(requestedQuantity)));
     const nextPrice = Math.max(25, Math.round(company.current_price * priceImpact * 100) / 100);
@@ -2859,13 +3577,21 @@ export function sellMarketShare(db, { investorId, companyId, quantity = 1 }, now
       INSERT INTO market_history (id, company_id, price, recorded_at)
       VALUES (?, ?, ?, ?)
     `).run(crypto.randomUUID(), companyId, nextPrice, soldAt);
+    updateOwnershipStructure(db, companyId, now);
+    writePortfolioSnapshot(db, investorId, soldAt);
 
     return {
       companyId,
       price: company.current_price,
       quantity: requestedQuantity,
       soldAt,
-      credited: totalCredit
+      grossProceeds,
+      taxRate,
+      taxAmount,
+      netProceeds,
+      credited: netProceeds,
+      costBasis: round2(soldCostBasis),
+      realizedProfit
     };
   })();
 }
@@ -2925,6 +3651,7 @@ export function runMarketTick(db, inflationRate = 0, now = Date.now(), state = n
       const nextPrice = Math.max(25, Math.round(company.current_price * (1 + pullToBase + noise + eventImpact + inflationImpact + demandImpact) * 100) / 100);
       updateCompany.run(nextPrice, recordedAt, company.id);
       insertHistory.run(crypto.randomUUID(), company.id, nextPrice, recordedAt);
+      updateOwnershipStructure(db, company.id, now);
     });
     const latestEvent = db.prepare('SELECT started_at FROM market_events ORDER BY started_at DESC LIMIT 1').get();
     if (!latestEvent || now - Date.parse(latestEvent.started_at) >= 6 * 60 * 60 * 1000) {
@@ -2941,5 +3668,7 @@ export function runMarketTick(db, inflationRate = 0, now = Date.now(), state = n
       `).run(crypto.randomUUID(), eventType, title, description, impact, recordedAt, new Date(now + 3 * 60 * 60 * 1000).toISOString());
     }
   })();
+  db.prepare('SELECT id FROM market_investors WHERE portfolio_enabled = 1').all()
+    .forEach((investor) => writePortfolioSnapshot(db, investor.id, recordedAt));
   return true;
 }

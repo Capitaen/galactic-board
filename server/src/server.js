@@ -21,10 +21,13 @@ import {
   listRadioCommandPermissions,
   listUsers,
   purchaseMarketDemand,
+  readCompanyOwnership,
   readCampaignState,
   readEconomySector,
   readEconomySectorHoldings,
   readMarketSnapshot,
+  readPortfolio,
+  readPortfolioHistory,
   runMarketTick,
   sellMarketShare,
   setSectorEmbargo,
@@ -246,8 +249,8 @@ function getHiddenPlanetFallbackOwner(planet) {
 
 function findIndexHtml() {
   const candidates = [
-    path.join(projectRoot, 'index.html'),
-    path.join(projectRoot, 'public', 'index.html')
+    path.join(projectRoot, 'public', 'index.html'),
+    path.join(projectRoot, 'index.html')
   ];
 
   for (const filePath of candidates) {
@@ -564,9 +567,6 @@ function applyServerProductionTicks(previousState, now = Date.now()) {
 function applyOwnerFrontlineImagePass(previousState) {
   const nextState = JSON.parse(JSON.stringify(previousState || {}));
   nextState.meta = nextState.meta || {};
-  if (nextState.meta.ownerMapPassVersion === OWNER_FRONTLINE_PASS_VERSION) {
-    return { changed: false, state: nextState };
-  }
   const planets = Array.isArray(nextState.planets) ? nextState.planets : [];
   let changed = false;
   for (const planet of planets) {
@@ -575,12 +575,6 @@ function applyOwnerFrontlineImagePass(previousState) {
     const isListed = Boolean(referenceMatch?.owner);
     if (Boolean(planet.referenceListed) !== isListed) {
       planet.referenceListed = isListed;
-      changed = true;
-    }
-    const desiredOwner = referenceMatch?.owner || getHiddenPlanetFallbackOwner(planet);
-    if (!desiredOwner) continue;
-    if (planet.owner !== desiredOwner) {
-      planet.owner = desiredOwner;
       changed = true;
     }
   }
@@ -1091,6 +1085,36 @@ app.get('/api/economy/sectors/:sectorId/holdings', (req, res) => {
   }
 });
 
+app.get('/api/economy/portfolio', requireAuth, (req, res) => {
+  try {
+    if (!hasPersonalMarketPortfolio(req.user)) {
+      return res.status(403).json({ error: 'Diese Rolle besitzt kein persönliches Portfolio.' });
+    }
+    res.json({ portfolio: readPortfolio(db, `user_${req.user.id}`, req.user.id) });
+  } catch (error) {
+    res.status(error.status || 500).json({ error: error.message || 'Portfolio konnte nicht geladen werden.' });
+  }
+});
+
+app.get('/api/economy/portfolio/history', requireAuth, (req, res) => {
+  try {
+    if (!hasPersonalMarketPortfolio(req.user)) {
+      return res.status(403).json({ error: 'Diese Rolle besitzt kein persönliches Portfolio.' });
+    }
+    res.json({ history: readPortfolioHistory(db, `user_${req.user.id}`, String(req.query?.range || 'today')) });
+  } catch (error) {
+    res.status(error.status || 500).json({ error: error.message || 'Portfolio-Historie konnte nicht geladen werden.' });
+  }
+});
+
+app.get('/api/economy/companies/:companyId/ownership', (req, res) => {
+  try {
+    res.json({ ownership: readCompanyOwnership(db, String(req.params.companyId || '')) });
+  } catch (error) {
+    res.status(error.status || 500).json({ error: error.message || 'Anteilseigner konnten nicht geladen werden.' });
+  }
+});
+
 app.post('/api/economy/sectors/:sectorId/buy-resource', requireAuth, requireSectorCivilianBuyer, (req, res) => {
   try {
     const { state, revision } = readCampaignState(db);
@@ -1162,6 +1186,35 @@ app.post('/api/economy/market/buy', (req, res) => {
   }
 });
 
+app.post('/api/economy/companies/:companyId/buy', (req, res) => {
+  const session = getSession(req);
+  const portfolioEnabled = hasPersonalMarketPortfolio(session);
+  if (session && !portfolioEnabled) {
+    return res.status(403).json({ error: 'Diese Admin-Rolle besitzt kein persönliches Portfolio.' });
+  }
+  const investorId = portfolioEnabled ? `user_${session.id}` : '';
+  const consumerKey = portfolioEnabled ? '' : getMarketConsumerKey(req);
+  try {
+    const purchase = purchaseMarketDemand(db, {
+      investorId,
+      userId: session?.id || '',
+      consumerKey,
+      companyId: String(req.params.companyId || ''),
+      quantity: portfolioEnabled ? Number(req.body?.quantity || 1) : 1
+    });
+    res.json({
+      ok: true,
+      purchase,
+      market: readMarketSnapshot(db, investorId, session?.id || '')
+    });
+  } catch (error) {
+    res.status(error.status || 500).json({
+      error: error.message || 'Aktienkauf fehlgeschlagen.',
+      nextPurchaseAt: error.nextPurchaseAt || null
+    });
+  }
+});
+
 app.post('/api/economy/market/sell', requireAuth, (req, res) => {
   const session = req.user;
   if (!hasPersonalMarketPortfolio(session)) {
@@ -1169,10 +1222,67 @@ app.post('/api/economy/market/sell', requireAuth, (req, res) => {
   }
   const investorId = `user_${session.id}`;
   try {
+    const { state, revision } = readCampaignState(db);
     const sale = sellMarketShare(db, {
       investorId,
       companyId: String(req.body?.companyId || ''),
       quantity: Number(req.body?.quantity || 1)
+    });
+    const nextState = JSON.parse(JSON.stringify(state || {}));
+    nextState.resources = nextState.resources || {};
+    nextState.resources.GAR = nextState.resources.GAR || {};
+    nextState.resources.GAR.credits = Number(nextState.resources.GAR.credits || 0) + Number(sale.taxAmount || 0);
+    const updatedAt = writeCampaignState(db, nextState, revision + 1);
+    broadcastCampaignChange({
+      state: nextState,
+      revision: revision + 1,
+      updatedAt,
+      changedKeys: ['resources']
+    });
+    const market = readMarketSnapshot(db, investorId, session.id);
+    market.factionAccounts = {
+      ...market.factionAccounts,
+      GAR: {
+        faction: 'GAR',
+        credits: Number(nextState.resources?.GAR?.credits || 0),
+        updatedAt
+      }
+    };
+    res.json({
+      ok: true,
+      sale,
+      market
+    });
+  } catch (error) {
+    res.status(error.status || 500).json({
+      error: error.message || 'Aktienverkauf fehlgeschlagen.'
+    });
+  }
+});
+
+app.post('/api/economy/companies/:companyId/sell', requireAuth, (req, res) => {
+  const session = req.user;
+  if (!hasPersonalMarketPortfolio(session)) {
+    return res.status(403).json({ error: 'Diese Rolle besitzt kein persönliches Portfolio.' });
+  }
+  const investorId = `user_${session.id}`;
+  try {
+    const { state, revision } = readCampaignState(db);
+    const sale = sellMarketShare(db, {
+      investorId,
+      companyId: String(req.params.companyId || ''),
+      quantity: Number(req.body?.quantity || 1)
+    });
+    const nextState = JSON.parse(JSON.stringify(state || {}));
+    nextState.resources = nextState.resources || {};
+    nextState.resources.GAR = nextState.resources.GAR || {};
+    nextState.resources.GAR.credits = Number(nextState.resources.GAR.credits || 0) + Number(sale.taxAmount || 0);
+    const updatedAt = writeCampaignState(db, nextState, revision + 1);
+    broadcastCampaignChange({
+      state: nextState,
+      revision: revision + 1,
+      updatedAt,
+      changedKeys: ['resources']
     });
     res.json({
       ok: true,
