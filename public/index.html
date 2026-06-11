@@ -7,7 +7,7 @@
 <style>
 :root {
   --bg:#02050d; --panel:#111821; --panel2:#172231; --text:#e9f8ff; --muted:#89a7bb;
-  --gar:#3c8dff; --kus:#ff5b57; --hutt:#ffb347; --neutral:#f0d44b; --line:#ffffff;
+  --gar:#3c8dff; --kus:#ff5b57; --hutt:#1f6b48; --neutral:#8e98aa; --line:#ffffff;
   --hud:#6be7ff; --hud-soft:rgba(107,231,255,.18); --hud-glow:rgba(74,216,255,.35); --hud-edge:rgba(114,241,255,.48);
   --hud-purple:rgba(121,105,255,.22);
   --steel:#0b1119; --steel-2:#131c28; --steel-3:#1a2533; --shadow:rgba(0,0,0,.58);
@@ -174,7 +174,7 @@ body {
 .tactical-grid-path { fill:none; stroke:rgba(190,212,236,.42); stroke-width:1.2; }
 .planet-label.is-hidden-by-zoom { display:none !important; }
 .planet { position:absolute; width:13px; height:13px; border:1px solid white; border-radius:50%; transform:translate(-50%,-50%); cursor:pointer; pointer-events:auto; box-shadow:0 0 8px rgba(255,255,255,.5); }
-.planet.priority-world { width:18px; height:18px; background:#2cd66b !important; border-width:2px; box-shadow:0 0 12px rgba(44,214,107,.85); z-index:8; }
+.planet.priority-world { width:18px; height:18px; background:#f0d44b !important; border-width:2px; box-shadow:0 0 12px rgba(240,212,75,.85); z-index:8; }
 .planet.core-world { transform:translate(-50%,-50%) scale(1.1); }
 .planet.GAR { background:var(--gar); }
 .planet.KUS { background:var(--kus); }
@@ -188,9 +188,9 @@ body {
 .planet.active-battle::after { content:""; position:absolute; left:50%; top:50%; width:28px; height:28px; border-radius:50%; border:2px solid rgba(255,255,255,.95); transform:translate(-50%,-50%); box-shadow:0 0 12px rgba(255,255,255,.3); }
 .planet.active-battle.battle-ring-gar::after { border-color:rgba(31,124,255,.95); box-shadow:0 0 14px rgba(31,124,255,.4); }
 .planet.active-battle.battle-ring-kus::after { border-color:rgba(208,54,50,.95); box-shadow:0 0 14px rgba(208,54,50,.4); }
-.planet.active-battle.battle-ring-neutral::after { border-color:rgba(240,212,75,.95); box-shadow:0 0 14px rgba(240,212,75,.34); }
+.planet.active-battle.battle-ring-neutral::after { border-color:rgba(142,152,170,.95); box-shadow:0 0 14px rgba(142,152,170,.34); }
 .planet-label { position:absolute; transform:translate(6px,-10px); font-size:11px; color:#dfe7ff; text-shadow:0 1px 3px #000, 0 0 2px #000; pointer-events:none; white-space:nowrap; display:none; }
-.planet-label.priority-world { color:#b8ffc8; font-weight:700; }
+.planet-label.priority-world { color:#fff2a0; font-weight:700; }
 .show-labels .planet-label { display:block; }
 .planet-label.hover-visible { display:block !important; }
 .planet-label.search-highlight { display:block !important; color:#fff6bf; text-shadow:0 0 10px rgba(255,230,110,.75), 0 1px 3px #000; font-weight:700; }
@@ -214,6 +214,8 @@ body {
 .lane.blue { stroke:var(--gar); }
 .lane.red { stroke:var(--kus); }
 .lane.purple { stroke:#9c43ff; opacity:.72; }
+.lane.orange { stroke:var(--hutt); }
+.lane.gray { stroke:var(--neutral); }
 .lane.route-hovered { stroke-width:8 !important; opacity:1 !important; filter:drop-shadow(0 0 10px rgba(255,255,255,.55)); }
 .lane.route-selected { stroke-width:8 !important; opacity:1 !important; filter:drop-shadow(0 0 8px rgba(255,255,255,.45)); }
 .route-hitbox { pointer-events:stroke; cursor:pointer; }
@@ -297,7 +299,7 @@ body {
     linear-gradient(0deg, rgba(255,255,255,.02), transparent 26%);
   opacity:.7;
 }
-#layersPanel { top:75px; left:75px; width:290px; display:none; padding:10px; }
+#layersPanel { top:78px; left:58px; width:290px; display:none; padding:10px; z-index:58; }
 .layer-row { display:flex; align-items:center; gap:11px; padding:10px 8px; border-bottom:1px solid rgba(255,255,255,.06); color:#e8edf7; }
 .layer-row input { transform:scale(1.1); }
 .layer-row .handle { color:#7a8291; font-size:19px; }
@@ -305,10 +307,11 @@ body {
 #infoPanel { top:85px; right:20px; width:360px; max-height:calc(100vh - 120px); overflow:auto; display:none; padding:16px; }
 #legendPanel {
   left:22px;
-  bottom:118px;
-  width:265px;
+  bottom:98px;
+  width:228px;
   display:none;
-  padding:14px;
+  padding:11px;
+  z-index:52;
 }
 #legendPanel.active { display:block; }
 .hud-legend-title {
@@ -320,16 +323,17 @@ body {
 }
 .hud-legend-list {
   display:grid;
-  gap:8px;
+  gap:6px;
 }
 .hud-legend-item {
   display:flex;
   align-items:center;
-  gap:10px;
-  padding:8px 10px;
+  gap:9px;
+  padding:7px 9px;
   border-radius:12px;
   background:rgba(255,255,255,.03);
   border:1px solid rgba(109,234,255,.08);
+  font-size:13px;
 }
 .hud-legend-dot {
   width:13px;
@@ -342,7 +346,7 @@ body {
 .hud-legend-dot.KUS { background:var(--kus); }
 .hud-legend-dot.HUTT { background:var(--hutt); }
 .hud-legend-dot.NEUTRAL { background:var(--neutral); }
-.hud-legend-dot.PRIORITY { background:#2cd66b; }
+.hud-legend-dot.PRIORITY { background:#f0d44b; }
 h2,h3 { margin:0 0 12px; }
 small,.muted { color:var(--muted); }
 .form-row { margin:10px 0; display:flex; flex-direction:column; gap:5px; }
@@ -390,18 +394,18 @@ textarea { min-height:82px; resize:vertical; }
 .danger { background:#67201e; }
 #topbar {
   position:absolute;
-  left:82px;
-  top:22px;
-  z-index:30;
+  left:76px;
+  top:18px;
+  z-index:90;
   display:flex;
   align-items:center;
-  gap:10px;
+  gap:8px;
   flex-wrap:wrap;
-  overflow:hidden;
+  overflow:visible;
   background:
     linear-gradient(135deg, rgba(16,25,38,.94), rgba(8,13,22,.92));
   border:1px solid rgba(110,236,255,.18);
-  padding:12px 14px;
+  padding:10px 12px;
   border-radius:18px;
   box-shadow:
     inset 0 0 0 1px rgba(255,255,255,.03),
@@ -424,9 +428,37 @@ textarea { min-height:82px; resize:vertical; }
   text-transform:uppercase;
   color:#bff6ff;
 }
-#roleSelect { width:190px; padding:6px; }
-.topbar-auth { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-.topbar-auth input { width:160px; padding:7px 9px; }
+#roleSelect { display:none; width:190px; padding:6px; }
+.topbar-session {
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  min-height:40px;
+  padding:8px 12px;
+  border-radius:14px;
+  border:1px solid rgba(110,236,255,.16);
+  background:rgba(77,204,255,.05);
+  color:#d8f6ff;
+  font-size:12px;
+}
+.topbar-session strong {
+  min-height:auto !important;
+  padding:0 !important;
+  border:0 !important;
+  background:none !important;
+  box-shadow:none !important;
+  font-size:12px !important;
+  letter-spacing:.08em !important;
+}
+.topbar-session-name {
+  max-width:180px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.topbar-logout {
+  min-width:92px;
+}
 .role-faction-badge {
   display:inline-flex;
   align-items:center;
@@ -544,8 +576,8 @@ textarea { min-height:82px; resize:vertical; }
   box-shadow:0 0 20px rgba(59,141,255,.24);
 }
 .planet-card-war-fill.KUS { background:linear-gradient(90deg, rgba(255,91,87,.92), rgba(255,170,120,.76)); box-shadow:0 0 20px rgba(255,91,87,.22); }
-.planet-card-war-fill.HUTT { background:linear-gradient(90deg, rgba(255,179,71,.94), rgba(255,220,120,.8)); box-shadow:0 0 20px rgba(255,179,71,.22); }
-.planet-card-war-fill.NEUTRAL { background:linear-gradient(90deg, rgba(240,212,75,.94), rgba(255,239,160,.82)); box-shadow:0 0 20px rgba(240,212,75,.2); }
+.planet-card-war-fill.HUTT { background:linear-gradient(90deg, rgba(31,107,72,.94), rgba(82,180,129,.8)); box-shadow:0 0 20px rgba(31,107,72,.22); }
+.planet-card-war-fill.NEUTRAL { background:linear-gradient(90deg, rgba(142,152,170,.94), rgba(201,209,220,.82)); box-shadow:0 0 20px rgba(142,152,170,.2); }
 .planet-card-war-caption {
   margin:10px 0 0;
   text-align:center;
@@ -618,9 +650,9 @@ textarea { min-height:82px; resize:vertical; }
 .planet-card-admin-toggle {
   margin-top:2px;
 }
-.search-wrap { position:relative; width:260px; }
+.search-wrap { position:relative; width:260px; z-index:120; }
 #planetSearch { width:100%; padding:8px 10px; }
-#planetSearchResults { position:absolute; top:calc(100% + 6px); left:0; right:0; z-index:60; max-height:320px; overflow:auto; background:rgba(18,21,27,.98); border:1px solid #3c4350; border-radius:10px; box-shadow:0 18px 45px rgba(0,0,0,.45); }
+#planetSearchResults { position:absolute; top:calc(100% + 6px); left:0; right:0; z-index:140; max-height:320px; overflow:auto; background:rgba(18,21,27,.98); border:1px solid #3c4350; border-radius:10px; box-shadow:0 18px 45px rgba(0,0,0,.45); }
 .search-result { padding:10px 12px; border-bottom:1px solid rgba(255,255,255,.06); cursor:pointer; }
 .search-result:last-child { border-bottom:0; }
 .search-result strong { display:block; font-size:14px; }
@@ -636,8 +668,42 @@ textarea { min-height:82px; resize:vertical; }
 .badge { display:inline-block; padding:3px 8px; border-radius:999px; background:#303642; margin-right:5px; font-size:12px; }
 .badge.GAR { background:rgba(31,124,255,.25); color:#aecdff; }
 .badge.KUS { background:rgba(208,54,50,.25); color:#ffc2c0; }
-.badge.HUTT { background:rgba(243,154,45,.25); color:#ffd3a0; }
-.badge.NEUTRAL { background:rgba(240,212,75,.25); color:#fff2a0; }
+.badge.HUTT { background:rgba(31,107,72,.25); color:#baf0d0; }
+.badge.NEUTRAL { background:rgba(142,152,170,.25); color:#eef3ff; }
+.login-modal {
+  position:absolute;
+  inset:0;
+  z-index:180;
+  display:none;
+  align-items:center;
+  justify-content:center;
+  padding:24px;
+  background:rgba(2,6,12,.7);
+  backdrop-filter:blur(10px);
+}
+.login-modal.active {
+  display:flex;
+}
+.login-modal-card {
+  width:min(460px, calc(100vw - 32px));
+  padding:22px;
+  border-radius:22px;
+  border:1px solid rgba(110,236,255,.22);
+  background:linear-gradient(180deg, rgba(16,25,38,.98), rgba(8,13,22,.98));
+  box-shadow:0 24px 58px rgba(0,0,0,.52), inset 0 0 26px rgba(88,214,255,.04);
+}
+.login-modal-card h2 { margin:0 0 10px; }
+.login-modal-card p { margin:0 0 18px; color:var(--muted); line-height:1.5; }
+.login-modal-fields {
+  display:grid;
+  gap:10px;
+}
+.login-modal-actions {
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+  margin-top:16px;
+}
 #statusbar {
   position:absolute;
   left:18px;
@@ -673,6 +739,33 @@ textarea { min-height:82px; resize:vertical; }
     inset 0 0 0 1px rgba(255,255,255,.02),
     inset 0 0 24px rgba(64,186,255,.05),
     0 18px 36px rgba(0,0,0,.36);
+  transition:transform .35s ease, opacity .25s ease, bottom .35s ease;
+}
+#mainNavToggle {
+  position:absolute;
+  left:50%;
+  bottom:128px;
+  z-index:46;
+  width:54px;
+  height:38px;
+  transform:translateX(-50%);
+  border-radius:16px;
+  border:1px solid rgba(108,233,255,.18);
+  background:linear-gradient(180deg, rgba(17,28,42,.95), rgba(10,15,23,.96));
+  color:#c8f8ff;
+  font-size:22px;
+  cursor:pointer;
+  box-shadow:0 14px 28px rgba(0,0,0,.34);
+  transition:bottom .3s ease, transform .3s ease, opacity .25s ease;
+}
+body.nav-collapsed .main-nav {
+  transform:translate(-50%, 145%);
+  opacity:0;
+  pointer-events:none;
+}
+body.nav-collapsed #mainNavToggle {
+  bottom:54px;
+  transform:translateX(-50%) rotate(180deg);
 }
 .main-tab-btn {
   position:relative;
@@ -910,24 +1003,17 @@ a { color:#8bc7ff; }
     width:100%;
     font-size:15px;
   }
-  #roleSelect {
-    flex:1 1 180px;
-    width:auto;
-    min-width:148px;
-  }
-  .topbar-auth {
-    display:grid;
-    grid-template-columns:1fr 1fr auto;
+  .topbar-session {
     width:100%;
+    justify-content:space-between;
   }
-  .topbar-auth input { width:100%; min-width:0; }
   .search-wrap {
     flex:1 1 100%;
     width:100%;
   }
   #viewModeBtn,
   #saveBtn,
-  #loginBtn {
+  #logoutBtn {
     min-height:40px;
   }
   #planetSearchResults,
@@ -951,7 +1037,7 @@ a { color:#8bc7ff; }
   }
   #layersPanel {
     left:12px;
-    top:176px;
+    top:162px;
     width:min(320px, calc(100vw - 24px));
     max-height:calc(100vh - 290px);
     overflow:auto;
@@ -967,7 +1053,7 @@ a { color:#8bc7ff; }
   #legendPanel {
     left:12px;
     bottom:max(108px, calc(env(safe-area-inset-bottom) + 90px));
-    width:min(300px, calc(100vw - 24px));
+    width:min(220px, calc(100vw - 24px));
   }
   #workspacePanel {
     left:12px;
@@ -1000,6 +1086,9 @@ a { color:#8bc7ff; }
     bottom:max(10px, env(safe-area-inset-bottom));
     gap:8px;
   }
+  #mainNavToggle {
+    bottom:max(86px, calc(env(safe-area-inset-bottom) + 68px));
+  }
   .main-tab-btn {
     flex:1 1 0;
     min-width:0;
@@ -1014,14 +1103,10 @@ a { color:#8bc7ff; }
   #topbar {
     right:120px;
   }
-  .topbar-auth {
-    grid-template-columns:repeat(3, minmax(0, 1fr));
-  }
   .search-wrap {
     flex:1 1 220px;
   }
   #layersPanel,
-  #legendPanel,
   #workspacePanel {
     top:124px;
   }
@@ -1046,6 +1131,10 @@ a { color:#8bc7ff; }
   #infoPanel,
   #workspacePanel,
   .main-nav {
+    visibility:hidden;
+    pointer-events:none;
+  }
+  #mainNavToggle {
     visibility:hidden;
     pointer-events:none;
   }
@@ -1088,7 +1177,6 @@ a { color:#8bc7ff; }
 
   <div id="topbar">
     <strong>Galactic Campaign Board</strong>
-    <span class="muted">Rolle:</span>
     <select id="roleSelect">
       <option>Admin</option>
       <option>Republic Navy Admin</option>
@@ -1105,20 +1193,20 @@ a { color:#8bc7ff; }
       <option>Huttenkartell</option>
       <option selected>Viewer</option>
     </select>
-    <div class="topbar-auth">
-      <input id="loginUser" type="text" placeholder="Benutzername" autocomplete="username">
-      <input id="loginPassword" type="password" placeholder="Passwort" autocomplete="current-password">
-      <button class="secondary" id="loginBtn">Login</button>
+    <div class="topbar-session">
+      <span class="muted">Angemeldet als</span>
+      <strong id="sessionUserDisplay" class="topbar-session-name">Gast / Viewer</strong>
     </div>
     <div id="roleFactionBadge" class="role-faction-badge hidden"></div>
-     <div class="search-wrap">
-       <input id="planetSearch" type="search" placeholder="Planeten / Flotten suchen..." autocomplete="off">
-       <div id="planetSearchResults" class="hidden"></div>
-     </div>
-     <button class="secondary" id="viewModeBtn">Schematic Map</button>
-     <button class="secondary hidden" id="sectorDrawBtn">Sektor zeichnen</button>
-     <button class="secondary" id="saveBtn">Export JSON</button>
-   </div>
+    <div class="search-wrap">
+      <input id="planetSearch" type="search" placeholder="Planeten / Flotten suchen..." autocomplete="off">
+      <div id="planetSearchResults" class="hidden"></div>
+    </div>
+    <button class="secondary topbar-logout" id="logoutBtn">Logout</button>
+    <button class="secondary" id="viewModeBtn">Schematic Map</button>
+    <button class="secondary hidden" id="sectorDrawBtn">Sektor zeichnen</button>
+    <button class="secondary" id="saveBtn">Export JSON</button>
+  </div>
 
   <div id="layersPanel" class="panel">
     <h3>Schichten</h3>
@@ -1142,14 +1230,15 @@ a { color:#8bc7ff; }
     <div class="hud-legend-list">
       <div class="hud-legend-item"><span class="hud-legend-dot GAR"></span><span>Blauer Planet = Republik</span></div>
       <div class="hud-legend-item"><span class="hud-legend-dot KUS"></span><span>Roter Planet = KUS</span></div>
-      <div class="hud-legend-item"><span class="hud-legend-dot HUTT"></span><span>Orange Planet = Hutten</span></div>
-      <div class="hud-legend-item"><span class="hud-legend-dot NEUTRAL"></span><span>Gelber Planet = Unabhängig / Neutral</span></div>
-      <div class="hud-legend-item"><span class="hud-legend-dot PRIORITY"></span><span>Grüner Planet = Hauptplanet</span></div>
+      <div class="hud-legend-item"><span class="hud-legend-dot HUTT"></span><span>Dunkelgrüner Planet = Hutten</span></div>
+      <div class="hud-legend-item"><span class="hud-legend-dot NEUTRAL"></span><span>Grauer Planet = Unabhängig / Neutral</span></div>
+      <div class="hud-legend-item"><span class="hud-legend-dot PRIORITY"></span><span>Gelber Planet = Hauptplanet</span></div>
     </div>
   </div>
 
   <div id="workspacePanel"></div>
 
+  <button class="toolbtn" id="mainNavToggle" title="Navigation ein- oder ausblenden">⌄</button>
   <div class="main-nav">
     <button class="main-tab-btn active" data-main-tab="map">Map</button>
     <button class="main-tab-btn" data-main-tab="fleetManagement">Flottenmanagement</button>
@@ -1163,6 +1252,21 @@ a { color:#8bc7ff; }
   <div id="statusbar">
     <span id="statusLeft">MVP v2: Flotten snappen auf Sternsysteme. Alt+Drag als Admin kalibriert Planetenpositionen.</span>
     <span>Map attribution: W. R. van Hage / CC-BY-SA & GFDL • Powered by your campaign logic</span>
+  </div>
+
+  <div id="loginModal" class="login-modal active" aria-hidden="false">
+    <div class="login-modal-card">
+      <h2>Login</h2>
+      <p>Melde dich an, um auf deine Fraktionsfunktionen zuzugreifen, oder fahre als Gast fort.</p>
+      <div class="login-modal-fields">
+        <input id="loginUser" type="text" placeholder="Benutzername" autocomplete="username">
+        <input id="loginPassword" type="password" placeholder="Passwort" autocomplete="current-password">
+      </div>
+      <div class="login-modal-actions">
+        <button class="primary" id="loginBtn">Einloggen</button>
+        <button class="secondary" id="guestContinueBtn">Als Gast fortfahren</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -1505,6 +1609,13 @@ const saveBtn = document.getElementById('saveBtn');
 const muteBtn = document.getElementById('muteBtn');
 const roleFactionBadge = document.getElementById('roleFactionBadge');
 const loginBtn = document.getElementById('loginBtn');
+const logoutBtn = document.getElementById('logoutBtn');
+const guestContinueBtn = document.getElementById('guestContinueBtn');
+const loginModal = document.getElementById('loginModal');
+const loginModalUser = document.getElementById('loginUser');
+const loginModalPassword = document.getElementById('loginPassword');
+const sessionUserDisplay = document.getElementById('sessionUserDisplay');
+const mainNavToggle = document.getElementById('mainNavToggle');
 const orientationGuardEl = document.getElementById('orientationGuard');
 const orientationLockBtn = document.getElementById('orientationLockBtn');
 const orientationDismissBtn = document.getElementById('orientationDismissBtn');
@@ -1666,6 +1777,8 @@ let radioCommandAdminState = {
   loading: false
 };
 let currentAuthenticatedUsername = '';
+let viewerModeActive = true;
+let navCollapsed = false;
 let mobileOrientationDismissed = false;
 let audioMuted = false;
 let contextMenuState = null;
@@ -3301,8 +3414,11 @@ function updateServerSession(me) {
   if (!me) return;
   serverSync.session = me;
   currentAuthenticatedUsername = me.username || '';
+  if (currentAuthenticatedUsername) viewerModeActive = false;
   roleSelect.value = me.role || 'Viewer';
   refreshRoleChrome();
+  if (currentAuthenticatedUsername) hideLoginModal();
+  else if (!viewerModeActive) showLoginModal();
 }
 
 function destroyServerSocketConnection() {
@@ -3397,6 +3513,7 @@ async function bootstrapFromServer() {
     console.warn('Server bootstrap unavailable, falling back to local state', error);
     applyDefaultAnonymousRole();
     refreshRoleChrome();
+    showLoginModal();
     disableLiveSync('Server-Bootstrap fehlgeschlagen. Lokaler Offline-Modus aktiv.');
   }
 }
@@ -5711,9 +5828,73 @@ function escapeLoginManagerText(value) {
     .replaceAll("'", '&#039;');
 }
 
+function setNavCollapsed(collapsed) {
+  navCollapsed = Boolean(collapsed);
+  document.body.classList.toggle('nav-collapsed', navCollapsed);
+  if (mainNavToggle) mainNavToggle.textContent = navCollapsed ? '⌃' : '⌄';
+}
+
+function showLoginModal() {
+  if (!loginModal) return;
+  loginModal.classList.add('active');
+  loginModal.setAttribute('aria-hidden', 'false');
+  window.setTimeout(() => loginModalUser?.focus(), 30);
+}
+
+function hideLoginModal() {
+  if (!loginModal) return;
+  loginModal.classList.remove('active');
+  loginModal.setAttribute('aria-hidden', 'true');
+}
+
+function updateSessionDisplay() {
+  if (!sessionUserDisplay) return;
+  const role = currentRole();
+  if (currentAuthenticatedUsername) {
+    sessionUserDisplay.textContent = `${currentAuthenticatedUsername} (${role})`;
+    if (logoutBtn) logoutBtn.textContent = 'Logout';
+    return;
+  }
+  sessionUserDisplay.textContent = viewerModeActive ? 'Gast / Viewer' : 'Nicht eingeloggt';
+  if (logoutBtn) logoutBtn.textContent = 'Login';
+}
+
+function continueAsGuest() {
+  viewerModeActive = true;
+  currentAuthenticatedUsername = '';
+  serverSync.session = { id: null, username: '', role: 'Viewer' };
+  roleSelect.value = 'Viewer';
+  refreshRoleChrome();
+  hideLoginModal();
+  setStatus('Gastmodus aktiv.');
+}
+
+async function logoutCurrentUser() {
+  if (!currentAuthenticatedUsername) {
+    viewerModeActive = false;
+    refreshRoleChrome();
+    showLoginModal();
+    return;
+  }
+  if (serverSync.enabled) {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+    } catch (error) {
+      console.warn('Logout request failed', error);
+    }
+  }
+  viewerModeActive = false;
+  currentAuthenticatedUsername = '';
+  serverSync.session = { id: null, username: '', role: 'Viewer' };
+  roleSelect.value = 'Viewer';
+  refreshRoleChrome();
+  showLoginModal();
+  setStatus('Du wurdest ausgeloggt.');
+}
+
 async function attemptLogin() {
-  const username = document.getElementById('loginUser')?.value || '';
-  const password = document.getElementById('loginPassword')?.value || '';
+  const username = loginModalUser?.value || '';
+  const password = loginModalPassword?.value || '';
   if (!serverSync.enabled) {
     setStatus('Login benötigt den Server-Modus über http://localhost.');
     return;
@@ -5727,10 +5908,13 @@ async function attemptLogin() {
     });
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.error || 'Login fehlgeschlagen');
+    viewerModeActive = false;
     serverSync.session = payload.user || { id: null, username: '', role: 'Viewer' };
     currentAuthenticatedUsername = payload.user?.username || '';
     roleSelect.value = payload.user?.role || 'Viewer';
     refreshRoleChrome();
+    hideLoginModal();
+    if (loginModalPassword) loginModalPassword.value = '';
     destroyServerSocketConnection();
     clearServerReconnectTimer();
     await bootstrapFromServer();
@@ -5746,6 +5930,7 @@ async function attemptLogin() {
     if (activeMainTab === 'radioCommandCenter') renderRadioCommandCenterView();
     setStatus(`Login erfolgreich: ${payload.user.username} (${payload.user.role})`);
   } catch (error) {
+    viewerModeActive = false;
     currentAuthenticatedUsername = '';
     serverSync.session = { id: null, username: '', role: 'Viewer' };
     roleSelect.value = 'Viewer';
@@ -5760,6 +5945,7 @@ async function attemptLogin() {
 
 function applyDefaultAnonymousRole() {
   if (currentAuthenticatedUsername) return;
+  viewerModeActive = false;
   serverSync.session = { id: null, username: '', role: 'Viewer' };
   roleSelect.value = 'Viewer';
 }
@@ -5779,6 +5965,7 @@ function refreshRoleChrome() {
   document.querySelector('[data-main-tab="fleetManagement"]')?.classList.toggle('hidden', currentRole() === 'Senat');
   document.querySelector('[data-main-tab="shipyard"]')?.classList.toggle('hidden', currentRole() === 'Senat');
   roleSelect.disabled = true;
+  updateSessionDisplay();
   if (!canManageLogins() && activeMainTab === 'loginManager') setMainTab('map');
   if (!canManageRadioCommands() && activeMainTab === 'radioCommandCenter') setMainTab('map');
   if (currentRole() === 'Senat' && (activeMainTab === 'fleetManagement' || activeMainTab === 'shipyard')) setMainTab('buildProjects');
@@ -6272,6 +6459,7 @@ function buildRouteCache() {
       else if (other.owner === 'GAR') cls = 'purple';
       else if (other.owner === 'KUS') cls = 'red';
       else if (other.owner === 'HUTT') cls = 'orange';
+      else cls = 'gray';
     }
     return cls ? { id: getRouteId(a, b), a, b, cls } : null;
   }).filter(Boolean);
@@ -7013,15 +7201,15 @@ function getHyperlaneVisualState(a, b, adjacency) {
   if (!a || !b) return { color: 'rgba(160,170,188,.28)', contested: false };
   if (ownerA === 'GAR' && ownerB === 'GAR') return { color: 'rgba(31,124,255,.5)', contested: false };
   if (ownerA === 'KUS' && ownerB === 'KUS') return { color: 'rgba(208,54,50,.5)', contested: false };
-  if (ownerA === 'HUTT' && ownerB === 'HUTT') return { color: 'rgba(243,154,45,.6)', contested: false };
+  if (ownerA === 'HUTT' && ownerB === 'HUTT') return { color: 'rgba(31,107,72,.6)', contested: false };
   if ((ownerA === 'GAR' && ownerB === 'KUS') || (ownerA === 'KUS' && ownerB === 'GAR')) return { color: 'rgba(156,67,255,.72)', contested: true };
-  if ((ownerA === 'GAR' && ownerB === 'HUTT') || (ownerA === 'HUTT' && ownerB === 'GAR')) return { color: 'rgba(255,181,92,.6)', contested: true };
-  if ((ownerA === 'KUS' && ownerB === 'HUTT') || (ownerA === 'HUTT' && ownerB === 'KUS')) return { color: 'rgba(255,154,72,.62)', contested: true };
+  if ((ownerA === 'GAR' && ownerB === 'HUTT') || (ownerA === 'HUTT' && ownerB === 'GAR')) return { color: 'rgba(64,146,108,.62)', contested: true };
+  if ((ownerA === 'KUS' && ownerB === 'HUTT') || (ownerA === 'HUTT' && ownerB === 'KUS')) return { color: 'rgba(78,142,96,.62)', contested: true };
   if (ownerA === 'NEUTRAL' && ownerB === 'NEUTRAL') {
     const aStatus = getNeutralInfluenceStatus(a, adjacency);
     const bStatus = getNeutralInfluenceStatus(b, adjacency);
     if (aStatus === 'CONTESTED' || bStatus === 'CONTESTED') return { color: 'rgba(156,67,255,.42)', contested: true };
-    return { color: 'rgba(170,176,188,.24)', contested: false };
+    return { color: 'rgba(170,176,188,.32)', contested: false };
   }
   const neutral = ownerA === 'NEUTRAL' ? a : (ownerB === 'NEUTRAL' ? b : null);
   const faction = neutral && neutral.id === a.id ? b : a;
@@ -7029,8 +7217,8 @@ function getHyperlaneVisualState(a, b, adjacency) {
   if (neutralStatus === 'CONTESTED') return { color: getPlanetInfluenceFaction(faction) === 'GAR' ? 'rgba(110,140,255,.66)' : 'rgba(186,94,255,.66)', contested: true };
   if (neutralStatus === 'GAR_PRESSURE') return { color: 'rgba(94,154,255,.44)', contested: true };
   if (neutralStatus === 'KUS_PRESSURE') return { color: 'rgba(222,98,120,.44)', contested: true };
-  if (neutralStatus === 'HUTT_PRESSURE') return { color: 'rgba(243,154,45,.5)', contested: true };
-  return { color: 'rgba(170,176,188,.24)', contested: false };
+  if (neutralStatus === 'HUTT_PRESSURE') return { color: 'rgba(31,107,72,.5)', contested: true };
+  return { color: 'rgba(170,176,188,.32)', contested: false };
 }
 
 function drawInfluencePlanetHalo(ctx, x, y, innerColor, outerColor, radius) {
@@ -7074,7 +7262,7 @@ function renderInfluenceClouds() {
 
   drawCloudPass((a, b) => getPlanetInfluenceFaction(a) === 'GAR' && getPlanetInfluenceFaction(b) === 'GAR', 'rgba(31,124,255,.95)', 70, 18, 0.28);
   drawCloudPass((a, b) => getPlanetInfluenceFaction(a) === 'KUS' && getPlanetInfluenceFaction(b) === 'KUS', 'rgba(208,54,50,.95)', 70, 18, 0.28);
-  drawCloudPass((a, b) => getPlanetInfluenceFaction(a) === 'HUTT' && getPlanetInfluenceFaction(b) === 'HUTT', 'rgba(243,154,45,.92)', 66, 18, 0.26);
+  drawCloudPass((a, b) => getPlanetInfluenceFaction(a) === 'HUTT' && getPlanetInfluenceFaction(b) === 'HUTT', 'rgba(31,107,72,.92)', 66, 18, 0.26);
   if (layers.contested) {
     drawCloudPass((a, b) => {
       const visual = getHyperlaneVisualState(a, b, adjacency);
@@ -7094,7 +7282,7 @@ function renderInfluenceClouds() {
       return;
     }
     if (influenceOwner === 'HUTT') {
-      drawInfluencePlanetHalo(influenceCtx, position.x, position.y, 'rgba(255,187,102,.42)', 'rgba(243,154,45,.18)', 62);
+      drawInfluencePlanetHalo(influenceCtx, position.x, position.y, 'rgba(68,170,118,.42)', 'rgba(31,107,72,.18)', 62);
       return;
     }
     if (layers.contested) {
@@ -7106,7 +7294,7 @@ function renderInfluenceClouds() {
       } else if (status === 'KUS_PRESSURE') {
         drawInfluencePlanetHalo(influenceCtx, position.x, position.y, 'rgba(255,138,138,.22)', 'rgba(152,132,144,.1)', 48);
       } else if (status === 'HUTT_PRESSURE') {
-        drawInfluencePlanetHalo(influenceCtx, position.x, position.y, 'rgba(255,190,116,.24)', 'rgba(243,154,45,.12)', 48);
+        drawInfluencePlanetHalo(influenceCtx, position.x, position.y, 'rgba(68,170,118,.24)', 'rgba(31,107,72,.12)', 48);
       } else {
         drawInfluencePlanetHalo(influenceCtx, position.x, position.y, 'rgba(255,228,112,.14)', 'rgba(178,178,178,.08)', 40);
       }
@@ -11262,6 +11450,7 @@ document.addEventListener('keydown', (event) => {
 });
 
 document.addEventListener('pointerdown', (event) => {
+  if (event.target.closest('#loginModal')) return;
   if (event.target.closest('.search-wrap')) return;
   closePlanetSearchResults(false);
   if (event.target.closest('.inline-search-wrap')) return;
@@ -11269,6 +11458,9 @@ document.addEventListener('pointerdown', (event) => {
   closeFleetManagementSearchResults(false);
   if (!event.target.closest('#contextMenu')) closeContextMenu();
 });
+mainNavToggle.onclick = () => {
+  setNavCollapsed(!navCollapsed);
+};
 document.getElementById('saveBtn').onclick = () => {
   const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -11292,7 +11484,15 @@ orientationDismissBtn?.addEventListener('click', () => {
   syncMobileOrientationUi();
 });
 loginBtn.onclick = attemptLogin;
-document.getElementById('loginPassword').addEventListener('keydown', (event) => {
+guestContinueBtn.onclick = continueAsGuest;
+logoutBtn.onclick = logoutCurrentUser;
+loginModalPassword.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    attemptLogin();
+  }
+});
+loginModalUser.addEventListener('keydown', (event) => {
   if (event.key === 'Enter') {
     event.preventDefault();
     attemptLogin();
@@ -11301,6 +11501,7 @@ document.getElementById('loginPassword').addEventListener('keydown', (event) => 
 applyDefaultAnonymousRole();
 loadClientUiPrefs();
 applyAudioMuteState();
+setNavCollapsed(false);
 refreshRoleChrome();
 bootstrapFromServer();
 syncMobileOrientationUi();
