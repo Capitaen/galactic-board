@@ -1221,9 +1221,7 @@ a { color:#8bc7ff; }
     <h3>Schichten</h3>
     <label class="layer-row"><span class="handle">⋮⋮</span><input type="checkbox" data-layer="planets" checked> Planeten</label>
     <label class="layer-row"><span class="handle">⋮⋮</span><input type="checkbox" data-layer="planetLabels"> Planetennamen</label>
-    <label class="layer-row"><span class="handle">⋮⋮</span><input type="checkbox" data-layer="influence" checked> Frontline / Influence</label>
     <label class="layer-row"><span class="handle">⋮⋮</span><input type="checkbox" data-layer="hyperlanes" checked> Hyperraum-Routen</label>
-    <label class="layer-row"><span class="handle">⋮⋮</span><input type="checkbox" data-layer="contested" checked> Contested / Neutral Overlay</label>
     <label class="layer-row"><span class="handle">⋮⋮</span><input type="checkbox" data-layer="garFleets" checked> GAR-Flotten</label>
     <label class="layer-row"><span class="handle">⋮⋮</span><input type="checkbox" data-layer="kusFleets" checked> KUS-Flotten</label>
     <label class="layer-row"><span class="handle">⋮⋮</span><input type="checkbox" data-layer="grid" checked> Raster</label>
@@ -1296,9 +1294,7 @@ const LABEL_ZOOM_THRESHOLD = 0.9;
 const STARTUP_LAYERS = {
   planets: true,
   planetLabels: false,
-  influence: false,
   hyperlanes: false,
-  contested: false,
   garFleets: true,
   kusFleets: true,
   grid: true,
@@ -1365,6 +1361,8 @@ const RESOURCE_RESET_VERSION = 'resource_reset_2026_05_01';
 const CAPTURE_REWARD_PER_SLOT = 20;
 const MINE_BUILD_DURATION_HOURS = 30;
 const MAX_CIVILIAN_PRODUCTION_BONUS = 0.30;
+const SECTOR_DOMINANCE_THRESHOLD = 0.5;
+const WAREHOUSE_LEVEL_CAPACITY = [0, 500, 1500, 3500, 7000, 12000];
 const CIVILIAN_CREDIT_YIELDS = {
   civilian_quadraniumErz: { resource: 'quadraniumErz', credits: 220 },
   civilian_agrinium: { resource: 'agrinium', credits: 320 },
@@ -1476,6 +1474,25 @@ const MINE_PROJECT_DEFS = {
     cost: { quadraniumErz: 1400, agrinium: 1120, tibannaGas: 980, baradium: 840, kavamSalz: 1120 }
   }
 };
+const STORAGE_RESOURCE_KEYS = ['quadraniumErz', 'agrinium', 'tibannaGas', 'baradium', 'kavamSalz'];
+const STORAGE_BUILDING_DEFS = Object.fromEntries(STORAGE_RESOURCE_KEYS.map((resourceKey) => {
+  const baseLabel = RESOURCE_LABELS[resourceKey];
+  const safeKey = `storage_${resourceKey}`;
+  return [safeKey, {
+    label: `${baseLabel}-Lager`,
+    category: 'storage',
+    storageResource: resourceKey,
+    cost: {
+      quadraniumErz: 320,
+      agrinium: 180,
+      tibannaGas: 160,
+      baradium: 140,
+      kavamSalz: 180,
+      credits: 1800
+    }
+  }];
+}));
+Object.assign(MINE_PROJECT_DEFS, STORAGE_BUILDING_DEFS);
 const INFRASTRUCTURE_KEYS = Object.keys(MINE_PROJECT_DEFS);
 Object.values(MINE_PROJECT_DEFS).forEach((project) => {
   const rawCost = Object.entries(project.cost || {})
@@ -2046,6 +2063,9 @@ function normalizeCampaignState() {
   state.meta.manualSectors = ensureSectorStore()
     .map((sector) => createManualSectorRecord(sector))
     .filter((sector) => sector.points.length >= 3);
+  state.meta.planetWarehouses = ensureWarehouseStore()
+    .map((warehouse) => createWarehouseRecord(warehouse))
+    .filter((warehouse) => warehouse.planetId && Number.isInteger(warehouse.slotIndex));
   state.meta.customRoutes = ensureCustomRouteStore()
     .map((route, index) => ({
       id: String(route?.id || `custom_route_${index + 1}`),
@@ -2092,6 +2112,9 @@ function normalizeCampaignState() {
     activeBattle: Boolean(planet.activeBattle),
     isCoreWorld: Boolean(planet.isCoreWorld)
   }));
+  state.planets.forEach((planet) => {
+    syncWarehouseStoreForPlanet(planet.id);
+  });
   state.authUsers = state.authUsers
     .map((user) => ({
       id: user.id || `auth_${Math.random().toString(36).slice(2, 10)}`,
@@ -3296,7 +3319,12 @@ function saveClientUiPrefs() {
 function loadClientUiPrefs() {
   try {
     const raw = JSON.parse(localStorage.getItem(CLIENT_UI_PREFS_KEY) || '{}');
-    if (raw.layers && typeof raw.layers === 'object') layers = { ...STARTUP_LAYERS, ...raw.layers };
+    if (raw.layers && typeof raw.layers === 'object') {
+      const restoredLayers = { ...raw.layers };
+      delete restoredLayers.influence;
+      delete restoredLayers.contested;
+      layers = { ...STARTUP_LAYERS, ...restoredLayers };
+    }
     if (Number.isFinite(raw.zoom)) zoom = raw.zoom;
     if (Number.isFinite(raw.panX)) panX = raw.panX;
     if (Number.isFinite(raw.panY)) panY = raw.panY;
@@ -3305,6 +3333,12 @@ function loadClientUiPrefs() {
   } catch (error) {
     console.warn('UI prefs could not be restored', error);
   }
+}
+
+function syncLayerCheckboxes() {
+  document.querySelectorAll('[data-layer]').forEach((cb) => {
+    cb.checked = Boolean(layers[cb.dataset.layer]);
+  });
 }
 
 function sanitizeCampaignMeta(meta) {
@@ -3724,6 +3758,214 @@ function setPlanetResourceSlots(planetId, slots) {
     .map((slot) => (INFRASTRUCTURE_KEYS.includes(slot) ? slot : ''));
 }
 
+function ensureWarehouseStore() {
+  state.meta = state.meta || {};
+  if (!Array.isArray(state.meta.planetWarehouses)) state.meta.planetWarehouses = [];
+  return state.meta.planetWarehouses;
+}
+
+function createWarehouseRecord(data = {}) {
+  const resourceType = STORAGE_RESOURCE_KEYS.includes(data.resourceType) ? data.resourceType : 'quadraniumErz';
+  const level = clamp(Math.max(1, Number(data.level || 1)), 1, WAREHOUSE_LEVEL_CAPACITY.length - 1);
+  const capacity = WAREHOUSE_LEVEL_CAPACITY[level] || WAREHOUSE_LEVEL_CAPACITY[1];
+  return {
+    id: data.id || `warehouse_${Math.random().toString(36).slice(2, 10)}`,
+    planetId: String(data.planetId || ''),
+    slotIndex: Math.max(0, Number(data.slotIndex || 0)),
+    resourceType,
+    level,
+    currentStock: clamp(Number(data.currentStock || 0), 0, capacity)
+  };
+}
+
+function getWarehouseBuildingKey(resourceType) {
+  return `storage_${resourceType}`;
+}
+
+function isWarehouseBuildingKey(buildingKey) {
+  return Boolean(STORAGE_BUILDING_DEFS[buildingKey]);
+}
+
+function getWarehouseCapacity(level = 1) {
+  return WAREHOUSE_LEVEL_CAPACITY[Math.max(1, Math.min(WAREHOUSE_LEVEL_CAPACITY.length - 1, Number(level || 1)))] || WAREHOUSE_LEVEL_CAPACITY[1];
+}
+
+function getWarehouseUpgradeCost(level = 1) {
+  const nextLevel = Math.max(2, Number(level || 1) + 1);
+  const factor = nextLevel - 1;
+  return {
+    quadraniumErz: 220 * factor,
+    agrinium: 140 * factor,
+    tibannaGas: 120 * factor,
+    baradium: 110 * factor,
+    kavamSalz: 130 * factor,
+    credits: 1400 * factor
+  };
+}
+
+function getPlanetWarehouses(planetId) {
+  return ensureWarehouseStore().filter((entry) => entry.planetId === planetId);
+}
+
+function getWarehouseByPlanetSlot(planetId, slotIndex) {
+  return ensureWarehouseStore().find((entry) => entry.planetId === planetId && Number(entry.slotIndex) === Number(slotIndex)) || null;
+}
+
+function syncWarehouseStoreForPlanet(planetId) {
+  const slots = getPlanetResourceSlots(planetId);
+  const store = ensureWarehouseStore();
+  for (let index = store.length - 1; index >= 0; index -= 1) {
+    const warehouse = store[index];
+    if (warehouse.planetId !== planetId) continue;
+    const buildingKey = slots[warehouse.slotIndex] || '';
+    if (!isWarehouseBuildingKey(buildingKey)) {
+      store.splice(index, 1);
+      continue;
+    }
+    warehouse.resourceType = STORAGE_BUILDING_DEFS[buildingKey].storageResource;
+    warehouse.level = clamp(warehouse.level, 1, WAREHOUSE_LEVEL_CAPACITY.length - 1);
+    warehouse.currentStock = clamp(warehouse.currentStock, 0, getWarehouseCapacity(warehouse.level));
+  }
+  slots.forEach((buildingKey, slotIndex) => {
+    if (!isWarehouseBuildingKey(buildingKey) || getWarehouseByPlanetSlot(planetId, slotIndex)) return;
+    store.push(createWarehouseRecord({
+      planetId,
+      slotIndex,
+      resourceType: STORAGE_BUILDING_DEFS[buildingKey].storageResource,
+      level: 1,
+      currentStock: 0
+    }));
+  });
+}
+
+function getPlanetSlotUsage(planetId) {
+  const slots = getPlanetResourceSlots(planetId);
+  const used = slots.filter(Boolean).length;
+  return { used, total: 10 };
+}
+
+function getManualSectorForPlanet(planet) {
+  if (!planet) return null;
+  return ensureSectorStore().find((sector) => Array.isArray(sector?.points) && sector.points.length >= 3 && pointInPolygon({ x: planet.x, y: planet.y }, sector.points)) || null;
+}
+
+function getOperationalSectorInfoForPlanet(planet) {
+  const manualSector = getManualSectorForPlanet(planet);
+  if (manualSector) return { id: manualSector.id, name: manualSector.name, manual: true };
+  const fallbackName = String(planet?.sector || planet?.region || planet?.name || 'Unbekannter Sektor').trim() || 'Unbekannter Sektor';
+  return { id: `fallback:${fallbackName}`, name: fallbackName, manual: false };
+}
+
+function getSectorWarehouseSummary(sectorId) {
+  const summary = Object.fromEntries(STORAGE_RESOURCE_KEYS.map((key) => [key, { stock: 0, capacity: 0, warehouses: [] }]));
+  state.planets.forEach((planet) => {
+    if (planet.owner !== 'GAR') return;
+    const sectorInfo = getOperationalSectorInfoForPlanet(planet);
+    if (sectorInfo.id !== sectorId) return;
+    getPlanetWarehouses(planet.id).forEach((warehouse) => {
+      const bucket = summary[warehouse.resourceType];
+      if (!bucket) return;
+      const capacity = getWarehouseCapacity(warehouse.level);
+      bucket.stock += Number(warehouse.currentStock || 0);
+      bucket.capacity += capacity;
+      bucket.warehouses.push({
+        ...warehouse,
+        capacity,
+        planetName: planet.name,
+        sectorName: sectorInfo.name
+      });
+    });
+  });
+  return summary;
+}
+
+function getLogisticsSectorChoices() {
+  const byId = new Map();
+  state.planets.forEach((planet) => {
+    if (planet.owner !== 'GAR') return;
+    const sectorInfo = getOperationalSectorInfoForPlanet(planet);
+    if (!byId.has(sectorInfo.id)) byId.set(sectorInfo.id, { ...sectorInfo });
+  });
+  return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name, 'de'));
+}
+
+function addStockToSectorWarehouses(sectorId, resourceType, amount) {
+  let remaining = Math.max(0, Number(amount || 0));
+  if (!remaining) return 0;
+  const warehouses = getSectorWarehouseSummary(sectorId)[resourceType]?.warehouses || [];
+  warehouses
+    .slice()
+    .sort((a, b) => (a.currentStock - b.currentStock) || (a.level - b.level))
+    .forEach((warehouseEntry) => {
+      if (remaining <= 0) return;
+      const warehouse = ensureWarehouseStore().find((entry) => entry.id === warehouseEntry.id);
+      if (!warehouse) return;
+      const free = Math.max(0, getWarehouseCapacity(warehouse.level) - Number(warehouse.currentStock || 0));
+      const delta = Math.min(free, remaining);
+      warehouse.currentStock += delta;
+      remaining -= delta;
+    });
+  return amount - remaining;
+}
+
+function removeStockFromSectorWarehouses(sectorId, resourceType, amount) {
+  let remaining = Math.max(0, Number(amount || 0));
+  if (!remaining) return 0;
+  const warehouses = getSectorWarehouseSummary(sectorId)[resourceType]?.warehouses || [];
+  warehouses
+    .slice()
+    .sort((a, b) => (b.currentStock - a.currentStock) || (b.level - a.level))
+    .forEach((warehouseEntry) => {
+      if (remaining <= 0) return;
+      const warehouse = ensureWarehouseStore().find((entry) => entry.id === warehouseEntry.id);
+      if (!warehouse) return;
+      const delta = Math.min(Number(warehouse.currentStock || 0), remaining);
+      warehouse.currentStock -= delta;
+      remaining -= delta;
+  });
+  return amount - remaining;
+}
+
+function getGarWarehouseTotals() {
+  const totals = Object.fromEntries(STORAGE_RESOURCE_KEYS.map((resourceKey) => [resourceKey, 0]));
+  ensureWarehouseStore().forEach((warehouse) => {
+    const planet = planetIndex.get(warehouse.planetId);
+    if (!planet || planet.owner !== 'GAR') return;
+    if (!STORAGE_RESOURCE_KEYS.includes(warehouse.resourceType)) return;
+    totals[warehouse.resourceType] += Number(warehouse.currentStock || 0);
+  });
+  return totals;
+}
+
+function canAffordGarInfrastructureCost(cost = {}) {
+  const totals = getGarWarehouseTotals();
+  const pool = getFactionResourcePool('GAR');
+  const credits = Number(pool.credits || 0);
+  if (credits < Number(cost?.credits || 0)) return false;
+  return STORAGE_RESOURCE_KEYS.every((resourceKey) => (totals[resourceKey] + Number(pool[resourceKey] || 0)) >= Number(cost?.[resourceKey] || 0));
+}
+
+function spendGarInfrastructureCost(cost = {}) {
+  if (!canAffordGarInfrastructureCost(cost)) return false;
+  let remainingByResource = Object.fromEntries(STORAGE_RESOURCE_KEYS.map((resourceKey) => [resourceKey, Number(cost?.[resourceKey] || 0)]));
+  const pool = getFactionResourcePool('GAR');
+  const sectors = getLogisticsSectorChoices();
+  sectors.forEach((sector) => {
+    STORAGE_RESOURCE_KEYS.forEach((resourceKey) => {
+      const remaining = Number(remainingByResource[resourceKey] || 0);
+      if (remaining <= 0) return;
+      const spent = removeStockFromSectorWarehouses(sector.id, resourceKey, remaining);
+      remainingByResource[resourceKey] -= spent;
+    });
+  });
+  STORAGE_RESOURCE_KEYS.forEach((resourceKey) => {
+    const remaining = Number(remainingByResource[resourceKey] || 0);
+    if (remaining > 0) pool[resourceKey] = Math.max(0, Number(pool[resourceKey] || 0) - remaining);
+  });
+  pool.credits -= Number(cost?.credits || 0);
+  return true;
+}
+
 function canEditPlanetResourceSlot(planet, index) {
   if (!planet || !Number.isInteger(index)) return false;
   const role = currentRole();
@@ -3761,6 +4003,18 @@ function canEditPlanetDescription(planet) {
 
 function canBuildMineProjects() {
   return currentAssignedRole() === 'Admin' || currentAssignedRole() === 'Galaktischer Senats Admin';
+}
+
+function canBuildWarehouses() {
+  return canBuildMineProjects();
+}
+
+function canManageWarehouseLogistics() {
+  const assignedRole = currentAssignedRole();
+  return assignedRole === 'Admin'
+    || assignedRole === 'Galaktischer Senats Admin'
+    || assignedRole === 'Republic Navy Admin'
+    || currentRole() === 'Republic Navy / GAR';
 }
 
 function getMineProjectMeta(buildingKey) {
@@ -4024,14 +4278,28 @@ function applyProductionTicks(now = Date.now()) {
   const elapsed = Math.max(0, now - lastTick);
   const ticks = Math.floor(elapsed / RESOURCE_PRODUCTION_TICK_MS);
   if (ticks <= 0) return 0;
-  RESOURCE_FACTIONS.forEach((faction) => {
-    const rate = getEffectiveFactionProductionRate(faction);
-    const delta = createEmptyFactionResources();
-    RESOURCE_KEYS.forEach((key) => {
-      delta[key] = rate[key] * ticks;
+  const garPoolDelta = createEmptyFactionResources();
+  state.planets
+    .filter((planet) => planet.owner === 'GAR')
+    .forEach((planet) => {
+      const perTick = getPlanetProductionRate(planet.id);
+      const sectorInfo = getOperationalSectorInfoForPlanet(planet);
+      STORAGE_RESOURCE_KEYS.forEach((resourceKey) => {
+        const totalProduced = Number(perTick?.[resourceKey] || 0) * ticks;
+        if (totalProduced <= 0) return;
+        const stored = addStockToSectorWarehouses(sectorInfo.id, resourceKey, totalProduced);
+        const overflow = totalProduced - stored;
+        if (overflow > 0) garPoolDelta[resourceKey] += overflow;
+      });
+      garPoolDelta.credits += Number(perTick?.credits || 0) * ticks;
     });
-    addFactionResources(faction, delta);
+  addFactionResources('GAR', garPoolDelta);
+  const kusRate = getEffectiveFactionProductionRate('KUS');
+  const kusDelta = createEmptyFactionResources();
+  RESOURCE_KEYS.forEach((key) => {
+    kusDelta[key] = kusRate[key] * ticks;
   });
+  addFactionResources('KUS', kusDelta);
   state.lastResourceTickAt = lastTick + (ticks * RESOURCE_PRODUCTION_TICK_MS);
   return ticks;
 }
@@ -4115,6 +4383,47 @@ function spendResources(cost, faction = 'GAR') {
   return true;
 }
 
+function getSectorShipyardCostSummary(planetId, cost = {}) {
+  const planet = planetIndex.get(planetId);
+  if (!planet) return null;
+  const sectorInfo = getOperationalSectorInfoForPlanet(planet);
+  const warehouseSummary = getSectorWarehouseSummary(sectorInfo.id);
+  const pool = getFactionResourcePool('GAR');
+  return {
+    planet,
+    sectorInfo,
+    warehouseSummary,
+    reservePool: pool,
+    creditBalance: Number(pool.credits || 0),
+    missing: STORAGE_RESOURCE_KEYS.filter((resourceKey) => ((Number(warehouseSummary[resourceKey]?.stock || 0) + Number(pool[resourceKey] || 0)) < Number(cost?.[resourceKey] || 0)))
+  };
+}
+
+function canAffordSectorShipyardCost(planetId, cost = {}, faction = 'GAR') {
+  if (DEBUG_DISABLE_GAR_BUILD_LIMITS && faction === 'GAR') return true;
+  if (faction !== 'GAR') return canAffordCost(cost, faction);
+  const summary = getSectorShipyardCostSummary(planetId, cost);
+  if (!summary) return false;
+  if (summary.creditBalance < Number(cost?.credits || 0)) return false;
+  return summary.missing.length === 0;
+}
+
+function spendSectorShipyardCost(planetId, cost = {}, faction = 'GAR') {
+  if (DEBUG_DISABLE_GAR_BUILD_LIMITS && faction === 'GAR') return true;
+  if (faction !== 'GAR') return spendResources(cost, faction);
+  if (!canAffordSectorShipyardCost(planetId, cost, faction)) return false;
+  const summary = getSectorShipyardCostSummary(planetId, cost);
+  STORAGE_RESOURCE_KEYS.forEach((resourceKey) => {
+    const required = Number(cost?.[resourceKey] || 0);
+    if (required <= 0) return;
+    const spent = removeStockFromSectorWarehouses(summary.sectorInfo.id, resourceKey, required);
+    const remaining = required - spent;
+    if (remaining > 0) summary.reservePool[resourceKey] = Math.max(0, Number(summary.reservePool[resourceKey] || 0) - remaining);
+  });
+  if (Number(cost?.credits || 0) > 0) getFactionResourcePool('GAR').credits -= Number(cost.credits || 0);
+  return true;
+}
+
 function getShipDisplayLocation(ship) {
   const planet = ship.locationPlanetId ? planetIndex.get(ship.locationPlanetId) : null;
   return planet ? planet.name : '—';
@@ -4170,6 +4479,9 @@ function createBuildJobRecord(data = {}) {
     targetSlotIndex: Number.isInteger(data.targetSlotIndex) ? data.targetSlotIndex : -1,
     resourceKey: data.resourceKey || '',
     buildingKey: data.buildingKey || data.resourceKey || '',
+    sourceSectorId: String(data.sourceSectorId || '').trim(),
+    targetSectorId: String(data.targetSectorId || '').trim(),
+    amount: Math.max(0, Number(data.amount || 0)),
     startedAt: data.startedAt || Date.now(),
     finishesAt: data.finishesAt || Date.now(),
     faction: data.faction || 'GAR',
@@ -4200,6 +4512,18 @@ function processBuildJobs(now = Date.now()) {
   let changed = false;
   state.buildJobs.forEach((job) => {
     if (job.status !== 'building' || now < job.finishesAt) return;
+    if (job.jobType === 'transport') {
+      const delivered = addStockToSectorWarehouses(job.targetSectorId, job.resourceKey, job.amount);
+      const overflow = Math.max(0, Number(job.amount || 0) - delivered);
+      if (overflow > 0) {
+        const refund = createEmptyFactionResources();
+        refund[job.resourceKey] = overflow;
+        addFactionResources(job.faction || 'GAR', refund);
+      }
+      job.status = 'completed';
+      changed = true;
+      return;
+    }
     if (job.jobType === 'mine') {
       const planet = planetIndex.get(job.buildLocationPlanetId);
       const slots = getPlanetResourceSlots(job.buildLocationPlanetId);
@@ -4216,6 +4540,7 @@ function processBuildJobs(now = Date.now()) {
       }
       slots[job.targetSlotIndex] = buildingKey;
       setPlanetResourceSlots(job.buildLocationPlanetId, slots);
+      syncWarehouseStoreForPlanet(job.buildLocationPlanetId);
       job.status = 'completed';
       changed = true;
       return;
@@ -4282,7 +4607,7 @@ function renderResourcePills(slots) {
     const building = getMineProjectMeta(slot);
     const category = building.category === 'development'
       ? 'Entwicklungszentrum'
-      : (building.category === 'civilian' ? 'Zivil' : 'Militärisch');
+      : (building.category === 'civilian' ? 'Zivil' : (building.category === 'storage' ? 'Lager' : 'Militärisch'));
     return `<span class="resource-pill">${category}: ${building.label}</span>`;
   }).join('');
 }
@@ -4300,13 +4625,21 @@ function getBuildJobDisplayName(job) {
 }
 
 function getBuildJobLocationName(job) {
+  if (job?.jobType === 'transport') {
+    const sectors = getLogisticsSectorChoices();
+    const source = sectors.find((entry) => entry.id === job.sourceSectorId)?.name || 'Unbekannter Sektor';
+    const target = sectors.find((entry) => entry.id === job.targetSectorId)?.name || 'Unbekannter Sektor';
+    return `${source} -> ${target}`;
+  }
   return planetIndex.get(job?.buildLocationPlanetId)?.name || '—';
 }
 
 function getBuildJobTypeLabel(job) {
+  if (job?.jobType === 'transport') return 'Ressourcentransport';
   if (job?.jobType !== 'mine') return 'Schiffbau';
   const category = getMineProjectMeta(job.buildingKey || job.resourceKey)?.category;
   if (category === 'development') return 'Wirtschafts- und Entwicklungszentrum';
+  if (category === 'storage') return 'Lagerbau';
   return category === 'civilian' ? 'Zivile Infrastruktur' : 'Militärische Infrastruktur';
 }
 
@@ -4353,7 +4686,7 @@ function startMineBuildProject() {
     setStatus('Der gewählte Infrastruktur-Slot ist bereits belegt.');
     return;
   }
-  if (!spendResources(project.cost, 'GAR')) {
+  if (!spendGarInfrastructureCost(project.cost)) {
     setStatus('Nicht genug GAR-Ressourcen für dieses Infrastrukturprojekt.');
     renderBuildProjectsView();
     return;
@@ -4375,6 +4708,75 @@ function startMineBuildProject() {
   renderBuildProjectsView();
   if (activeMainTab === 'shipyard') renderShipyardView();
   setStatus(`Infrastrukturprojekt gestartet: ${project.label} auf ${planet.name} (Slot ${slotIndex + 1})`);
+}
+
+function upgradeWarehouse(warehouseId) {
+  const warehouse = ensureWarehouseStore().find((entry) => entry.id === warehouseId);
+  if (!warehouse) {
+    setStatus('Lager nicht gefunden.');
+    return;
+  }
+  if (!canBuildWarehouses()) {
+    setStatus('Nur Senats-Admins oder globale Admins können Lager upgraden.');
+    return;
+  }
+  if (warehouse.level >= WAREHOUSE_LEVEL_CAPACITY.length - 1) {
+    setStatus('Dieses Lager hat bereits die maximale Ausbaustufe erreicht.');
+    return;
+  }
+  const cost = getWarehouseUpgradeCost(warehouse.level);
+  if (!spendGarInfrastructureCost(cost)) {
+    setStatus('Nicht genug GAR-Ressourcen für das Lager-Upgrade.');
+    return;
+  }
+  warehouse.level += 1;
+  warehouse.currentStock = clamp(Number(warehouse.currentStock || 0), 0, getWarehouseCapacity(warehouse.level));
+  saveLocal();
+  if (selected?.type === 'planet' && selected.id === warehouse.planetId) openPlanet(warehouse.planetId);
+  if (activeMainTab === 'buildProjects') renderBuildProjectsView();
+  if (activeMainTab === 'shipyard') renderShipyardView();
+  setStatus(`Lager-Upgrade abgeschlossen: ${RESOURCE_LABELS[warehouse.resourceType]}-Lager jetzt Stufe ${warehouse.level}.`);
+}
+
+function startWarehouseTransport() {
+  if (!canManageWarehouseLogistics()) {
+    setStatus('Nur Navy, Senats-Admins oder Admins können Transporte anordnen.');
+    return;
+  }
+  const sourceSectorId = document.getElementById('warehouseSourceSector')?.value || '';
+  const targetSectorId = document.getElementById('warehouseTargetSector')?.value || '';
+  const resourceKey = document.getElementById('warehouseTransportResource')?.value || '';
+  const amount = Math.floor(Number(document.getElementById('warehouseTransportAmount')?.value || 0));
+  if (!sourceSectorId || !targetSectorId || sourceSectorId === targetSectorId) {
+    setStatus('Bitte zwei unterschiedliche Sektoren für den Transport wählen.');
+    return;
+  }
+  if (!STORAGE_RESOURCE_KEYS.includes(resourceKey) || amount <= 0) {
+    setStatus('Bitte Ressource und Menge für den Transport korrekt angeben.');
+    return;
+  }
+  const sourceSummary = getSectorWarehouseSummary(sourceSectorId);
+  if (Number(sourceSummary[resourceKey]?.stock || 0) < amount) {
+    setStatus('Im Ausgangssektor ist nicht genug Bestand für diesen Transport vorhanden.');
+    return;
+  }
+  removeStockFromSectorWarehouses(sourceSectorId, resourceKey, amount);
+  state.buildJobs.push(createBuildJobRecord({
+    jobType: 'transport',
+    projectName: `${RESOURCE_LABELS[resourceKey]}-Transport`,
+    resourceKey,
+    sourceSectorId,
+    targetSectorId,
+    amount,
+    startedAt: Date.now(),
+    finishesAt: Date.now() + (2 * RESOURCE_PRODUCTION_TICK_MS),
+    faction: 'GAR',
+    status: 'building'
+  }));
+  saveLocal();
+  renderBuildProjectsView();
+  if (activeMainTab === 'shipyard') renderShipyardView();
+  setStatus(`Transport angeordnet: ${formatResourceAmount(amount)} ${RESOURCE_LABELS[resourceKey]} unterwegs.`);
 }
 
 function closeMineBuildPlanetResults() {
@@ -6182,7 +6584,7 @@ function rebuildIndexes() {
 }
 
 function needsRouteNetwork() {
-  return Boolean(layers.hyperlanes || layers.contested || layers.influence);
+  return Boolean(layers.hyperlanes);
 }
 
 function needsArcgisTacticalData() {
@@ -7248,6 +7650,7 @@ function renderInfluenceClouds() {
   const width = influenceCanvas.width || WORLD_SIZE;
   const height = influenceCanvas.height || WORLD_SIZE;
   influenceCtx.clearRect(0, 0, width, height);
+<<<<<<< Updated upstream
   if (!layers.influence) return;
   if (!tacticalBaseReady && viewMode !== 'schematic') {
     scheduleTacticalBaseBuild();
@@ -7311,6 +7714,28 @@ function renderInfluenceClouds() {
         drawInfluencePlanetHalo(influenceCtx, position.x, position.y, 'rgba(255,228,112,.14)', 'rgba(178,178,178,.08)', 40);
       }
     }
+=======
+  if (!layers.sectorLabels) return;
+  const sectors = ensureSectorStore().filter((sector) => Array.isArray(sector?.points) && sector.points.length >= 3);
+  if (!sectors.length) return;
+  sectors.forEach((sector) => {
+    const summary = getManualSectorControlSummary(sector);
+    if (!summary.total) return;
+    const influenceState = getSectorInfluenceState(summary);
+    const palette = getSectorInfluencePalette(influenceState.dominantOwner || 'NEUTRAL');
+    const fill = palette.fill;
+    const edge = palette.edge;
+    if (!fill || !edge || !traceSectorPolygonPath(influenceCtx, sector.points)) return;
+    influenceCtx.save();
+    influenceCtx.fillStyle = fill;
+    influenceCtx.strokeStyle = edge;
+    influenceCtx.lineWidth = 3;
+    influenceCtx.shadowColor = edge;
+    influenceCtx.shadowBlur = 12;
+    influenceCtx.fill();
+    influenceCtx.stroke();
+    influenceCtx.restore();
+>>>>>>> Stashed changes
   });
 }
 
@@ -7441,7 +7866,7 @@ function scheduleTacticalBaseBuild() {
     markDirty({ tacticalBase: true, influence: true, layers: true });
   };
   runStep(() => {
-    if (layers.hyperlanes || layers.influence || layers.contested) {
+    if (layers.hyperlanes) {
       rebuildTacticalRouteCache(data, projectionMode);
     } else {
       tacticalRouteCache = [];
@@ -7641,6 +8066,7 @@ function applyViewMode() {
 function applyLayers() {
   const isSchematic = viewMode === 'schematic';
   applyViewMode();
+  syncLayerCheckboxes();
   planetLayer.classList.toggle('hidden', !layers.planets);
   legendPanel.classList.toggle('active', Boolean(layers.legend) && activeMainTab === 'map');
   const showLabels = layers.planetLabels && (zoom >= LABEL_ZOOM_THRESHOLD || isClusterZoomActive());
@@ -7649,13 +8075,12 @@ function applyLayers() {
     label.classList.toggle('is-hidden-by-zoom', layers.planetLabels && zoom < LABEL_ZOOM_THRESHOLD && !isClusterZoomActive());
   });
   overlay.classList.toggle('hide-hyperlanes', !layers.hyperlanes);
-  overlay.classList.toggle('hide-contested', layers.hyperlanes && !layers.contested);
   fleetElements.forEach((el, fleetId) => {
     const fleet = fleetIndex.get(fleetId);
     const isVisible = isFleetElementVisible(fleet);
     el.classList.toggle('hidden', !isVisible);
   });
-  const showInfluenceCanvas = layers.influence;
+  const showInfluenceCanvas = layers.sectorLabels;
   const showTacticalCanvas = isSchematic
     ? (layers.hyperlanes || layers.sectorLabels)
     : (layers.grid || layers.sectorLabels || layers.hyperlanes);
@@ -7723,7 +8148,7 @@ function flushRender() {
         overlay.innerHTML = '';
       }
       renderTacticalBase();
-      if (layers.influence) renderInfluenceClouds();
+      if (layers.sectorLabels) renderInfluenceClouds();
       dirtyFrontline = false;
       dirtyInfluence = false;
       dirtyTacticalBase = false;
@@ -8181,6 +8606,197 @@ function getManualSectorControlSummary(sector) {
   return summary;
 }
 
+<<<<<<< Updated upstream
+=======
+function getSectorInfluenceEntries(summary) {
+  return ['GAR', 'KUS', 'HUTT', 'NEUTRAL']
+    .map((owner) => ({ owner, count: Number(summary?.[owner] || 0) }))
+    .filter((entry) => entry.count > 0)
+    .sort((a, b) => b.count - a.count);
+}
+
+function getSectorInfluenceState(summary) {
+  const entries = getSectorInfluenceEntries(summary);
+  const top = entries[0] || null;
+  const second = entries[1] || null;
+  const total = Math.max(1, Number(summary?.total || 0));
+  const dominantShare = top ? (top.count / total) : 0;
+  const secondShare = second ? (second.count / total) : 0;
+  const secured = Boolean(top) && dominantShare > SECTOR_DOMINANCE_THRESHOLD;
+  const contested = false;
+  return {
+    entries,
+    dominantOwner: secured ? (top?.owner || '') : 'NEUTRAL',
+    dominantShare,
+    secondOwner: second?.owner || '',
+    secondShare,
+    secured,
+    contested,
+    status: secured ? 'SECURED' : 'NEUTRAL'
+  };
+}
+
+function getSectorInfluenceHistoryEntry(sectorId) {
+  return ensureSectorInfluenceStore()[sectorId] || null;
+}
+
+function syncSectorInfluenceHistory(timestamp = Date.now(), recordChanges = true) {
+  const store = ensureSectorInfluenceStore();
+  let changed = false;
+  ensureSectorStore().forEach((sector) => {
+    const summary = getManualSectorControlSummary(sector);
+    const influenceState = getSectorInfluenceState(summary);
+    const nextController = influenceState.dominantOwner || 'NEUTRAL';
+    const previous = store[sector.id];
+    if (!previous) {
+      store[sector.id] = {
+        controller: nextController,
+        status: influenceState.status,
+        dominantShare: influenceState.dominantShare,
+        updatedAt: timestamp,
+        lastChange: null
+      };
+      changed = true;
+      return;
+    }
+    if (recordChanges && previous.controller && previous.controller !== nextController) {
+      previous.lastChange = {
+        from: previous.controller,
+        to: nextController,
+        at: timestamp
+      };
+      changed = true;
+    }
+    if (previous.status !== influenceState.status || previous.controller !== nextController || Math.abs((previous.dominantShare || 0) - influenceState.dominantShare) > 0.0001) {
+      previous.status = influenceState.status;
+      previous.controller = nextController;
+      previous.dominantShare = influenceState.dominantShare;
+      previous.updatedAt = timestamp;
+      changed = true;
+    }
+  });
+  return changed;
+}
+
+function getSectorInfluencePalette(owner) {
+  if (owner === 'GAR') return { fill: 'rgba(31,124,255,.24)', edge: 'rgba(124,190,255,.88)' };
+  if (owner === 'KUS') return { fill: 'rgba(208,54,50,.24)', edge: 'rgba(255,142,142,.88)' };
+  if (owner === 'HUTT') return { fill: 'rgba(31,107,72,.24)', edge: 'rgba(120,214,163,.84)' };
+  return { fill: 'rgba(142,152,170,.22)', edge: 'rgba(214,222,236,.8)' };
+}
+
+function getPlanetInfluenceWeight(planet) {
+  let weight = 1;
+  if (planet?.isCoreWorld) weight += 0.35;
+  if (planet?.activeBattle) weight += 0.15;
+  return weight;
+}
+
+function buildSectorInfluenceFill(ctx, sector, summary) {
+  const entries = getSectorInfluenceEntries(summary);
+  if (!entries.length) return null;
+  const points = Array.isArray(sector?.points) ? sector.points : [];
+  if (!points.length) return null;
+  if (entries.length === 1) return getSectorInfluencePalette(entries[0].owner).fill;
+  const bounds = points.reduce((acc, point) => ({
+    minX: Math.min(acc.minX, point.x),
+    minY: Math.min(acc.minY, point.y),
+    maxX: Math.max(acc.maxX, point.x),
+    maxY: Math.max(acc.maxY, point.y)
+  }), { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity });
+  const gradient = ctx.createLinearGradient(bounds.minX, bounds.minY, bounds.maxX, bounds.maxY);
+  let cursor = 0;
+  entries.forEach((entry, index) => {
+    const share = entry.count / Math.max(1, summary.total);
+    const nextCursor = index === entries.length - 1 ? 1 : Math.min(1, cursor + share);
+    const fill = getSectorInfluencePalette(entry.owner).fill;
+    gradient.addColorStop(cursor, fill);
+    gradient.addColorStop(nextCursor, fill);
+    cursor = nextCursor;
+  });
+  return gradient;
+}
+
+function getSectorInfluenceEdge(summary) {
+  const influenceState = getSectorInfluenceState(summary);
+  const entries = influenceState.entries;
+  if (!entries.length) return null;
+  if (influenceState.contested) return 'rgba(182,112,255,.9)';
+  return getSectorInfluencePalette(entries[0].owner).edge;
+}
+
+function traceSectorPolygonPath(ctx, points = []) {
+  if (!points.length) return false;
+  ctx.beginPath();
+  ctx.moveTo(points[0].x, points[0].y);
+  for (let index = 1; index < points.length; index += 1) {
+    ctx.lineTo(points[index].x, points[index].y);
+  }
+  ctx.closePath();
+  return true;
+}
+
+function renderSectorPressureField(ctx, sector, sectorPlanets = [], influenceState) {
+  if (!sectorPlanets.length || !traceSectorPolygonPath(ctx, sector.points)) return;
+  const bounds = sector.points.reduce((acc, point) => ({
+    minX: Math.min(acc.minX, point.x),
+    minY: Math.min(acc.minY, point.y),
+    maxX: Math.max(acc.maxX, point.x),
+    maxY: Math.max(acc.maxY, point.y)
+  }), { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity });
+  const span = Math.max(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY, 180);
+  ctx.save();
+  ctx.clip();
+  sectorPlanets.forEach((planet) => {
+    const palette = getSectorInfluencePalette(ownerClass(planet.owner));
+    const weight = getPlanetInfluenceWeight(planet);
+    const radius = Math.max(110, Math.min(220, span * 0.34 * weight));
+    const gradient = ctx.createRadialGradient(planet.x, planet.y, radius * 0.06, planet.x, planet.y, radius);
+    gradient.addColorStop(0, palette.fill.replace('.24', influenceState.contested ? '.24' : '.34'));
+    gradient.addColorStop(0.42, palette.fill.replace('.24', influenceState.contested ? '.12' : '.18'));
+    gradient.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.beginPath();
+    ctx.fillStyle = gradient;
+    ctx.arc(planet.x, planet.y, radius, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  ctx.restore();
+}
+
+function renderSectorContestedOverlay(ctx, sector) {
+  if (!traceSectorPolygonPath(ctx, sector.points)) return;
+  const bounds = sector.points.reduce((acc, point) => ({
+    minX: Math.min(acc.minX, point.x),
+    minY: Math.min(acc.minY, point.y),
+    maxX: Math.max(acc.maxX, point.x),
+    maxY: Math.max(acc.maxY, point.y)
+  }), { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity });
+  ctx.save();
+  ctx.clip();
+  ctx.strokeStyle = 'rgba(191,132,255,.45)';
+  ctx.lineWidth = 3;
+  for (let x = bounds.minX - (bounds.maxY - bounds.minY); x <= bounds.maxX + (bounds.maxY - bounds.minY); x += 24) {
+    ctx.beginPath();
+    ctx.moveTo(x, bounds.minY - 12);
+    ctx.lineTo(x + (bounds.maxY - bounds.minY) + 24, bounds.maxY + 12);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function formatElapsedSince(timestamp) {
+  if (!timestamp) return 'unbekannt';
+  const diff = Math.max(0, Date.now() - Number(timestamp));
+  const minutes = Math.floor(diff / 60000);
+  if (minutes < 1) return 'gerade eben';
+  if (minutes < 60) return `vor ${minutes} Min.`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `vor ${hours} Std.`;
+  const days = Math.floor(hours / 24);
+  return `vor ${days} Tag${days === 1 ? '' : 'en'}`;
+}
+
+>>>>>>> Stashed changes
 function formatSectorControlPercent(summary, owner) {
   if (!summary.total) return '0.0%';
   return `${(((summary[owner] || 0) / summary.total) * 100).toFixed(1)}%`;
@@ -8260,7 +8876,16 @@ function openPlanet(id) {
     .filter(([, entry]) => entry.category === 'development')
     .map(([key, entry]) => `<option value="${key}">${entry.label}</option>`)
     .join('');
-  const resourceOptions = `<option value="">Leer</option><optgroup label="Militärische Infrastruktur">${militaryInfrastructureOptions}</optgroup><optgroup label="Zivile Infrastruktur">${civilianInfrastructureOptions}</optgroup><optgroup label="Wirtschafts- und Entwicklungszentren">${developmentInfrastructureOptions}</optgroup>`;
+  const storageInfrastructureOptions = Object.entries(MINE_PROJECT_DEFS)
+    .filter(([, entry]) => entry.category === 'storage')
+    .map(([key, entry]) => `<option value="${key}">${entry.label}</option>`)
+    .join('');
+  const resourceOptions = `<option value="">Leer</option><optgroup label="Militärische Infrastruktur">${militaryInfrastructureOptions}</optgroup><optgroup label="Zivile Infrastruktur">${civilianInfrastructureOptions}</optgroup><optgroup label="Wirtschafts- und Entwicklungszentren">${developmentInfrastructureOptions}</optgroup><optgroup label="Lager">${storageInfrastructureOptions}</optgroup>`;
+  const slotUsage = getPlanetSlotUsage(p.id);
+  const warehouses = getPlanetWarehouses(p.id).map((warehouse) => ({
+    ...warehouse,
+    capacity: getWarehouseCapacity(warehouse.level)
+  }));
   const resourceSlotControls = resourceSlots.map((slot, index) => {
     const slotEditable = canEditPlanetResourceSlot(p, index);
     return `
@@ -8292,6 +8917,7 @@ function openPlanet(id) {
       <div class="form-row">
         <label>Infrastruktur-Slots</label>
         <div>${renderResourcePills(resourceSlots)}</div>
+        <small>${slotUsage.used}/10 Slots belegt</small>
         <div class="resource-slot-row">
           ${resourceSlotControls}
         </div>
@@ -8300,6 +8926,20 @@ function openPlanet(id) {
           : (currentRole() === 'Senat'
             ? (isResourceAssignmentEditable(p) ? 'Senat kann alle 10 Infrastruktur-Slots auf republikanischen Planeten verwalten.' : 'Senat kann nur republikanische Planeten verwalten.')
             : (isResourceAssignmentEditable(p) ? 'Eventleitung darf nur die ersten 3 Infrastruktur-Slots auf KUS- und Neutral-Planeten ändern.' : 'Infrastruktur-Slots sind für deine Rolle auf diesem Planeten nicht editierbar.'))}</small>
+      </div>
+      <div class="form-row">
+        <label>Lager auf diesem Planeten</label>
+        <div class="workspace-card compact">
+          ${warehouses.length
+            ? warehouses.map((warehouse) => `
+              <div>
+                <strong>${RESOURCE_LABELS[warehouse.resourceType]}-Lager</strong><br>
+                <small>Slot ${Number(warehouse.slotIndex) + 1} • Stufe ${warehouse.level} • Bestand ${formatResourceAmount(warehouse.currentStock)}/${formatResourceAmount(warehouse.capacity)}</small>
+                ${canBuildWarehouses() && warehouse.level < WAREHOUSE_LEVEL_CAPACITY.length - 1 ? `<br><button class="mini-btn" onclick="upgradeWarehouse('${warehouse.id}')">Upgrade</button>` : ''}
+              </div>
+            `).join('<hr style="border-color:rgba(255,255,255,.08)">')
+            : '<span class="muted">Auf diesem Planeten stehen noch keine Lager.</span>'}
+        </div>
       </div>
       <div class="form-row">
         <label>Orbitale Raumstationen</label>
@@ -8386,6 +9026,7 @@ function savePlanet(id) {
       nextSlots[index] = document.getElementById(`planetResource${index}`)?.value || '';
     }
     setPlanetResourceSlots(p.id, nextSlots);
+    syncWarehouseStoreForPlanet(p.id);
   }
   let rewardText = '';
   if (previousOwner !== 'GAR' && p.owner === 'GAR') {
@@ -8705,7 +9346,7 @@ function startBuildOrder() {
     setStatus('Dieser Bauort ist für die gewählte Klasse nicht erlaubt.');
     return;
   }
-  if (faction === 'GAR' && !spendResources(meta.cost, 'GAR')) {
+  if (faction === 'GAR' && !spendSectorShipyardCost(locationPlanetId, meta.cost, 'GAR')) {
     setStatus('Nicht genug Ressourcen für diesen Bauauftrag.');
     renderShipyardView();
     return;
@@ -10984,12 +11625,15 @@ function renderShipyardView() {
   const faction = getActiveShipyardFaction();
   const production = getEffectiveFactionProductionRate(faction);
   const pool = getFactionResourcePool(faction);
+  const garWarehouseTotals = getGarWarehouseTotals();
+  const selectedLocationPlanet = planetIndex.get(selectedLocationId);
+  const sectorCostSummary = faction === 'GAR' && selectedLocationPlanet ? getSectorShipyardCostSummary(selectedLocationId, selectedMeta?.cost || {}) : null;
   const canBuildAnything = role !== 'Viewer' && (
     role === 'Admin'
     || (role === 'Republic Navy / GAR' && faction === 'GAR' && canCoordinate4thFleet())
     || (role === 'Eventleiter / KUS' && faction === 'KUS')
   );
-  const resourceSummary = RESOURCE_KEYS.map((key) => `<div class="stat-card"><strong>${RESOURCE_LABELS[key]}</strong><span>${formatResourceAmount(pool[key])}</span></div>`).join('');
+  const resourceSummary = RESOURCE_KEYS.map((key) => `<div class="stat-card"><strong>${RESOURCE_LABELS[key]}</strong><span>${formatResourceAmount(faction === 'GAR' && STORAGE_RESOURCE_KEYS.includes(key) ? (garWarehouseTotals[key] + Number(pool[key] || 0)) : pool[key])}</span></div>`).join('');
   const buildJobs = state.buildJobs.filter((job) => job.faction === faction && job.jobType !== 'mine' && job.status === 'building');
   const readyShips = state.ships.filter((ship) => ship.faction === faction && ship.status === 'ready');
   workspacePanel.innerHTML = `
@@ -11046,10 +11690,11 @@ function renderShipyardView() {
               ? 'Debug aktiv: GAR-Kosten derzeit deaktiviert.'
               : RESOURCE_KEYS.map((key) => `${RESOURCE_LABELS[key]}: ${selectedMeta?.cost?.[key] || 0}`).join(' • '))
             : 'KUS-Bau bleibt sofort verfügbar und ignoriert aktuell Rohstoffkosten.'}</p>
+          ${faction === 'GAR' && sectorCostSummary ? `<p><strong>Sektor-Lager ${escapeHtml(sectorCostSummary.sectorInfo.name)}:</strong> ${STORAGE_RESOURCE_KEYS.map((key) => `${RESOURCE_LABELS[key]} ${formatResourceAmount(sectorCostSummary.warehouseSummary[key]?.stock || 0)}/${formatResourceAmount(sectorCostSummary.warehouseSummary[key]?.capacity || 0)}`).join(' • ')}</p>` : ''}
           <p><strong>Bauzeit:</strong> ${faction === 'KUS' || DEBUG_DISABLE_GAR_BUILD_LIMITS ? 'Sofort' : `${selectedMeta?.buildTimeHours || 0}h`}</p>
           <p><strong>Bauorte:</strong> ${faction === 'KUS' ? 'Geonosis, Muunilinst, Serenno, Raxus' : (selectedMeta?.buildLocations === 'anyGARPlanet' ? 'Jeder GAR-Planet' : (selectedMeta?.buildLocations || []).join(', '))}</p>
         </div>
-        <button class="primary" onclick="startBuildOrder()" ${canBuildAnything && locations.length && (faction === 'KUS' || DEBUG_DISABLE_GAR_BUILD_LIMITS || canAffordCost(selectedMeta?.cost)) ? '' : 'disabled'}>${faction === 'KUS' || DEBUG_DISABLE_GAR_BUILD_LIMITS ? `${faction}-Schiff sofort erzeugen` : 'Bau starten'}</button>
+        <button class="primary" onclick="startBuildOrder()" ${canBuildAnything && locations.length && (faction === 'KUS' || DEBUG_DISABLE_GAR_BUILD_LIMITS || canAffordSectorShipyardCost(selectedLocationId, selectedMeta?.cost)) ? '' : 'disabled'}>${faction === 'KUS' || DEBUG_DISABLE_GAR_BUILD_LIMITS ? `${faction}-Schiff sofort erzeugen` : 'Bau starten'}</button>
       </div>
       <div class="workspace-card">
         <h3>Stündliche Produktion / Staatseinnahmen</h3>
@@ -11101,6 +11746,7 @@ function renderBuildProjectsView() {
   const role = currentRole();
   const faction = role === 'Eventleiter / KUS' ? 'KUS' : 'GAR';
   const pool = getFactionResourcePool(faction);
+  const garWarehouseTotals = getGarWarehouseTotals();
   const buildJobs = state.buildJobs
     .filter((job) => (role === 'Admin' ? true : job.faction === faction))
     .sort((a, b) => Number(a.finishesAt || 0) - Number(b.finishesAt || 0));
@@ -11108,7 +11754,7 @@ function renderBuildProjectsView() {
   const selectedPlanetId = document.getElementById('mineBuildPlanet')?.value || minePlanetChoices[0]?.id || '';
   const selectedPlanet = minePlanetChoices.find((planet) => planet.id === selectedPlanetId) || minePlanetChoices[0] || null;
   const requestedCategory = document.getElementById('infrastructureCategory')?.value || 'military';
-  const selectedCategory = ['military', 'civilian', 'development'].includes(requestedCategory)
+  const selectedCategory = ['military', 'civilian', 'development', 'storage'].includes(requestedCategory)
     ? requestedCategory
     : 'military';
   const categoryProjects = Object.entries(MINE_PROJECT_DEFS).filter(([, project]) => project.category === selectedCategory);
@@ -11121,7 +11767,13 @@ function renderBuildProjectsView() {
   const selectedMineMeta = getMineProjectMeta(selectedBuildingKey);
   const selectedPlanetProduction = selectedPlanet ? getPlanetProductionRate(selectedPlanet.id) : createEmptyFactionResources();
   const selectedPlanetBonuses = selectedPlanet ? getPlanetCivilianBonuses(selectedPlanet.id) : createEmptyFactionResources();
+  const logisticsSectors = getLogisticsSectorChoices();
+  const selectedLogisticsSectorId = document.getElementById('warehouseSectorSelect')?.value || logisticsSectors[0]?.id || '';
+  const selectedLogisticsSector = logisticsSectors.find((entry) => entry.id === selectedLogisticsSectorId) || logisticsSectors[0] || null;
+  const sectorWarehouseSummary = selectedLogisticsSector ? getSectorWarehouseSummary(selectedLogisticsSector.id) : null;
+  const transportJobs = buildJobs.filter((job) => job.jobType === 'transport');
   const canStartMineProject = canBuildMineProjects();
+  const canManageLogistics = canManageWarehouseLogistics();
   workspacePanel.innerHTML = `
     <div class="workspace-head">
       <div>
@@ -11133,7 +11785,7 @@ function renderBuildProjectsView() {
       </div>
     </div>
     <div class="workspace-grid">
-      ${RESOURCE_KEYS.map((key) => `<div class="stat-card"><strong>${RESOURCE_LABELS[key]}</strong><span>${formatResourceAmount(pool[key])}</span></div>`).join('')}
+      ${RESOURCE_KEYS.map((key) => `<div class="stat-card"><strong>${RESOURCE_LABELS[key]}</strong><span>${formatResourceAmount(faction === 'GAR' && STORAGE_RESOURCE_KEYS.includes(key) ? (garWarehouseTotals[key] + Number(pool[key] || 0)) : pool[key])}</span></div>`).join('')}
     </div>
     <div class="workspace-section workspace-columns">
       <div class="workspace-card">
@@ -11153,6 +11805,7 @@ function renderBuildProjectsView() {
             <option value="military" ${selectedCategory === 'military' ? 'selected' : ''}>Militärische Infrastruktur</option>
             <option value="civilian" ${selectedCategory === 'civilian' ? 'selected' : ''}>Zivile Infrastruktur</option>
             <option value="development" ${selectedCategory === 'development' ? 'selected' : ''}>Wirtschafts- und Entwicklungszentren</option>
+            <option value="storage" ${selectedCategory === 'storage' ? 'selected' : ''}>Lager</option>
           </select>
         </div>
         <div class="form-row">
@@ -11173,14 +11826,16 @@ function renderBuildProjectsView() {
           <strong>${selectedMineMeta?.label || 'Gebäude'}</strong>
           <p>${selectedMineMeta?.category === 'development'
             ? selectedMineMeta.description
-            : (selectedMineMeta?.category === 'civilian'
-              ? `Erwirtschaftet etwa ${formatCredits(CIVILIAN_CREDIT_YIELDS[selectedBuildingKey]?.credits || 0)} Bruttoumsatz pro Stunde. Nur der festgelegte Steuersatz fließt in den GAR-Haushalt.`
-              : `Produziert +1 ${RESOURCE_LABELS[selectedMineMeta?.productionResource] || 'Ressource'} pro Stunde.`)}</p>
+            : (selectedMineMeta?.category === 'storage'
+              ? `Lagert ausschließlich ${RESOURCE_LABELS[selectedMineMeta?.storageResource] || 'eine Ressource'} und belegt genau einen Planeten-Slot.`
+              : (selectedMineMeta?.category === 'civilian'
+                ? `Erwirtschaftet etwa ${formatCredits(CIVILIAN_CREDIT_YIELDS[selectedBuildingKey]?.credits || 0)} Bruttoumsatz pro Stunde. Nur der festgelegte Steuersatz fließt in den GAR-Haushalt.`
+                : `Produziert +1 ${RESOURCE_LABELS[selectedMineMeta?.productionResource] || 'Ressource'} pro Stunde.`))}</p>
           <strong>Kosten</strong>
           <p>${RESOURCE_KEYS.map((key) => `${RESOURCE_LABELS[key]}: ${selectedMineMeta?.cost?.[key] || 0}`).join(' • ')}</p>
           <p><strong>Bauzeit:</strong> ${MINE_BUILD_DURATION_HOURS}h</p>
         </div>
-        <button class="primary" onclick="startMineBuildProject()" ${(canStartMineProject && availableSlots.length && canAffordCost(selectedMineMeta?.cost || {}, 'GAR')) ? '' : 'disabled'}>Infrastrukturprojekt starten</button>
+        <button class="primary" onclick="startMineBuildProject()" ${(canStartMineProject && availableSlots.length && canAffordGarInfrastructureCost(selectedMineMeta?.cost || {})) ? '' : 'disabled'}>Infrastrukturprojekt starten</button>
       </div>
       <div class="workspace-card">
         <h3>Produktion auf ${selectedPlanet?.name || 'Planet'}</h3>
@@ -11191,6 +11846,7 @@ function renderBuildProjectsView() {
           </tbody>
         </table>
         <p class="muted">Boni der Wirtschafts- und Entwicklungszentren wirken auf alle militärischen und zivilen Produktionsgebäude desselben Planeten. Je Rohstoff gilt ein Maximum von +${MAX_CIVILIAN_PRODUCTION_BONUS * 100} %.</p>
+        <p class="muted" style="margin-top:8px">${selectedPlanet ? `${getPlanetSlotUsage(selectedPlanet.id).used}/10 Slots auf ${selectedPlanet.name} belegt.` : ''}</p>
       </div>
       <div class="workspace-card">
         <h3>Projektübersicht</h3>
@@ -11206,6 +11862,64 @@ function renderBuildProjectsView() {
             `).join('')}
           </div>
         ` : '<div class="muted-box">Keine Bauprojekte vorhanden.</div>'}
+      </div>
+    </div>
+    <div class="workspace-section workspace-columns">
+      <div class="workspace-card">
+        <h3>Sektorlogistik</h3>
+        <div class="form-row">
+          <label>Sektor</label>
+          <select id="warehouseSectorSelect" onchange="renderBuildProjectsView()">
+            ${logisticsSectors.map((sector) => `<option value="${sector.id}" ${sector.id === selectedLogisticsSector?.id ? 'selected' : ''}>${sector.name}</option>`).join('')}
+          </select>
+        </div>
+        ${sectorWarehouseSummary ? `
+          <table class="data-table">
+            <thead><tr><th>Ressource</th><th>Bestand</th><th>Kapazität</th><th>Lagerstandorte</th></tr></thead>
+            <tbody>
+              ${STORAGE_RESOURCE_KEYS.map((resourceKey) => `
+                <tr>
+                  <td>${RESOURCE_LABELS[resourceKey]}</td>
+                  <td>${formatResourceAmount(sectorWarehouseSummary[resourceKey]?.stock || 0)}</td>
+                  <td>${formatResourceAmount(sectorWarehouseSummary[resourceKey]?.capacity || 0)}</td>
+                  <td>${(sectorWarehouseSummary[resourceKey]?.warehouses || []).map((warehouse) => `${warehouse.planetName} (L${warehouse.level})`).join(', ') || '—'}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        ` : '<div class="muted-box">Noch keine GAR-Sektoren mit Lagern gefunden.</div>'}
+      </div>
+      <div class="workspace-card">
+        <h3>Transporte anordnen</h3>
+        <p>${canManageLogistics ? 'Navy, Senats-Admins und Admins können sektorweite Ressourcentransporte anlegen.' : 'Für diese Aktion fehlen dir die nötigen Rechte.'}</p>
+        <div class="form-row">
+          <label>Ausgangssektor</label>
+          <select id="warehouseSourceSector" ${canManageLogistics ? '' : 'disabled'}>
+            ${logisticsSectors.map((sector) => `<option value="${sector.id}">${sector.name}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-row">
+          <label>Zielsektor</label>
+          <select id="warehouseTargetSector" ${canManageLogistics ? '' : 'disabled'}>
+            ${logisticsSectors.map((sector) => `<option value="${sector.id}" ${sector.id === selectedLogisticsSector?.id ? 'selected' : ''}>${sector.name}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-row">
+          <label>Ressource</label>
+          <select id="warehouseTransportResource" ${canManageLogistics ? '' : 'disabled'}>
+            ${STORAGE_RESOURCE_KEYS.map((resourceKey) => `<option value="${resourceKey}">${RESOURCE_LABELS[resourceKey]}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-row">
+          <label>Menge</label>
+          <input id="warehouseTransportAmount" type="number" min="1" step="1" value="100" ${canManageLogistics ? '' : 'disabled'}>
+        </div>
+        <button class="primary" onclick="startWarehouseTransport()" ${canManageLogistics ? '' : 'disabled'}>Transport anordnen</button>
+        <div class="workspace-card compact" style="margin-top:12px">
+          ${transportJobs.length
+            ? transportJobs.map((job) => `<div><strong>${RESOURCE_LABELS[job.resourceKey] || job.resourceKey}</strong><br><small>${getBuildJobLocationName(job)} • ${formatResourceAmount(job.amount)} • ${job.status === 'building' ? formatDuration((job.finishesAt || 0) - Date.now()) : 'Abgeschlossen'}</small></div>`).join('<hr style="border-color:rgba(255,255,255,.08)">')
+            : '<span class="muted">Keine laufenden Transporte.</span>'}
+        </div>
       </div>
     </div>
   `;
@@ -11603,13 +12317,12 @@ document.getElementById('layersBtn').onclick = () => {
   panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
 };
 document.querySelectorAll('[data-layer]').forEach((cb) => {
-  cb.checked = Boolean(layers[cb.dataset.layer]);
   cb.onchange = () => {
     layers[cb.dataset.layer] = cb.checked;
     saveClientUiPrefs();
     const affectsTacticalCanvas = ['grid', 'hyperlanes', 'sectorLabels'].includes(cb.dataset.layer);
-    const affectsInfluence = ['influence', 'contested'].includes(cb.dataset.layer);
-    const affectsRouteNetwork = ['hyperlanes', 'contested', 'influence'].includes(cb.dataset.layer);
+    const affectsInfluence = cb.dataset.layer === 'sectorLabels';
+    const affectsRouteNetwork = cb.dataset.layer === 'hyperlanes';
     markDirty({
       layers: true,
       tacticalBase: affectsTacticalCanvas,
@@ -11619,6 +12332,7 @@ document.querySelectorAll('[data-layer]').forEach((cb) => {
     });
   };
 });
+syncLayerCheckboxes();
 roleSelect.onchange = () => {
   refreshRoleChrome();
   if (selected?.type === 'planet') openPlanet(selected.id);
@@ -11734,6 +12448,7 @@ loginModalUser.addEventListener('keydown', (event) => {
 });
 applyDefaultAnonymousRole();
 loadClientUiPrefs();
+syncLayerCheckboxes();
 applyAudioMuteState();
 setNavCollapsed(false);
 refreshRoleChrome();
