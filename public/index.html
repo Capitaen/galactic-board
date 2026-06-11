@@ -1864,6 +1864,14 @@ function ensureSectorStore() {
   return state.meta.manualSectors;
 }
 
+function ensureSectorInfluenceStore() {
+  state.meta = state.meta || {};
+  if (!state.meta.sectorInfluence || typeof state.meta.sectorInfluence !== 'object' || Array.isArray(state.meta.sectorInfluence)) {
+    state.meta.sectorInfluence = {};
+  }
+  return state.meta.sectorInfluence;
+}
+
 function createManualSectorRecord(data = {}) {
   const points = Array.isArray(data.points)
     ? data.points
@@ -5417,6 +5425,7 @@ function commitSectorDraft() {
   ensureSectorStore().push(sector);
   activeSectorDraft = null;
   tacticalHoverAreas = buildTacticalHoverAreas(null, viewMode === 'schematic' ? 'schematic' : 'image', viewMode);
+  syncSectorInfluenceHistory(Date.now(), false);
   saveLocal();
   updateSectorDrawButton();
   refreshSectorOverlayNow();
@@ -5433,6 +5442,7 @@ function deleteManualSector(name) {
   tacticalHoverAreas = buildTacticalHoverAreas(null, viewMode === 'schematic' ? 'schematic' : 'image', viewMode);
   if (hoveredZoneInfo?.sector?.id === sector.id || hoveredZoneInfo?.sector?.name === sector.name) setHoveredZone(null);
   if (selected?.type === 'sector' && selected.id === sector.id) closeInfoPanel();
+  delete ensureSectorInfluenceStore()[sector.id];
   saveLocal();
   refreshSectorOverlayNow();
   renderAll({ layers: true, routeOverlay: true });
@@ -7231,18 +7241,22 @@ function renderInfluenceClouds() {
   sectors.forEach((sector) => {
     const summary = getManualSectorControlSummary(sector);
     if (!summary.total) return;
+    const influenceState = getSectorInfluenceState(summary);
+    const sectorPlanets = state.planets.filter((planet) => pointInPolygon({ x: planet.x, y: planet.y }, sector.points));
     const fill = buildSectorInfluenceFill(influenceCtx, sector, summary);
     const edge = getSectorInfluenceEdge(summary);
     if (!fill || !edge || !traceSectorPolygonPath(influenceCtx, sector.points)) return;
     influenceCtx.save();
     influenceCtx.fillStyle = fill;
     influenceCtx.strokeStyle = edge;
-    influenceCtx.lineWidth = 2.2;
+    influenceCtx.lineWidth = influenceState.contested ? 4 : 3;
     influenceCtx.shadowColor = edge;
     influenceCtx.shadowBlur = 12;
     influenceCtx.fill();
     influenceCtx.stroke();
     influenceCtx.restore();
+    renderSectorPressureField(influenceCtx, sector, sectorPlanets, influenceState);
+    if (influenceState.contested) renderSectorContestedOverlay(influenceCtx, sector);
   });
 }
 
@@ -8084,11 +8098,81 @@ function getSectorInfluenceEntries(summary) {
     .sort((a, b) => b.count - a.count);
 }
 
+function getSectorInfluenceState(summary) {
+  const entries = getSectorInfluenceEntries(summary);
+  const top = entries[0] || null;
+  const second = entries[1] || null;
+  const total = Math.max(1, Number(summary?.total || 0));
+  const dominantShare = top ? (top.count / total) : 0;
+  const secondShare = second ? (second.count / total) : 0;
+  const secured = Boolean(top) && dominantShare >= 0.6;
+  const contested = Boolean(top) && !secured && entries.length >= 2;
+  return {
+    entries,
+    dominantOwner: top?.owner || '',
+    dominantShare,
+    secondOwner: second?.owner || '',
+    secondShare,
+    secured,
+    contested,
+    status: contested ? 'CONTESTED' : (secured ? 'SECURED' : 'UNSTABLE')
+  };
+}
+
+function getSectorInfluenceHistoryEntry(sectorId) {
+  return ensureSectorInfluenceStore()[sectorId] || null;
+}
+
+function syncSectorInfluenceHistory(timestamp = Date.now(), recordChanges = true) {
+  const store = ensureSectorInfluenceStore();
+  let changed = false;
+  ensureSectorStore().forEach((sector) => {
+    const summary = getManualSectorControlSummary(sector);
+    const influenceState = getSectorInfluenceState(summary);
+    const nextController = influenceState.dominantOwner || '';
+    const previous = store[sector.id];
+    if (!previous) {
+      store[sector.id] = {
+        controller: nextController,
+        status: influenceState.status,
+        dominantShare: influenceState.dominantShare,
+        updatedAt: timestamp,
+        lastChange: null
+      };
+      changed = true;
+      return;
+    }
+    if (recordChanges && previous.controller && previous.controller !== nextController) {
+      previous.lastChange = {
+        from: previous.controller,
+        to: nextController,
+        at: timestamp
+      };
+      changed = true;
+    }
+    if (previous.status !== influenceState.status || previous.controller !== nextController || Math.abs((previous.dominantShare || 0) - influenceState.dominantShare) > 0.0001) {
+      previous.status = influenceState.status;
+      previous.controller = nextController;
+      previous.dominantShare = influenceState.dominantShare;
+      previous.updatedAt = timestamp;
+      changed = true;
+    }
+  });
+  return changed;
+}
+
 function getSectorInfluencePalette(owner) {
   if (owner === 'GAR') return { fill: 'rgba(31,124,255,.24)', edge: 'rgba(124,190,255,.88)' };
   if (owner === 'KUS') return { fill: 'rgba(208,54,50,.24)', edge: 'rgba(255,142,142,.88)' };
   if (owner === 'HUTT') return { fill: 'rgba(31,107,72,.24)', edge: 'rgba(120,214,163,.84)' };
   return { fill: 'rgba(142,152,170,.22)', edge: 'rgba(214,222,236,.8)' };
+}
+
+function getPlanetInfluenceWeight(planet) {
+  let weight = 1;
+  if (planet?.isCoreWorld) weight += 0.35;
+  if (planet?.activeBattle) weight += 0.15;
+  return weight;
 }
 
 function buildSectorInfluenceFill(ctx, sector, summary) {
@@ -8117,10 +8201,10 @@ function buildSectorInfluenceFill(ctx, sector, summary) {
 }
 
 function getSectorInfluenceEdge(summary) {
-  const entries = getSectorInfluenceEntries(summary);
+  const influenceState = getSectorInfluenceState(summary);
+  const entries = influenceState.entries;
   if (!entries.length) return null;
-  const activeFactions = entries.filter((entry) => entry.owner !== 'NEUTRAL');
-  if (activeFactions.length >= 2) return 'rgba(182,112,255,.9)';
+  if (influenceState.contested) return 'rgba(182,112,255,.9)';
   return getSectorInfluencePalette(entries[0].owner).edge;
 }
 
@@ -8135,6 +8219,66 @@ function traceSectorPolygonPath(ctx, points = []) {
   return true;
 }
 
+function renderSectorPressureField(ctx, sector, sectorPlanets = [], influenceState) {
+  if (!sectorPlanets.length || !traceSectorPolygonPath(ctx, sector.points)) return;
+  const bounds = sector.points.reduce((acc, point) => ({
+    minX: Math.min(acc.minX, point.x),
+    minY: Math.min(acc.minY, point.y),
+    maxX: Math.max(acc.maxX, point.x),
+    maxY: Math.max(acc.maxY, point.y)
+  }), { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity });
+  const span = Math.max(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY, 180);
+  ctx.save();
+  ctx.clip();
+  sectorPlanets.forEach((planet) => {
+    const palette = getSectorInfluencePalette(ownerClass(planet.owner));
+    const weight = getPlanetInfluenceWeight(planet);
+    const radius = Math.max(110, Math.min(220, span * 0.34 * weight));
+    const gradient = ctx.createRadialGradient(planet.x, planet.y, radius * 0.06, planet.x, planet.y, radius);
+    gradient.addColorStop(0, palette.fill.replace('.24', influenceState.contested ? '.24' : '.34'));
+    gradient.addColorStop(0.42, palette.fill.replace('.24', influenceState.contested ? '.12' : '.18'));
+    gradient.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.beginPath();
+    ctx.fillStyle = gradient;
+    ctx.arc(planet.x, planet.y, radius, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  ctx.restore();
+}
+
+function renderSectorContestedOverlay(ctx, sector) {
+  if (!traceSectorPolygonPath(ctx, sector.points)) return;
+  const bounds = sector.points.reduce((acc, point) => ({
+    minX: Math.min(acc.minX, point.x),
+    minY: Math.min(acc.minY, point.y),
+    maxX: Math.max(acc.maxX, point.x),
+    maxY: Math.max(acc.maxY, point.y)
+  }), { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity });
+  ctx.save();
+  ctx.clip();
+  ctx.strokeStyle = 'rgba(191,132,255,.45)';
+  ctx.lineWidth = 3;
+  for (let x = bounds.minX - (bounds.maxY - bounds.minY); x <= bounds.maxX + (bounds.maxY - bounds.minY); x += 24) {
+    ctx.beginPath();
+    ctx.moveTo(x, bounds.minY - 12);
+    ctx.lineTo(x + (bounds.maxY - bounds.minY) + 24, bounds.maxY + 12);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function formatElapsedSince(timestamp) {
+  if (!timestamp) return 'unbekannt';
+  const diff = Math.max(0, Date.now() - Number(timestamp));
+  const minutes = Math.floor(diff / 60000);
+  if (minutes < 1) return 'gerade eben';
+  if (minutes < 60) return `vor ${minutes} Min.`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `vor ${hours} Std.`;
+  const days = Math.floor(hours / 24);
+  return `vor ${days} Tag${days === 1 ? '' : 'en'}`;
+}
+
 function formatSectorControlPercent(summary, owner) {
   if (!summary.total) return '0.0%';
   return `${(((summary[owner] || 0) / summary.total) * 100).toFixed(1)}%`;
@@ -8147,6 +8291,14 @@ function openSector(id) {
     return;
   }
   const control = getManualSectorControlSummary(sector);
+  const influenceState = getSectorInfluenceState(control);
+  const historyEntry = getSectorInfluenceHistoryEntry(sector.id);
+  const statusLabel = influenceState.contested
+    ? 'Umkämpft'
+    : (influenceState.secured ? `Gesichert: ${getOwnerLabel(influenceState.dominantOwner)}` : 'Instabil');
+  const lastChangeText = historyEntry?.lastChange
+    ? `Zuletzt gefallen: ${historyEntry.lastChange.from} an ${historyEntry.lastChange.to} • ${formatElapsedSince(historyEntry.lastChange.at)}`
+    : 'Noch kein Fraktionswechsel erfasst.';
   selected = { type: 'sector', id: sector.id };
   refreshFleetSelectionState();
   refreshRouteSelectionState();
@@ -8156,6 +8308,14 @@ function openSector(id) {
     <p><span class="badge">Manueller Sektor</span><span class="badge">${control.total} Planet${control.total === 1 ? '' : 'en'}</span></p>
     <div class="form-row"><label>Sektorname</label><input id="sectorName" value="${escapeHtml(sector.name)}"></div>
     <div class="form-row"><label>Notiz</label><textarea id="sectorDescription">${escapeHtml(sector.description || '')}</textarea></div>
+    <div class="form-row">
+      <label>Sektorstatus</label>
+      <div class="workspace-card compact">
+        <div><strong>${statusLabel}</strong></div>
+        <div>Dominanz: ${(influenceState.dominantShare * 100).toFixed(1)}%</div>
+        <div>${lastChangeText}</div>
+      </div>
+    </div>
     <div class="form-row">
       <label>Kontrolle im Sektor</label>
       <div class="workspace-card compact">
@@ -8179,6 +8339,7 @@ function saveSector(id) {
   sector.name = document.getElementById('sectorName')?.value.trim() || sector.name;
   sector.description = document.getElementById('sectorDescription')?.value.trim() || '';
   tacticalHoverAreas = buildTacticalHoverAreas(null, viewMode === 'schematic' ? 'schematic' : 'image', viewMode);
+  syncSectorInfluenceHistory(Date.now(), false);
   saveLocal();
   refreshSectorOverlayNow();
   render({ positions: true, layers: true, routeOverlay: true });
@@ -8345,6 +8506,7 @@ function savePlanet(id) {
     rewardText = resourceDeltaToText(reward);
   }
   enforceStrategicOwnershipRules();
+  syncSectorInfluenceHistory(Date.now(), true);
   saveLocal();
   playAudioCue(datapadAcceptAudio);
   render({ positions: true, frontline: true, influence: true, layers: true });
@@ -11504,6 +11666,7 @@ applyDefaultAnonymousRole();
 loadClientUiPrefs();
 applyAudioMuteState();
 setNavCollapsed(false);
+syncSectorInfluenceHistory(Date.now(), false);
 refreshRoleChrome();
 bootstrapFromServer();
 syncMobileOrientationUi();
