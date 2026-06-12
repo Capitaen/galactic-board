@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node server/src/server.js",
     "dev": "node --watch server/src/server.js",
-    "dispatch:audit": "node server/scripts/dispatchAuditToDiscord.js"
+    "dispatch:audit": "node server/scripts/dispatchAuditToDiscord.js",
+    "repair:sqlite": "node server/scripts/repairSqliteDatabase.js"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",
