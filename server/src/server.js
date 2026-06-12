@@ -28,9 +28,14 @@ import {
   readMarketSnapshot,
   readPortfolio,
   readPortfolioHistory,
+  repairAllMarket,
+  repairCompanyHoldings,
+  repairInvestorCompany,
+  resetCompanyPrice,
   runMarketTick,
   sellMarketShare,
   setSectorEmbargo,
+  suspendCompany,
   updateEconomyPolicy,
   updateRadioCommandPermission,
   updateUser,
@@ -1112,6 +1117,55 @@ app.get('/api/economy/companies/:companyId/ownership', (req, res) => {
     res.json({ ownership: readCompanyOwnership(db, String(req.params.companyId || '')) });
   } catch (error) {
     res.status(error.status || 500).json({ error: error.message || 'Anteilseigner konnten nicht geladen werden.' });
+  }
+});
+
+app.post('/api/admin/economy/repair-investor-company', requireAuth, requireSectorEmbargoManager, (req, res) => {
+  try {
+    const result = repairInvestorCompany(db, String(req.body?.investorId || ''), String(req.body?.companyId || ''));
+    res.json({ ok: true, result });
+  } catch (error) {
+    res.status(error.status || 500).json({ error: error.message || 'Investor-Holding konnte nicht repariert werden.' });
+  }
+});
+
+app.post('/api/admin/economy/companies/:companyId/repair-holdings', requireAuth, requireSectorEmbargoManager, (req, res) => {
+  try {
+    res.json({ ok: true, result: repairCompanyHoldings(db, String(req.params.companyId || '')) });
+  } catch (error) {
+    res.status(error.status || 500).json({ error: error.message || 'Company-Holdings konnten nicht repariert werden.' });
+  }
+});
+
+app.post('/api/admin/economy/repair-all-market', requireAuth, requireSectorEmbargoManager, (req, res) => {
+  try {
+    res.json({ ok: true, result: repairAllMarket(db) });
+  } catch (error) {
+    res.status(error.status || 500).json({ error: error.message || 'Markt konnte nicht repariert werden.' });
+  }
+});
+
+app.post('/api/admin/economy/companies/:companyId/suspend', requireAuth, requireSectorEmbargoManager, (req, res) => {
+  try {
+    res.json({ ok: true, result: suspendCompany(db, String(req.params.companyId || ''), String(req.body?.reason || 'Admin-Suspension')) });
+  } catch (error) {
+    res.status(error.status || 500).json({ error: error.message || 'Holding konnte nicht ausgesetzt werden.' });
+  }
+});
+
+app.post('/api/admin/economy/companies/:companyId/reset-price', requireAuth, requireSectorEmbargoManager, (req, res) => {
+  try {
+    res.json({
+      ok: true,
+      result: resetCompanyPrice(
+        db,
+        String(req.params.companyId || ''),
+        Number(req.body?.fairPrice || 0),
+        String(req.body?.reason || 'Admin-Fair-Price-Reset')
+      )
+    });
+  } catch (error) {
+    res.status(error.status || 500).json({ error: error.message || 'Fair-Price-Reset fehlgeschlagen.' });
   }
 });
 
