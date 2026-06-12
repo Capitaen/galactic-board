@@ -2922,12 +2922,12 @@ export function runInstitutionalInvestorTick(state, options = {}) {
   }
   const recordedAt = new Date(now).toISOString();
   const demandRows = db.prepare(`
-    SELECT sector_id AS sectorId, sector_name AS sectorName, resource_type AS resourceType,
-      demand_score AS demandScore, supply_score AS supplyScore,
-      import_dependency AS importDependency, export_strength AS exportStrength,
-      market_multiplier AS marketMultiplier, pressure_score AS pressureScore,
-      momentum, trend, volatility, chain_impulse AS chainImpulse,
-      chain_source_resource AS chainSourceResource,
+    SELECT d.sector_id AS sectorId, d.sector_name AS sectorName, d.resource_type AS resourceType,
+      d.demand_score AS demandScore, d.supply_score AS supplyScore,
+      d.import_dependency AS importDependency, d.export_strength AS exportStrength,
+      d.market_multiplier AS marketMultiplier, d.pressure_score AS pressureScore,
+      d.momentum, d.trend, d.volatility, d.chain_impulse AS chainImpulse,
+      d.chain_source_resource AS chainSourceResource,
       s.market_sentiment AS marketSentiment, s.war_pressure AS warPressure
     FROM sector_resource_demand d
     LEFT JOIN sector_economy_state s ON s.sector_id = d.sector_id
@@ -4388,11 +4388,11 @@ export function runMarketTick(db, inflationRate = 0, now = Date.now(), state = n
     INSERT INTO market_history (id, company_id, price, recorded_at) VALUES (?, ?, ?, ?)
   `);
   const demandMap = new Map(db.prepare(`
-    SELECT sector_name AS sectorName, resource_type AS resourceType,
-      demand_score AS demandScore, supply_score AS supplyScore,
-      market_multiplier AS marketMultiplier, import_dependency AS importDependency,
-      export_strength AS exportStrength, pressure_score AS pressureScore,
-      momentum, trend, volatility, chain_impulse AS chainImpulse,
+    SELECT d.sector_name AS sectorName, d.resource_type AS resourceType,
+      d.demand_score AS demandScore, d.supply_score AS supplyScore,
+      d.market_multiplier AS marketMultiplier, d.import_dependency AS importDependency,
+      d.export_strength AS exportStrength, d.pressure_score AS pressureScore,
+      d.momentum, d.trend, d.volatility, d.chain_impulse AS chainImpulse,
       e.market_sentiment AS marketSentiment
     FROM sector_resource_demand d
     LEFT JOIN sector_economy_state e ON e.sector_id = d.sector_id
