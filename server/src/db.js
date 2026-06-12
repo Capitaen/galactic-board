@@ -13,11 +13,39 @@ const RESOURCE_MARKET_CONFIG = {
 };
 
 const RESOURCE_KEYS = Object.keys(RESOURCE_MARKET_CONFIG);
-const DEMAND_TICK_MS = 5 * 60 * 1000;
+const DEMAND_TICK_MS = 15 * 1000;
 const INSTITUTIONAL_TICK_MS = 10 * 60 * 1000;
 const ACP_HISTORY_WINDOW_MS = 183 * 24 * 60 * 60 * 1000;
 const MAX_INTELLIGENCE_REPORTS = 80;
 const MAX_TRADE_HISTORY_ROWS = 6000;
+const MIN_MARKET_PRICE = 25;
+const MAX_SINGLE_TRADE_MOVE = 0.18;
+const ABNORMAL_15M_PRICE_MULTIPLIER = 4;
+const MAX_PORTFOLIO_TRADE_QUANTITY = 10000;
+const RESOURCE_DEPENDENCY_CHAIN = {
+  quadraniumErz: { target: 'tibannaGas', delayTicks: 4 },
+  tibannaGas: { target: 'kavamSalz', delayTicks: 8 },
+  kavamSalz: { target: 'agrinium', delayTicks: 12 },
+  agrinium: { target: 'baradium', delayTicks: 16 },
+  baradium: { target: 'quadraniumErz', delayTicks: 20 }
+};
+const RESOURCE_CHAIN_SOURCES = Object.fromEntries(
+  Object.entries(RESOURCE_DEPENDENCY_CHAIN).map(([source, config]) => [config.target, { source, delayTicks: config.delayTicks }])
+);
+const RESOURCE_STOCKPILE_COLUMNS = {
+  quadraniumErz: 'stockpileMetals',
+  tibannaGas: 'stockpileFuel',
+  kavamSalz: 'stockpileSupplies',
+  agrinium: 'stockpileTechnology',
+  baradium: 'stockpileChemicals'
+};
+const MARKET_SENTIMENT_EFFECTS = {
+  Panik: -0.14,
+  Negativ: -0.06,
+  Neutral: 0,
+  Positiv: 0.05,
+  Euphorisch: 0.1
+};
 
 const MANUAL_SECTOR_NAME_MAP = {
   sector_d4anle0m: 'Kernwelten',
@@ -576,6 +604,12 @@ export function createDb(projectRoot) {
       consumer_confidence REAL NOT NULL DEFAULT 1,
       infrastructure_demand REAL NOT NULL DEFAULT 1,
       black_market_pressure REAL NOT NULL DEFAULT 0,
+      market_sentiment TEXT NOT NULL DEFAULT 'Neutral',
+      stockpile_metals REAL NOT NULL DEFAULT 0,
+      stockpile_fuel REAL NOT NULL DEFAULT 0,
+      stockpile_supplies REAL NOT NULL DEFAULT 0,
+      stockpile_technology REAL NOT NULL DEFAULT 0,
+      stockpile_chemicals REAL NOT NULL DEFAULT 0,
       import_dependency_json TEXT NOT NULL DEFAULT '{}',
       export_strength_json TEXT NOT NULL DEFAULT '{}',
       last_demand_tick TEXT,
@@ -591,6 +625,12 @@ export function createDb(projectRoot) {
       import_dependency REAL NOT NULL DEFAULT 0,
       export_strength REAL NOT NULL DEFAULT 0,
       market_multiplier REAL NOT NULL DEFAULT 1,
+      pressure_score REAL NOT NULL DEFAULT 0,
+      momentum REAL NOT NULL DEFAULT 0,
+      trend REAL NOT NULL DEFAULT 0,
+      volatility REAL NOT NULL DEFAULT 0.08,
+      chain_impulse REAL NOT NULL DEFAULT 0,
+      chain_source_resource TEXT NOT NULL DEFAULT '',
       updated_at TEXT NOT NULL,
       PRIMARY KEY (sector_id, resource_type)
     );
@@ -675,6 +715,18 @@ export function createDb(projectRoot) {
       created_at TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS market_integrity_logs (
+      id TEXT PRIMARY KEY,
+      investor_id TEXT,
+      company_id TEXT,
+      issue_type TEXT NOT NULL,
+      severity TEXT NOT NULL,
+      before_json TEXT,
+      after_json TEXT,
+      action_taken TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS corruption_watch_log (
       id TEXT PRIMARY KEY,
       timestamp TEXT NOT NULL,
@@ -709,6 +761,12 @@ export function createDb(projectRoot) {
 
     CREATE INDEX IF NOT EXISTS idx_market_intelligence_reports_created_at
       ON market_intelligence_reports (created_at DESC);
+
+    CREATE INDEX IF NOT EXISTS idx_market_integrity_logs_company_created_at
+      ON market_integrity_logs (company_id, created_at DESC);
+
+    CREATE INDEX IF NOT EXISTS idx_market_integrity_logs_investor_created_at
+      ON market_integrity_logs (investor_id, created_at DESC);
 
     CREATE INDEX IF NOT EXISTS idx_sector_resource_prices_updated_at
       ON sector_resource_prices (updated_at DESC);
@@ -809,6 +867,43 @@ export function createDb(projectRoot) {
   }
   if (!sectorEconomyColumns.has('last_updated')) {
     db.exec('ALTER TABLE sector_economy_state ADD COLUMN last_updated TEXT');
+  }
+  if (!sectorEconomyColumns.has('market_sentiment')) {
+    db.exec("ALTER TABLE sector_economy_state ADD COLUMN market_sentiment TEXT NOT NULL DEFAULT 'Neutral'");
+  }
+  if (!sectorEconomyColumns.has('stockpile_metals')) {
+    db.exec('ALTER TABLE sector_economy_state ADD COLUMN stockpile_metals REAL NOT NULL DEFAULT 0');
+  }
+  if (!sectorEconomyColumns.has('stockpile_fuel')) {
+    db.exec('ALTER TABLE sector_economy_state ADD COLUMN stockpile_fuel REAL NOT NULL DEFAULT 0');
+  }
+  if (!sectorEconomyColumns.has('stockpile_supplies')) {
+    db.exec('ALTER TABLE sector_economy_state ADD COLUMN stockpile_supplies REAL NOT NULL DEFAULT 0');
+  }
+  if (!sectorEconomyColumns.has('stockpile_technology')) {
+    db.exec('ALTER TABLE sector_economy_state ADD COLUMN stockpile_technology REAL NOT NULL DEFAULT 0');
+  }
+  if (!sectorEconomyColumns.has('stockpile_chemicals')) {
+    db.exec('ALTER TABLE sector_economy_state ADD COLUMN stockpile_chemicals REAL NOT NULL DEFAULT 0');
+  }
+  const sectorDemandColumns = new Set(db.prepare('PRAGMA table_info(sector_resource_demand)').all().map((column) => column.name));
+  if (!sectorDemandColumns.has('pressure_score')) {
+    db.exec('ALTER TABLE sector_resource_demand ADD COLUMN pressure_score REAL NOT NULL DEFAULT 0');
+  }
+  if (!sectorDemandColumns.has('momentum')) {
+    db.exec('ALTER TABLE sector_resource_demand ADD COLUMN momentum REAL NOT NULL DEFAULT 0');
+  }
+  if (!sectorDemandColumns.has('trend')) {
+    db.exec('ALTER TABLE sector_resource_demand ADD COLUMN trend REAL NOT NULL DEFAULT 0');
+  }
+  if (!sectorDemandColumns.has('volatility')) {
+    db.exec('ALTER TABLE sector_resource_demand ADD COLUMN volatility REAL NOT NULL DEFAULT 0.08');
+  }
+  if (!sectorDemandColumns.has('chain_impulse')) {
+    db.exec('ALTER TABLE sector_resource_demand ADD COLUMN chain_impulse REAL NOT NULL DEFAULT 0');
+  }
+  if (!sectorDemandColumns.has('chain_source_resource')) {
+    db.exec("ALTER TABLE sector_resource_demand ADD COLUMN chain_source_resource TEXT NOT NULL DEFAULT ''");
   }
   const marketInvestorColumns = new Set(db.prepare('PRAGMA table_info(market_investors)').all().map((column) => column.name));
   if (!marketInvestorColumns.has('user_id')) {
@@ -1379,8 +1474,315 @@ function getAvailableFreeFloatShares(db, companyId) {
   return Math.max(0, roundShares(row?.freeFloatShares));
 }
 
+function writeMarketIntegrityLog(db, input = {}) {
+  const createdAt = input.createdAt || new Date().toISOString();
+  db.prepare(`
+    INSERT INTO market_integrity_logs (
+      id, investor_id, company_id, issue_type, severity,
+      before_json, after_json, action_taken, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    crypto.randomUUID(),
+    input.investorId || null,
+    input.companyId || null,
+    input.issueType || 'unknown',
+    input.severity || 'warning',
+    input.before ? JSON.stringify(input.before) : null,
+    input.after ? JSON.stringify(input.after) : null,
+    input.actionTaken || 'logged',
+    createdAt
+  );
+  return { createdAt };
+}
+
+function getSellableLotQuantity(db, investorId, companyId) {
+  return roundShares(db.prepare(`
+    SELECT COALESCE(SUM(CASE WHEN COALESCE(remaining_quantity, quantity) > 0
+      THEN COALESCE(remaining_quantity, quantity) ELSE 0 END), 0) AS shares
+    FROM market_orders
+    WHERE investor_id = ? AND company_id = ?
+  `).get(investorId, companyId)?.shares);
+}
+
+function setHoldingCache(db, investorId, companyId, shares) {
+  const nextShares = Math.max(0, roundShares(shares));
+  if (nextShares <= 0) {
+    db.prepare('DELETE FROM market_holdings WHERE investor_id = ? AND company_id = ?').run(investorId, companyId);
+    return nextShares;
+  }
+  db.prepare(`
+    INSERT INTO market_holdings (investor_id, company_id, shares)
+    VALUES (?, ?, ?)
+    ON CONFLICT(investor_id, company_id) DO UPDATE SET shares = excluded.shares
+  `).run(investorId, companyId, nextShares);
+  return nextShares;
+}
+
+export function reconcileInvestorCompanyHolding(db, investorId, companyId, options = {}) {
+  if (!investorId || !companyId) return { sellableQuantity: 0, cachedQuantity: 0, repaired: false, warning: null };
+  const createdAt = options.createdAt || new Date().toISOString();
+  const negativeLots = db.prepare(`
+    SELECT id, remaining_quantity AS remainingQuantity
+    FROM market_orders
+    WHERE investor_id = ? AND company_id = ? AND COALESCE(remaining_quantity, quantity) < 0
+  `).all(investorId, companyId);
+  if (negativeLots.length) {
+    const before = { negativeLots };
+    db.prepare(`
+      UPDATE market_orders
+      SET remaining_quantity = 0, closed_at = COALESCE(closed_at, ?)
+      WHERE investor_id = ? AND company_id = ? AND COALESCE(remaining_quantity, quantity) < 0
+    `).run(createdAt, investorId, companyId);
+    writeMarketIntegrityLog(db, {
+      investorId,
+      companyId,
+      issueType: 'negative_remaining_quantity',
+      severity: 'critical',
+      before,
+      after: { negativeLotsRepaired: negativeLots.length },
+      actionTaken: 'negative_remaining_quantity_clamped_to_zero',
+      createdAt
+    });
+  }
+  const sellableQuantity = getSellableLotQuantity(db, investorId, companyId);
+  const cachedQuantity = roundShares(db.prepare(`
+    SELECT shares FROM market_holdings
+    WHERE investor_id = ? AND company_id = ?
+  `).get(investorId, companyId)?.shares);
+  if (cachedQuantity !== sellableQuantity) {
+    setHoldingCache(db, investorId, companyId, sellableQuantity);
+    writeMarketIntegrityLog(db, {
+      investorId,
+      companyId,
+      issueType: 'holdings_lot_mismatch',
+      severity: 'warning',
+      before: { cachedQuantity, sellableQuantity },
+      after: { cachedQuantity: sellableQuantity },
+      actionTaken: 'market_holdings_cache_reconciled_from_open_lots',
+      createdAt
+    });
+    updateOwnershipStructure(db, companyId, Date.parse(createdAt) || Date.now());
+    return {
+      sellableQuantity,
+      cachedQuantity: sellableQuantity,
+      repaired: true,
+      warning: 'Bestand wurde aus offenen Kauf-Lots korrigiert.'
+    };
+  }
+  return { sellableQuantity, cachedQuantity, repaired: false, warning: null };
+}
+
+export function repairInvestorCompany(db, investorId, companyId) {
+  return db.transaction(() => {
+    const result = reconcileInvestorCompanyHolding(db, investorId, companyId, { createdAt: new Date().toISOString() });
+    writePortfolioSnapshot(db, investorId);
+    return result;
+  })();
+}
+
+export function repairCompanyHoldings(db, companyId) {
+  return db.transaction(() => {
+    const investorIds = db.prepare(`
+      SELECT investor_id AS investorId FROM market_holdings WHERE company_id = ?
+      UNION
+      SELECT investor_id AS investorId FROM market_orders WHERE company_id = ?
+    `).all(companyId, companyId).map((row) => row.investorId).filter(Boolean);
+    const results = investorIds.map((investorId) => reconcileInvestorCompanyHolding(db, investorId, companyId));
+    updateOwnershipStructure(db, companyId);
+    investorIds.forEach((investorId) => writePortfolioSnapshot(db, investorId));
+    return { companyId, repairedInvestors: results.filter((entry) => entry.repaired).length, checkedInvestors: results.length };
+  })();
+}
+
+export function repairAllMarket(db) {
+  return db.transaction(() => {
+    const companyIds = db.prepare(`
+      SELECT id FROM market_companies
+      UNION
+      SELECT company_id AS id FROM market_orders
+      UNION
+      SELECT company_id AS id FROM market_holdings
+    `).all().map((row) => row.id).filter(Boolean);
+    let checkedInvestors = 0;
+    let repairedInvestors = 0;
+    companyIds.forEach((companyId) => {
+      const result = repairCompanyHoldings(db, companyId);
+      checkedInvestors += result.checkedInvestors;
+      repairedInvestors += result.repairedInvestors;
+    });
+    return { companies: companyIds.length, checkedInvestors, repairedInvestors };
+  })();
+}
+
+function suspendCompanyInternal(db, companyId, reason = 'Marktintegritaetsschutz', createdAt = new Date().toISOString()) {
+  const company = db.prepare('SELECT id, name, market_status AS marketStatus FROM market_companies WHERE id = ? OR symbol = ?').get(companyId, companyId);
+  if (!company) {
+    const error = new Error('Unternehmen nicht gefunden.');
+    error.status = 404;
+    throw error;
+  }
+  db.prepare(`
+    UPDATE market_companies
+    SET market_status = 'suspended', updated_at = ?
+    WHERE id = ?
+  `).run(createdAt, company.id);
+  writeMarketIntegrityLog(db, {
+    companyId: company.id,
+    issueType: 'suspended_company',
+    severity: 'critical',
+    before: { marketStatus: company.marketStatus },
+    after: { marketStatus: 'suspended' },
+    actionTaken: reason,
+    createdAt
+  });
+  insertMarketEvent(db, {
+    eventType: 'market_suspended',
+    title: 'Handel ausgesetzt',
+    description: reason,
+    impact: 0,
+    startedAt: createdAt
+  });
+  return { companyId: company.id, suspended: true, reason };
+}
+
+export function suspendCompany(db, companyId, reason = 'Marktintegritaetsschutz') {
+  return db.transaction(() => suspendCompanyInternal(db, companyId, reason))();
+}
+
+export function resetCompanyPrice(db, companyId, fairPrice, reason = 'Admin-Fair-Price-Reset') {
+  return db.transaction(() => {
+    const createdAt = new Date().toISOString();
+    const company = db.prepare('SELECT * FROM market_companies WHERE id = ? OR symbol = ?').get(companyId, companyId);
+    if (!company) {
+      const error = new Error('Unternehmen nicht gefunden.');
+      error.status = 404;
+      throw error;
+    }
+    if (
+      Number(company.is_embargoed || 0)
+      || ['embargo', 'suspended', 'insolvent', 'takeover'].includes(normalizeMarketStatus(company.market_status))
+      || company.acquired_by_company_id
+    ) {
+      const error = new Error('Diese Holding ist aktuell nicht normal handelbar.');
+      error.status = 409;
+      throw error;
+    }
+    const price = round2(Math.max(MIN_MARKET_PRICE, Number(fairPrice || company.base_price || MIN_MARKET_PRICE)));
+    db.prepare(`
+      UPDATE market_companies
+      SET previous_price = current_price, current_price = ?, market_cap = ?, updated_at = ?
+      WHERE id = ?
+    `).run(price, round2(price * roundShares(company.total_shares)), createdAt, company.id);
+    db.prepare('INSERT INTO market_history (id, company_id, price, recorded_at) VALUES (?, ?, ?, ?)')
+      .run(crypto.randomUUID(), company.id, price, createdAt);
+    writeMarketIntegrityLog(db, {
+      companyId: company.id,
+      issueType: 'repaired_company',
+      severity: 'admin',
+      before: { currentPrice: company.current_price, previousPrice: company.previous_price },
+      after: { currentPrice: price },
+      actionTaken: reason,
+      createdAt
+    });
+    insertMarketEvent(db, {
+      eventType: 'market_price_reset',
+      title: 'Fair-Price-Reset',
+      description: reason,
+      impact: 0,
+      startedAt: createdAt
+    });
+    updateOwnershipStructure(db, company.id, Date.parse(createdAt) || Date.now());
+    return { companyId: company.id, fairPrice: price };
+  })();
+}
+
+function assertPriceIsFinite(db, companyId, price, context = {}) {
+  if (!Number.isFinite(Number(price)) || Number.isNaN(Number(price)) || Number(price) < MIN_MARKET_PRICE) {
+    writeMarketIntegrityLog(db, {
+      investorId: context.investorId || null,
+      companyId,
+      issueType: 'invalid_price',
+      severity: 'critical',
+      before: context,
+      after: { rejectedPrice: price },
+      actionTaken: 'transaction_rollback',
+      createdAt: context.createdAt
+    });
+    const error = new Error('Ungueltiger Marktpreis. Trade wurde abgebrochen.');
+    error.status = 409;
+    throw error;
+  }
+}
+
+function calculateBoundedTradePricing(db, company, quantity, side, context = {}) {
+  const currentPrice = Number(company.current_price || 0);
+  assertPriceIsFinite(db, company.id, currentPrice, context);
+  const rawMove = 0.0125 * Math.sqrt(Math.max(1, Number(quantity || 1)));
+  const cappedMove = Math.min(MAX_SINGLE_TRADE_MOVE, rawMove);
+  const direction = side === 'sell' ? -1 : 1;
+  const nextPrice = round2(Math.max(MIN_MARKET_PRICE, currentPrice * (1 + (direction * cappedMove))));
+  const executionPrice = round2(Math.max(MIN_MARKET_PRICE, currentPrice * (1 + (direction * cappedMove * 0.5))));
+  if (rawMove > MAX_SINGLE_TRADE_MOVE) {
+    writeMarketIntegrityLog(db, {
+      investorId: context.investorId || null,
+      companyId: company.id,
+      issueType: 'abnormal_price_move',
+      severity: 'warning',
+      before: { currentPrice, requestedQuantity: quantity, rawMove, side },
+      after: { cappedMove, nextPrice, executionPrice },
+      actionTaken: 'price_impact_capped',
+      createdAt: context.createdAt
+    });
+  }
+  assertPriceIsFinite(db, company.id, nextPrice, { ...context, currentPrice, nextPrice });
+  return { executionPrice, nextPrice, rawMove, cappedMove };
+}
+
+function assertRecentPriceWindowHealthy(db, company, nextPrice, context = {}) {
+  const createdAt = context.createdAt || new Date().toISOString();
+  const cutoff = new Date((Date.parse(createdAt) || Date.now()) - (15 * 60 * 1000)).toISOString();
+  const rows = db.prepare(`
+    SELECT price FROM market_history
+    WHERE company_id = ? AND recorded_at >= ?
+    ORDER BY recorded_at ASC
+  `).all(company.id, cutoff);
+  if (!rows.length) return;
+  const baseline = Number(rows[0].price || company.current_price || company.base_price || MIN_MARKET_PRICE);
+  if (!Number.isFinite(baseline) || baseline < MIN_MARKET_PRICE) return;
+  const ratio = Number(nextPrice) / baseline;
+  if (ratio > ABNORMAL_15M_PRICE_MULTIPLIER || ratio < (1 / ABNORMAL_15M_PRICE_MULTIPLIER)) {
+    suspendCompanyInternal(
+      db,
+      company.id,
+      `${company.name} wurde wegen abnormaler Kursbewegung im 15-Minuten-Fenster ausgesetzt.`,
+      createdAt
+    );
+    writeMarketIntegrityLog(db, {
+      investorId: context.investorId || null,
+      companyId: company.id,
+      issueType: 'abnormal_price_move',
+      severity: 'critical',
+      before: { baseline, currentPrice: company.current_price, nextPrice, ratio },
+      after: { marketStatus: 'suspended' },
+      actionTaken: 'transaction_rollback_company_suspended',
+      createdAt
+    });
+    const error = new Error('Handel wegen abnormaler Kursbewegung ausgesetzt.');
+    error.status = 409;
+    throw error;
+  }
+}
+
 function getPortfolioMetrics(db, investorId) {
   const investor = getOrCreateMarketInvestor(db, investorId);
+  db.prepare(`
+    SELECT company_id AS companyId FROM market_holdings WHERE investor_id = ?
+    UNION
+    SELECT company_id AS companyId FROM market_orders WHERE investor_id = ?
+  `).all(investorId, investorId)
+    .map((row) => row.companyId)
+    .filter(Boolean)
+    .forEach((companyId) => reconcileInvestorCompanyHolding(db, investorId, companyId));
   const positions = db.prepare(`
     SELECT h.company_id AS companyId, h.shares,
       c.name, c.symbol, c.sector, c.resource_key AS resourceKey, c.resource_refs_json AS resourceRefsJson,
@@ -1884,10 +2286,30 @@ function buildDemandComputationContext(db, state, now = Date.now()) {
     SELECT sector_id AS sectorId, sector_name AS sectorName, resource_type AS resourceType,
       demand_score AS demandScore, supply_score AS supplyScore,
       import_dependency AS importDependency, export_strength AS exportStrength,
-      market_multiplier AS marketMultiplier, updated_at AS updatedAt
+      market_multiplier AS marketMultiplier, pressure_score AS pressureScore,
+      momentum, trend, volatility, chain_impulse AS chainImpulse,
+      chain_source_resource AS chainSourceResource, updated_at AS updatedAt
     FROM sector_resource_demand
   `).all();
   const previousDemandMap = new Map(previousDemandRows.map((row) => [`${row.sectorId}::${row.resourceType}`, row]));
+  const previousSectorRows = db.prepare(`
+    SELECT sector_id AS sectorId, sector_name AS sectorName, market_sentiment AS marketSentiment,
+      stockpile_metals AS stockpileMetals, stockpile_fuel AS stockpileFuel,
+      stockpile_supplies AS stockpileSupplies, stockpile_technology AS stockpileTechnology,
+      stockpile_chemicals AS stockpileChemicals
+    FROM sector_economy_state
+  `).all();
+  const previousSectorMap = new Map(previousSectorRows.map((row) => [row.sectorId, row]));
+  const galacticAverages = {};
+  RESOURCE_KEYS.forEach((resourceKey) => {
+    const rows = previousDemandRows.filter((row) => row.resourceType === resourceKey);
+    galacticAverages[resourceKey] = {
+      demandScore: average(rows.map((row) => Number(row.demandScore || 1))) || 1,
+      supplyScore: average(rows.map((row) => Number(row.supplyScore || 1))) || 1,
+      pressureScore: average(rows.map((row) => Number(row.pressureScore || 0))) || 0,
+      momentum: average(rows.map((row) => Number(row.momentum || 0))) || 0
+    };
+  });
   return {
     now,
     state,
@@ -1896,8 +2318,61 @@ function buildDemandComputationContext(db, state, now = Date.now()) {
     inflationRate,
     policy,
     activeEvents,
-    previousDemandMap
+    previousDemandMap,
+    previousSectorMap,
+    galacticAverages
   };
+}
+
+function getDemandRowFromMap(map, sectorId, resourceType) {
+  return map?.get(`${sectorId}::${resourceType}`) || null;
+}
+
+function calculateSentimentLabel(score) {
+  if (score <= -0.55) return 'Panik';
+  if (score <= -0.16) return 'Negativ';
+  if (score >= 0.62) return 'Euphorisch';
+  if (score >= 0.18) return 'Positiv';
+  return 'Neutral';
+}
+
+function calculateDelayedChainImpulse(sectorId, targetResource, options = {}) {
+  const sourceConfig = RESOURCE_CHAIN_SOURCES[targetResource];
+  if (!sourceConfig) return { impulse: 0, sourceResource: '' };
+  const { source, delayTicks } = sourceConfig;
+  const previousTarget = getDemandRowFromMap(options.previousDemandMap, sectorId, targetResource);
+  const localSource = getDemandRowFromMap(options.previousDemandMap, sectorId, source);
+  const neighborIds = options.neighbors?.get(sectorId) || [];
+  const neighborRows = neighborIds
+    .map((neighborId) => getDemandRowFromMap(options.previousDemandMap, neighborId, source))
+    .filter(Boolean);
+  const galactic = options.galacticAverages?.[source] || {};
+  const localPressure = Number(localSource?.pressureScore || 0) + Number(localSource?.momentum || 0) * 0.45;
+  const neighborPressure = neighborRows.length
+    ? average(neighborRows.map((row) => Number(row.pressureScore || 0) + Number(row.momentum || 0) * 0.35))
+    : localPressure * 0.35;
+  const galacticPressure = Number(galactic.pressureScore || 0) + Number(galactic.momentum || 0) * 0.25;
+  const weightedPressure = (localPressure * 0.7) + (neighborPressure * 0.2) + (galacticPressure * 0.1);
+  const tickBucket = Math.floor(Number(options.now || Date.now()) / DEMAND_TICK_MS);
+  const probabilityNoise = stableNoise(`chain-prob:${sectorId}:${source}:${targetResource}:${tickBucket}`, 0.18);
+  const activationChance = clamp(0.22 + Math.max(0, weightedPressure) * 0.18 + probabilityNoise, 0.05, 0.82);
+  const activated = stableNoise(`chain-gate:${sectorId}:${source}:${targetResource}:${tickBucket}`, 0.5) + 0.5 <= activationChance;
+  const delayedBuild = activated ? weightedPressure / Math.max(1, delayTicks) : 0;
+  const previousImpulse = Number(previousTarget?.chainImpulse || 0);
+  const decay = clamp(0.91 - (1 / Math.max(8, delayTicks * 4)), 0.76, 0.9);
+  return {
+    impulse: round2(clamp((previousImpulse * decay) + delayedBuild, -0.55, 1.25)),
+    sourceResource: source
+  };
+}
+
+function calculateResourceStockpile(previousValue, sector, resourceType, demandScore, supplyScore, sectorState, options = {}) {
+  const production = Number(sector.slotSummary?.production?.[resourceType] || 0);
+  const embargoDrain = Number(sectorState?.isEmbargoed || 0) ? 0.18 : 0;
+  const warDrain = Number(sectorState?.warPressure || 0) * 0.06;
+  const netFlow = (production * 0.8) + (Number(supplyScore || 1) * 0.35) - (Number(demandScore || 1) * 0.3) - embargoDrain - warDrain;
+  const storageNoise = stableNoise(`stockpile:${sector.id}:${resourceType}:${Math.floor(Number(options.now || Date.now()) / DEMAND_TICK_MS)}`, 0.08);
+  return round2(clamp(Number(previousValue || 0) * 0.96 + netFlow + storageNoise, 0, 500));
 }
 
 export function getNeighborSectorDemand(sectorId, resourceType, state, options = {}) {
@@ -1949,7 +2424,13 @@ export function calculateResourceDemand(sectorId, resourceType, state, options =
       supplyScore: 1,
       importDependency: 0.35,
       exportStrength: 0.1,
-      marketMultiplier: 1
+      marketMultiplier: 1,
+      pressureScore: 0,
+      momentum: 0,
+      trend: 0,
+      volatility: 0.08,
+      chainImpulse: 0,
+      chainSourceResource: ''
     };
   }
   const production = Number(sector.slotSummary?.production?.[resourceType] || 0);
@@ -1977,32 +2458,95 @@ export function calculateResourceDemand(sectorId, resourceType, state, options =
     baradium: 0.55 + industrialIndex * 0.3 + warPressure * 0.28 + shipProjects * 0.06,
     kavamSalz: 0.9 + populationIndex * 0.55 + warPressure * 0.18 + options.inflationRate * 0.2
   }[resourceType] || 1;
-  const supplyScore = clamp(0.35 + (production * 0.34) + exportStrength * 0.08, 0.15, 5.2);
+  const supplyDisruption = clamp(
+    (warPressure * 0.08)
+      + (blackMarketPressure * 0.035)
+      + (sector.dominantOwner === 'OPFOR' ? 0.25 : 0),
+    0,
+    0.48
+  );
+  const supplyScore = clamp((0.35 + (production * 0.34) + exportStrength * 0.08) * (1 - supplyDisruption), 0.15, 5.2);
   const randomNoise = stableNoise(`${sectorId}:${resourceType}:${Math.floor(options.now / DEMAND_TICK_MS)}`, 0.035);
   const speculationFactor = stableNoise(`spec:${sectorId}:${resourceType}:${Math.floor(options.now / (DEMAND_TICK_MS * 2))}`, 0.05);
   const tradeRouteDisruption = warPressure * 0.04 + blackMarketPressure * 0.03;
   const corruptionMultiplier = 1 + (blackMarketPressure * 0.03);
   const previous = options.previousDemandMap?.get(`${sectorId}::${resourceType}`);
-  const rawDemand = clamp(baseDemand + neighborDemand.averageNeed * 0.35 + randomNoise + speculationFactor, 0.25, 5.6);
-  const delayedDemandEffect = previous ? (Number(previous.demandScore || rawDemand) * 0.7) + (rawDemand * 0.3) : rawDemand;
+  const previousSector = options.previousSectorMap?.get(sectorId);
+  const previousSentiment = previousSector?.marketSentiment || 'Neutral';
+  const sentimentEffect = MARKET_SENTIMENT_EFFECTS[previousSentiment] || 0;
+  const chain = calculateDelayedChainImpulse(sectorId, resourceType, options);
+  const chainDemandGate = stableNoise(`chain-demand:${sectorId}:${resourceType}:${Math.floor(options.now / DEMAND_TICK_MS)}`, 0.5) + 0.5;
+  const chainDemandEffect = chainDemandGate > 0.34
+    ? Number(chain.impulse || 0) * clamp(0.2 + chainDemandGate * 0.22, 0.12, 0.46)
+    : 0;
+  const rawDemand = clamp(
+    baseDemand
+      + neighborDemand.averageNeed * 0.35
+      + chainDemandEffect
+      + sentimentEffect * 0.35
+      + randomNoise
+      + speculationFactor,
+    0.25,
+    5.6
+  );
+  const delayedDemandEffect = previous ? (Number(previous.demandScore || rawDemand) * 0.76) + (rawDemand * 0.24) : rawDemand;
+  const supplySurplusPressure = Math.max(0, supplyScore - rawDemand) * 0.42;
+  const scarcityPressure = Math.max(0, rawDemand - supplyScore) * 0.34;
+  const neighborPressure = neighborDemand.averageNeed * 0.16;
+  const speculationPressure = Math.abs(speculationFactor) * 1.4;
+  const pressureScore = clamp(
+    supplySurplusPressure
+      + scarcityPressure
+      + neighborPressure
+      + warPressure * 0.16
+      + blackMarketPressure * 0.1
+      + importDependency * 0.06
+      + Math.max(0, chain.impulse) * 0.42
+      + speculationPressure
+      + sentimentEffect * 0.32
+      + options.activeEvents.totalImpact * 0.3,
+    -0.45,
+    3.2
+  );
+  const previousMomentum = Number(previous?.momentum || 0);
+  const previousMultiplier = Number(previous?.marketMultiplier || 1);
+  const momentum = clamp((previousMomentum * 0.84) + ((pressureScore - 0.45) * 0.13) + Number(chain.impulse || 0) * 0.09, -1.1, 1.8);
   const marketMultiplier = clamp(
     1
       + ((delayedDemandEffect - supplyScore) * 0.07)
       + (importDependency * 0.06)
       + (exportStrength * 0.045)
       + ((consumerConfidence - 1) * 0.08)
+      + (momentum * 0.035)
+      + (pressureScore * 0.018)
       + options.activeEvents.totalImpact * 0.5
       - tradeRouteDisruption
       + (options.inflationRate * 0.04),
     0.72,
     1.45
   ) * corruptionMultiplier;
+  const trend = clamp((Number(previous?.trend || 0) * 0.72) + ((marketMultiplier - previousMultiplier) * 0.28), -0.8, 0.8);
+  const volatility = clamp(
+    Number(previous?.volatility || 0.08) * 0.86
+      + Math.abs(trend) * 0.45
+      + Math.abs(momentum) * 0.035
+      + warPressure * 0.018
+      + Math.abs(speculationFactor) * 0.4,
+    0.03,
+    0.58
+  );
   return {
     demandScore: round2(delayedDemandEffect),
     supplyScore: round2(supplyScore),
     importDependency: round2(importDependency),
     exportStrength: round2(exportStrength),
     marketMultiplier: round2(clamp(marketMultiplier, 0.72, 1.45)),
+    pressureScore: round2(pressureScore),
+    momentum: round2(momentum),
+    trend: round2(trend),
+    volatility: round2(volatility),
+    chainImpulse: round2(chain.impulse),
+    chainSourceResource: chain.sourceResource,
     sectorState: {
       populationIndex: round2(populationIndex),
       industrialIndex: round2(industrialIndex),
@@ -2066,8 +2610,10 @@ export function runCivilianDemandTick(state, options = {}) {
       sector_id, sector_name, control_status, is_embargoed, economy_state,
       population_index, industrial_index, logistics_index,
       war_pressure, consumer_confidence, infrastructure_demand, black_market_pressure,
+      market_sentiment, stockpile_metals, stockpile_fuel, stockpile_supplies,
+      stockpile_technology, stockpile_chemicals,
       import_dependency_json, export_strength_json, last_demand_tick, last_updated
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(sector_id) DO UPDATE SET
       sector_name = excluded.sector_name,
       control_status = excluded.control_status,
@@ -2083,6 +2629,12 @@ export function runCivilianDemandTick(state, options = {}) {
       consumer_confidence = excluded.consumer_confidence,
       infrastructure_demand = excluded.infrastructure_demand,
       black_market_pressure = excluded.black_market_pressure,
+      market_sentiment = excluded.market_sentiment,
+      stockpile_metals = excluded.stockpile_metals,
+      stockpile_fuel = excluded.stockpile_fuel,
+      stockpile_supplies = excluded.stockpile_supplies,
+      stockpile_technology = excluded.stockpile_technology,
+      stockpile_chemicals = excluded.stockpile_chemicals,
       import_dependency_json = excluded.import_dependency_json,
       export_strength_json = excluded.export_strength_json,
       last_demand_tick = excluded.last_demand_tick,
@@ -2091,8 +2643,10 @@ export function runCivilianDemandTick(state, options = {}) {
   const upsertResourceDemand = db.prepare(`
     INSERT INTO sector_resource_demand (
       sector_id, sector_name, resource_type, demand_score, supply_score,
-      import_dependency, export_strength, market_multiplier, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      import_dependency, export_strength, market_multiplier,
+      pressure_score, momentum, trend, volatility, chain_impulse, chain_source_resource,
+      updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(sector_id, resource_type) DO UPDATE SET
       sector_name = excluded.sector_name,
       demand_score = excluded.demand_score,
@@ -2100,6 +2654,12 @@ export function runCivilianDemandTick(state, options = {}) {
       import_dependency = excluded.import_dependency,
       export_strength = excluded.export_strength,
       market_multiplier = excluded.market_multiplier,
+      pressure_score = excluded.pressure_score,
+      momentum = excluded.momentum,
+      trend = excluded.trend,
+      volatility = excluded.volatility,
+      chain_impulse = excluded.chain_impulse,
+      chain_source_resource = excluded.chain_source_resource,
       updated_at = excluded.updated_at
   `);
   const insertReport = db.prepare(`
@@ -2129,14 +2689,42 @@ export function runCivilianDemandTick(state, options = {}) {
       const demandByResource = calculateSectorDemand(sector.id, state, context);
       const importDependencyJson = {};
       const exportStrengthJson = {};
+      const stockpileValues = {
+        stockpileMetals: 0,
+        stockpileFuel: 0,
+        stockpileSupplies: 0,
+        stockpileTechnology: 0,
+        stockpileChemicals: 0
+      };
+      const previousSector = context.previousSectorMap?.get(sector.id);
+      const controlStatus = mapSectorControlStatus(sector);
       let referenceSectorState = null;
       let multiplierTotal = 0;
+      let pressureTotal = 0;
+      let momentumTotal = 0;
+      let trendTotal = 0;
       RESOURCE_KEYS.forEach((resourceKey) => {
         const demandRow = demandByResource[resourceKey];
         referenceSectorState = referenceSectorState || demandRow.sectorState;
         multiplierTotal += Number(demandRow.marketMultiplier || 1);
+        pressureTotal += Number(demandRow.pressureScore || 0);
+        momentumTotal += Number(demandRow.momentum || 0);
+        trendTotal += Number(demandRow.trend || 0);
         importDependencyJson[resourceKey] = demandRow.importDependency;
         exportStrengthJson[resourceKey] = demandRow.exportStrength;
+        const stockpileKey = RESOURCE_STOCKPILE_COLUMNS[resourceKey];
+        stockpileValues[stockpileKey] = calculateResourceStockpile(
+          previousSector?.[stockpileKey] || 0,
+          sector,
+          resourceKey,
+          demandRow.demandScore,
+          demandRow.supplyScore,
+          {
+            ...demandRow.sectorState,
+            isEmbargoed: controlStatus === 'OPFOR' ? 1 : 0
+          },
+          { now }
+        );
         upsertResourceDemand.run(
           sector.id,
           sector.name,
@@ -2146,6 +2734,12 @@ export function runCivilianDemandTick(state, options = {}) {
           demandRow.importDependency,
           demandRow.exportStrength,
           demandRow.marketMultiplier,
+          demandRow.pressureScore,
+          demandRow.momentum,
+          demandRow.trend,
+          demandRow.volatility,
+          demandRow.chainImpulse,
+          demandRow.chainSourceResource,
           recordedAt
         );
         const basePrice = Number(RESOURCE_MARKET_CONFIG[resourceKey]?.basePrice || 100);
@@ -2179,8 +2773,20 @@ export function runCivilianDemandTick(state, options = {}) {
         });
         if (report) insertReport.run(crypto.randomUUID(), report.severity, sector.id, resourceKey, report.message, recordedAt);
       });
-      const controlStatus = mapSectorControlStatus(sector);
-      const economyState = mapEconomyStateFromMultiplier(multiplierTotal / Math.max(1, RESOURCE_KEYS.length));
+      const averageMultiplier = multiplierTotal / Math.max(1, RESOURCE_KEYS.length);
+      const averagePressure = pressureTotal / Math.max(1, RESOURCE_KEYS.length);
+      const averageMomentum = momentumTotal / Math.max(1, RESOURCE_KEYS.length);
+      const averageTrend = trendTotal / Math.max(1, RESOURCE_KEYS.length);
+      const sentimentScore = (
+        ((averageMultiplier - 1) * 2.2)
+        + (averageMomentum * 0.35)
+        + (averageTrend * 1.1)
+        - Number(referenceSectorState?.warPressure || 0) * 0.12
+        - Number(referenceSectorState?.blackMarketPressure || 0) * 0.08
+        + stableNoise(`sentiment:${sector.id}:${Math.floor(now / (DEMAND_TICK_MS * 4))}`, 0.08)
+      );
+      const marketSentiment = calculateSentimentLabel(sentimentScore + averagePressure * 0.06);
+      const economyState = mapEconomyStateFromMultiplier(averageMultiplier);
       upsertSectorEconomy.run(
         sector.id,
         sector.name,
@@ -2194,6 +2800,12 @@ export function runCivilianDemandTick(state, options = {}) {
         referenceSectorState?.consumerConfidence || 1,
         referenceSectorState?.infrastructureDemand || 1,
         referenceSectorState?.blackMarketPressure || 0,
+        marketSentiment,
+        stockpileValues.stockpileMetals,
+        stockpileValues.stockpileFuel,
+        stockpileValues.stockpileSupplies,
+        stockpileValues.stockpileTechnology,
+        stockpileValues.stockpileChemicals,
         JSON.stringify(importDependencyJson),
         JSON.stringify(exportStrengthJson),
         recordedAt,
@@ -2263,11 +2875,29 @@ export function applyDemandToMiningHolding(db, sectorName, resourceType, demandD
   const recordedAt = options.recordedAt || new Date().toISOString();
   const demandPressure = (Number(demandData?.demandScore || 1) - Number(demandData?.supplyScore || 1)) * 0.012;
   const multiplierPressure = (Number(demandData?.marketMultiplier || 1) - 1) * 0.09;
+  const chainPressure = Number(demandData?.chainImpulse || 0) * 0.018;
+  const momentumPressure = Number(demandData?.momentum || 0) * 0.022;
+  const trendPressure = Number(demandData?.trend || 0) * 0.08;
+  const structuralPressure = Number(demandData?.pressureScore || 0) * 0.006;
+  const sentimentPressure = (MARKET_SENTIMENT_EFFECTS[demandData?.marketSentiment] || 0) * 0.08;
+  const volatilityDrag = Math.max(0, Number(demandData?.volatility || 0) - 0.18) * -0.025;
   const inflationPressure = Math.min(0.08, Math.max(0, Number(options.inflationRate || 0))) * 0.04;
   const noise = stableNoise(`price:${sectorName}:${resourceType}:${Math.floor(Date.parse(recordedAt) / DEMAND_TICK_MS)}`, 0.018);
   const nextPrice = Math.max(
     25,
-    round2(Number(company.currentPrice || company.basePrice || 0) * (1 + demandPressure + multiplierPressure + inflationPressure + noise))
+    round2(Number(company.currentPrice || company.basePrice || 0) * (
+      1
+        + demandPressure
+        + multiplierPressure
+        + chainPressure
+        + momentumPressure
+        + trendPressure
+        + structuralPressure
+        + sentimentPressure
+        + volatilityDrag
+        + inflationPressure
+        + noise
+    ))
   );
   db.prepare(`
     UPDATE market_companies
@@ -2295,7 +2925,10 @@ export function runInstitutionalInvestorTick(state, options = {}) {
     SELECT sector_id AS sectorId, sector_name AS sectorName, resource_type AS resourceType,
       demand_score AS demandScore, supply_score AS supplyScore,
       import_dependency AS importDependency, export_strength AS exportStrength,
-      market_multiplier AS marketMultiplier
+      market_multiplier AS marketMultiplier, pressure_score AS pressureScore,
+      momentum, trend, volatility, chain_impulse AS chainImpulse,
+      chain_source_resource AS chainSourceResource,
+      s.market_sentiment AS marketSentiment, s.war_pressure AS warPressure
     FROM sector_resource_demand d
     LEFT JOIN sector_economy_state s ON s.sector_id = d.sector_id
     WHERE COALESCE(s.is_embargoed, 0) = 0
@@ -2369,7 +3002,18 @@ export function runInstitutionalInvestorTick(state, options = {}) {
         .map((row) => {
           const company = companyMap.get(`${row.sectorName}::${row.resourceType}`);
           if (!company) return null;
-          const trendScore = Number(row.marketMultiplier || 1) + (Number(row.exportStrength || 0) * 0.18) - (Number(row.importDependency || 0) * 0.05);
+          const predictionNoise = stableNoise(`inst-predict:${investor.id}:${row.sectorId}:${row.resourceType}:${Math.floor(now / INSTITUTIONAL_TICK_MS)}`, 0.22);
+          const sentimentEffect = MARKET_SENTIMENT_EFFECTS[row.marketSentiment] || 0;
+          const trendScore = Number(row.marketMultiplier || 1)
+            + (Number(row.pressureScore || 0) * 0.12)
+            + (Number(row.momentum || 0) * 0.18)
+            + (Number(row.trend || 0) * 0.22)
+            + (Number(row.chainImpulse || 0) * 0.08)
+            + (Number(row.exportStrength || 0) * 0.14)
+            - (Number(row.importDependency || 0) * 0.04)
+            - (Number(row.volatility || 0) * 0.06)
+            + sentimentEffect
+            + predictionNoise * Number(investor.riskTolerance || 0.5);
           return { ...row, company, trendScore };
         })
         .filter(Boolean)
@@ -2379,16 +3023,26 @@ export function runInstitutionalInvestorTick(state, options = {}) {
       const priceRatio = Number(pick.company.currentPrice || 0) / Math.max(1, Number(pick.company.basePrice || 1));
       const retailDemand = Number(recentPlayerDemand.get(pick.company.id) || 0);
       const distress = Number(pick.company.bankruptcyRisk || 0);
-      let strategyAction = pick.marketMultiplier > 1.12 ? 'front_run_policy' : 'sector_monopoly_building';
+      let strategyAction = (Number(pick.momentum || 0) > 0.18 || Number(pick.chainImpulse || 0) > 0.22 || pick.marketMultiplier > 1.12)
+        ? 'front_run_policy'
+        : 'sector_monopoly_building';
       if (retailDemand >= 50 && priceRatio >= 1.08) strategyAction = 'sell_into_retail_hype';
       else if (distress >= 0.72 || normalizeMarketStatus(pick.company.marketStatus) === 'insolvent') strategyAction = 'acquire_distressed_assets';
-      else if (pick.marketMultiplier < 0.9 || priceRatio < 0.9) strategyAction = 'buy_the_dip';
+      else if (pick.marketMultiplier < 0.9 || priceRatio < 0.9 || pick.marketSentiment === 'Panik') strategyAction = 'buy_the_dip';
       else if (Number(pick.importDependency || 0) > 0.5) strategyAction = 'liquidity_trap';
-      else if (Number(pick.exportStrength || 0) > 0.55) strategyAction = 'war_profiteering';
+      else if (Number(pick.warPressure || 0) > 0.7 && ['tibannaGas', 'baradium', 'kavamSalz'].includes(pick.resourceType)) strategyAction = 'war_profiteering';
+      else if (Number(pick.exportStrength || 0) > 0.55) strategyAction = 'sector_monopoly_building';
       if (investor.strategy === 'hostile_takeover' && (distress >= 0.55 || priceRatio < 0.96)) strategyAction = 'hostile_takeover';
       if (investor.strategy === 'embargo_profiteering' && Number(pick.importDependency || 0) > 0.45) strategyAction = 'embargo_profiteering';
-      const wantsToSell = strategyAction === 'sell_into_retail_hype';
-      let quantity = Math.max(1, Math.round((investor.riskTolerance * 35) + (Math.abs(pick.marketMultiplier - 1) * 120) + (retailDemand / 6)));
+      const wantsToSell = strategyAction === 'sell_into_retail_hype'
+        || (pick.marketSentiment === 'Euphorisch' && priceRatio > 1.22 && stableNoise(`inst-sell:${investor.id}:${pick.company.id}:${Math.floor(now / INSTITUTIONAL_TICK_MS)}`, 0.5) > 0.08);
+      let quantity = Math.max(1, Math.round(
+        (investor.riskTolerance * 35)
+          + (Math.abs(pick.marketMultiplier - 1) * 120)
+          + (Math.max(0, Number(pick.pressureScore || 0)) * 22)
+          + (Math.abs(Number(pick.momentum || 0)) * 28)
+          + (retailDemand / 6)
+      ));
       if (['hostile_takeover', 'acquire_distressed_assets'].includes(strategyAction)) quantity = Math.round(quantity * 2.8);
       const tradePrice = Number(pick.company.currentPrice || 0);
       const instHolding = getInstHolding.get(investor.id, pick.company.id);
@@ -2564,7 +3218,9 @@ export function readMarketSnapshot(db, investorId = '', userId = '') {
     SELECT sector_id AS sectorId, sector_name AS sectorName, resource_type AS resourceType,
       demand_score AS demandScore, supply_score AS supplyScore,
       import_dependency AS importDependency, export_strength AS exportStrength,
-      market_multiplier AS marketMultiplier, updated_at AS updatedAt
+      market_multiplier AS marketMultiplier, pressure_score AS pressureScore,
+      momentum, trend, volatility, chain_impulse AS chainImpulse,
+      chain_source_resource AS chainSourceResource, updated_at AS updatedAt
     FROM sector_resource_demand
     ORDER BY sector_name COLLATE NOCASE, resource_type
   `).all();
@@ -2653,7 +3309,10 @@ function getSectorStateRow(db, sectorId) {
       population_index AS populationIndex, industrial_index AS industrialIndex,
       logistics_index AS logisticsIndex, war_pressure AS warPressure,
       consumer_confidence AS consumerConfidence, infrastructure_demand AS infrastructureDemand,
-      black_market_pressure AS blackMarketPressure,
+      black_market_pressure AS blackMarketPressure, market_sentiment AS marketSentiment,
+      stockpile_metals AS stockpileMetals, stockpile_fuel AS stockpileFuel,
+      stockpile_supplies AS stockpileSupplies, stockpile_technology AS stockpileTechnology,
+      stockpile_chemicals AS stockpileChemicals,
       import_dependency_json AS importDependencyJson, export_strength_json AS exportStrengthJson,
       last_updated AS lastUpdated, last_demand_tick AS lastDemandTick
     FROM sector_economy_state
@@ -2675,6 +3334,7 @@ function normalizeSectorEconomyRow(db, sector) {
     controlStatus,
     isEmbargoed,
     economyState: row?.economyState || 'Normal',
+    marketSentiment: row?.marketSentiment || 'Neutral',
     consumerStrength: toMetric(row?.consumerConfidence || row?.populationIndex || 1),
     industryStrength: toMetric(row?.industrialIndex || 1),
     logisticsStrength: toMetric(row?.logisticsIndex || 1),
@@ -2683,6 +3343,13 @@ function normalizeSectorEconomyRow(db, sector) {
     exportStrength: toMetric(averageExport),
     importDependencyByResource: importDependency,
     exportStrengthByResource: exportStrength,
+    stockpiles: {
+      quadraniumErz: round2(Number(row?.stockpileMetals || 0)),
+      tibannaGas: round2(Number(row?.stockpileFuel || 0)),
+      kavamSalz: round2(Number(row?.stockpileSupplies || 0)),
+      agrinium: round2(Number(row?.stockpileTechnology || 0)),
+      baradium: round2(Number(row?.stockpileChemicals || 0))
+    },
     blackMarketPressure: toMetric(row?.blackMarketPressure || (isEmbargoed ? 1.2 : 0.15)),
     lastUpdated: row?.lastUpdated || row?.lastDemandTick || null
   };
@@ -2694,13 +3361,16 @@ function sectorResourceLabel(resourceKey) {
 
 function getSectorResourcePrices(db, sectorId) {
   const rows = db.prepare(`
-    SELECT sector_id AS sectorId, resource_type AS resourceType, base_price AS basePrice,
-      current_price AS currentPrice, previous_price AS previousPrice,
-      demand_score AS demandScore, supply_score AS supplyScore,
-      speculation_score AS speculationScore, updated_at AS updatedAt
-    FROM sector_resource_prices
-    WHERE sector_id = ?
-    ORDER BY resource_type
+    SELECT p.sector_id AS sectorId, p.resource_type AS resourceType, p.base_price AS basePrice,
+      p.current_price AS currentPrice, p.previous_price AS previousPrice,
+      p.demand_score AS demandScore, p.supply_score AS supplyScore,
+      p.speculation_score AS speculationScore, p.updated_at AS updatedAt,
+      d.pressure_score AS pressureScore, d.momentum, d.trend, d.volatility,
+      d.chain_impulse AS chainImpulse, d.chain_source_resource AS chainSourceResource
+    FROM sector_resource_prices p
+    LEFT JOIN sector_resource_demand d ON d.sector_id = p.sector_id AND d.resource_type = p.resource_type
+    WHERE p.sector_id = ?
+    ORDER BY p.resource_type
   `).all(sectorId);
   const byResource = new Map(rows.map((row) => [row.resourceType, row]));
   return RESOURCE_KEYS.map((resourceKey) => {
@@ -2719,6 +3389,12 @@ function getSectorResourcePrices(db, sectorId) {
       demandScore: round2(Number(row?.demandScore || 1)),
       supplyScore: round2(Number(row?.supplyScore || 1)),
       speculationScore: round2(Number(row?.speculationScore || 0)),
+      pressureScore: round2(Number(row?.pressureScore || 0)),
+      momentum: round2(Number(row?.momentum || 0)),
+      trend: round2(Number(row?.trend || 0)),
+      volatility: round2(Number(row?.volatility || 0.08)),
+      chainImpulse: round2(Number(row?.chainImpulse || 0)),
+      chainSourceResource: row?.chainSourceResource || '',
       updatedAt: row?.updatedAt || null
     };
   });
@@ -3169,7 +3845,9 @@ export function refreshHoldingSolvency(db, now = Date.now()) {
       c.bankruptcy_risk AS bankruptcyRisk, c.debt_index AS debtIndex, c.confidence_index AS confidenceIndex,
       c.market_status AS marketStatus, c.is_embargoed AS isEmbargoed,
       s.market_multiplier AS marketMultiplier, e.is_embargoed AS sectorEmbargoed,
-      e.economy_state AS economyState
+      s.pressure_score AS pressureScore, s.momentum, s.trend, s.volatility,
+      s.chain_impulse AS chainImpulse, e.economy_state AS economyState,
+      e.market_sentiment AS marketSentiment, e.war_pressure AS warPressure
     FROM market_companies c
     LEFT JOIN sector_resource_demand s ON s.sector_id = c.sector_id AND s.resource_type = c.resource_key
     LEFT JOIN sector_economy_state e ON e.sector_id = c.sector_id
@@ -3186,12 +3864,29 @@ export function refreshHoldingSolvency(db, now = Date.now()) {
       const demandPressure = clamp(1 - Number(company.marketMultiplier || 1), -0.35, 0.75);
       const embargoPressure = Number(company.sectorEmbargoed || company.isEmbargoed || 0) ? 0.25 : 0;
       const recessionPressure = company.economyState === 'Rezession' ? 0.14 : company.economyState === 'Abschwung' ? 0.08 : -0.04;
+      const sentimentPressure = company.marketSentiment === 'Panik' ? 0.16
+        : company.marketSentiment === 'Negativ' ? 0.07
+          : company.marketSentiment === 'Euphorisch' ? -0.05
+            : company.marketSentiment === 'Positiv' ? -0.03
+              : 0;
+      const cyclePressure = clamp(
+        Number(company.pressureScore || 0) * 0.035
+          - Number(company.momentum || 0) * 0.045
+          - Number(company.trend || 0) * 0.06
+          + Math.max(0, Number(company.volatility || 0) - 0.22) * 0.09
+          + Number(company.warPressure || 0) * 0.035
+          - Math.max(0, Number(company.chainImpulse || 0)) * 0.025,
+        -0.12,
+        0.22
+      );
       const nextRisk = clamp(
         Number(company.bankruptcyRisk || 0) * 0.78
           + pricePressure * 0.14
           + demandPressure * 0.18
           + embargoPressure
-          + recessionPressure,
+          + recessionPressure
+          + sentimentPressure
+          + cyclePressure,
         0,
         1
       );
@@ -3287,7 +3982,8 @@ export function refreshHoldingSolvency(db, now = Date.now()) {
 }
 
 export function purchaseMarketShare(db, investorId, companyId, now = Date.now()) {
-  return db.transaction(() => {
+  const createdAt = new Date(now).toISOString();
+  const execute = db.transaction(() => {
     const investor = getOrCreateMarketInvestor(db, investorId);
     const lastPurchaseAt = investor.last_purchase_at ? Date.parse(investor.last_purchase_at) : 0;
     const cooldownMs = 60 * 60 * 1000;
@@ -3297,36 +3993,73 @@ export function purchaseMarketShare(db, investorId, companyId, now = Date.now())
       error.nextPurchaseAt = new Date(lastPurchaseAt + cooldownMs).toISOString();
       throw error;
     }
-    const company = db.prepare('SELECT * FROM market_companies WHERE id = ?').get(companyId);
+    const company = db.prepare('SELECT * FROM market_companies WHERE id = ? OR symbol = ?').get(companyId, companyId);
     if (!company) {
       const error = new Error('Unternehmen nicht gefunden.');
       error.status = 404;
       throw error;
     }
+    if (normalizeMarketStatus(company.market_status) !== 'tradeable' || Number(company.is_embargoed || 0)) {
+      const error = new Error('Diese Holding ist aktuell nicht normal handelbar.');
+      error.status = 409;
+      throw error;
+    }
+    reconcileInvestorCompanyHolding(db, investorId, company.id, { createdAt });
+    const availableShares = getAvailableFreeFloatShares(db, company.id);
+    if (availableShares < 1) {
+      const error = new Error('Nicht genuegend frei handelbare Aktien verfuegbar.');
+      error.status = 409;
+      throw error;
+    }
+    const pricing = calculateBoundedTradePricing(db, company, 1, 'buy', { investorId, createdAt });
+    assertRecentPriceWindowHealthy(db, company, pricing.nextPrice, { investorId, createdAt });
+    if (Number(investor.balance || 0) < pricing.executionPrice) {
+      const error = new Error('Nicht genug Credits im persoenlichen Portfolio.');
+      error.status = 409;
+      throw error;
+    }
+    db.prepare('UPDATE market_investors SET balance = balance - ?, last_purchase_at = ? WHERE id = ?')
+      .run(pricing.executionPrice, createdAt, investorId);
     db.prepare(`
-      INSERT INTO market_holdings (investor_id, company_id, shares)
-      VALUES (?, ?, 1)
-      ON CONFLICT(investor_id, company_id) DO UPDATE SET shares = shares + 1
-    `).run(investorId, companyId);
-    const purchasedAt = new Date(now).toISOString();
-    db.prepare('UPDATE market_investors SET last_purchase_at = ? WHERE id = ?').run(purchasedAt, investorId);
-    const nextPrice = Math.round(company.current_price * 1.0125 * 100) / 100;
+      INSERT INTO market_orders (
+        id, investor_id, company_id, quantity, unit_price, total_value,
+        remaining_quantity, realized_profit, created_at
+      ) VALUES (?, ?, ?, 1, ?, ?, 1, 0, ?)
+    `).run(crypto.randomUUID(), investorId, company.id, pricing.executionPrice, pricing.executionPrice, createdAt);
+    setHoldingCache(db, investorId, company.id, getSellableLotQuantity(db, investorId, company.id));
     db.prepare(`
       UPDATE market_companies
       SET previous_price = current_price, current_price = ?, updated_at = ?
       WHERE id = ?
-    `).run(nextPrice, purchasedAt, companyId);
+    `).run(pricing.nextPrice, createdAt, company.id);
     db.prepare(`
       INSERT INTO market_history (id, company_id, price, recorded_at)
       VALUES (?, ?, ?, ?)
-    `).run(crypto.randomUUID(), companyId, nextPrice, purchasedAt);
-    return { companyId, price: company.current_price, purchasedAt, nextPurchaseAt: new Date(now + cooldownMs).toISOString() };
-  })();
+    `).run(crypto.randomUUID(), company.id, pricing.nextPrice, createdAt);
+    updateOwnershipStructure(db, company.id, now);
+    writePortfolioSnapshot(db, investorId, createdAt);
+    return { companyId: company.id, price: pricing.executionPrice, quantity: 1, totalCost: pricing.executionPrice, purchasedAt: createdAt, nextPurchaseAt: new Date(now + cooldownMs).toISOString() };
+  });
+  try {
+    return execute();
+  } catch (error) {
+    writeMarketIntegrityLog(db, {
+      investorId,
+      companyId,
+      issueType: 'transaction_rollback',
+      severity: 'warning',
+      before: { action: 'legacy_buy', quantity: 1 },
+      after: { error: error.message },
+      actionTaken: 'buy_transaction_rolled_back',
+      createdAt
+    });
+    throw error;
+  }
 }
 
 export function purchaseMarketDemand(db, { investorId, userId, consumerKey, companyId, quantity = 1 }, now = Date.now()) {
   return db.transaction(() => {
-    const company = db.prepare('SELECT * FROM market_companies WHERE id = ?').get(companyId);
+    const company = db.prepare('SELECT * FROM market_companies WHERE id = ? OR symbol = ?').get(companyId, companyId);
     if (!company) {
       const error = new Error('Unternehmen nicht gefunden.');
       error.status = 404;
@@ -3348,16 +4081,20 @@ export function purchaseMarketDemand(db, { investorId, userId, consumerKey, comp
     let nextPurchaseAt = null;
     const requestedQuantity = Math.floor(Number(quantity || 1));
     const effectiveQuantity = investorId ? requestedQuantity : 1;
-    if (!Number.isInteger(effectiveQuantity) || effectiveQuantity < 1 || effectiveQuantity > 10000) {
+    if (!Number.isInteger(effectiveQuantity) || effectiveQuantity < 1 || effectiveQuantity > MAX_PORTFOLIO_TRADE_QUANTITY) {
       const error = new Error('Ungültige Aktienmenge.');
       error.status = 400;
       throw error;
     }
 
+    const pricing = calculateBoundedTradePricing(db, company, effectiveQuantity, 'buy', { investorId, createdAt: purchasedAt });
+    assertRecentPriceWindowHealthy(db, company, pricing.nextPrice, { investorId, createdAt: purchasedAt });
+
     if (investorId) {
       const investor = getOrCreateMarketInvestor(db, investorId, userId);
-      const totalCost = Math.round(Number(company.current_price || 0) * effectiveQuantity * 100) / 100;
-      const availableShares = getAvailableFreeFloatShares(db, companyId);
+      reconcileInvestorCompanyHolding(db, investorId, company.id, { createdAt: purchasedAt });
+      const totalCost = round2(pricing.executionPrice * effectiveQuantity);
+      const availableShares = getAvailableFreeFloatShares(db, company.id);
       if (availableShares < effectiveQuantity) {
         const error = new Error('Nicht genügend frei handelbare Aktien verfügbar.');
         error.status = 409;
@@ -3373,7 +4110,7 @@ export function purchaseMarketDemand(db, { investorId, userId, consumerKey, comp
         INSERT INTO market_holdings (investor_id, company_id, shares)
         VALUES (?, ?, ?)
         ON CONFLICT(investor_id, company_id) DO UPDATE SET shares = shares + excluded.shares
-      `).run(investorId, companyId, effectiveQuantity);
+      `).run(investorId, company.id, effectiveQuantity);
       db.prepare(`
         UPDATE market_investors
         SET balance = balance - ?, last_purchase_at = ?
@@ -3384,7 +4121,8 @@ export function purchaseMarketDemand(db, { investorId, userId, consumerKey, comp
           id, investor_id, company_id, quantity, unit_price, total_value,
           remaining_quantity, realized_profit, created_at
         ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)
-      `).run(crypto.randomUUID(), investorId, companyId, effectiveQuantity, company.current_price, totalCost, effectiveQuantity, purchasedAt);
+      `).run(crypto.randomUUID(), investorId, company.id, effectiveQuantity, pricing.executionPrice, totalCost, effectiveQuantity, purchasedAt);
+      setHoldingCache(db, investorId, company.id, getSellableLotQuantity(db, investorId, company.id));
     } else {
       purchaseType = 'consumer';
       const activity = db.prepare(`
@@ -3405,26 +4143,24 @@ export function purchaseMarketDemand(db, { investorId, userId, consumerKey, comp
       nextPurchaseAt = new Date(now + cooldownMs).toISOString();
     }
 
-    const priceImpact = 1 + (0.0125 * Math.sqrt(effectiveQuantity));
-    const nextPrice = Math.round(company.current_price * priceImpact * 100) / 100;
     db.prepare(`
       UPDATE market_companies
       SET previous_price = current_price, current_price = ?, updated_at = ?
       WHERE id = ?
-    `).run(nextPrice, purchasedAt, companyId);
+    `).run(pricing.nextPrice, purchasedAt, company.id);
     db.prepare(`
       INSERT INTO market_history (id, company_id, price, recorded_at)
       VALUES (?, ?, ?, ?)
-    `).run(crypto.randomUUID(), companyId, nextPrice, purchasedAt);
-    updateOwnershipStructure(db, companyId, now);
+    `).run(crypto.randomUUID(), company.id, pricing.nextPrice, purchasedAt);
+    updateOwnershipStructure(db, company.id, now);
     if (investorId) writePortfolioSnapshot(db, investorId, purchasedAt);
 
     return {
-      companyId,
-      price: company.current_price,
+      companyId: company.id,
+      price: pricing.executionPrice,
       quantity: effectiveQuantity,
-      totalCost: investorId ? Math.round(company.current_price * effectiveQuantity * 100) / 100 : 0,
-      availableShares: investorId ? getAvailableFreeFloatShares(db, companyId) : null,
+      totalCost: investorId ? round2(pricing.executionPrice * effectiveQuantity) : 0,
+      availableShares: investorId ? getAvailableFreeFloatShares(db, company.id) : null,
       purchasedAt,
       purchaseType,
       nextPurchaseAt
@@ -3442,31 +4178,57 @@ export function getConsumerNextPurchaseAt(db, consumerKey) {
 }
 
 export function sellMarketShare(db, { investorId, companyId, quantity = 1 }, now = Date.now()) {
-  return db.transaction(() => {
-    const company = db.prepare('SELECT * FROM market_companies WHERE id = ?').get(companyId);
+  const transactionStartedAt = new Date(now).toISOString();
+  const execute = db.transaction(() => {
+    const company = db.prepare('SELECT * FROM market_companies WHERE id = ? OR symbol = ?').get(companyId, companyId);
     if (!company) {
       const error = new Error('Unternehmen nicht gefunden.');
       error.status = 404;
       throw error;
     }
+    if (
+      Number(company.is_embargoed || 0)
+      || ['embargo', 'suspended', 'insolvent', 'takeover'].includes(normalizeMarketStatus(company.market_status))
+      || company.acquired_by_company_id
+    ) {
+      const error = new Error('Diese Holding ist aktuell nicht normal handelbar.');
+      error.status = 409;
+      throw error;
+    }
     const holding = db.prepare(`
       SELECT shares FROM market_holdings
       WHERE investor_id = ? AND company_id = ?
-    `).get(investorId, companyId);
+    `).get(investorId, company.id);
     const requestedQuantity = Math.floor(Number(quantity || 1));
-    if (!Number.isInteger(requestedQuantity) || requestedQuantity < 1 || requestedQuantity > 10000) {
+    if (!Number.isInteger(requestedQuantity) || requestedQuantity < 1 || requestedQuantity > MAX_PORTFOLIO_TRADE_QUANTITY) {
       const error = new Error('Ungültige Aktienmenge.');
       error.status = 400;
       throw error;
     }
-    if (!holding || Number(holding.shares || 0) < requestedQuantity) {
-      const error = new Error('Du besitzt keine Aktie dieser Holding.');
+    const soldAt = new Date(now).toISOString();
+    const reconciliation = reconcileInvestorCompanyHolding(db, investorId, company.id, { createdAt: soldAt });
+    if (reconciliation.sellableQuantity < requestedQuantity) {
+      writeMarketIntegrityLog(db, {
+        investorId,
+        companyId: company.id,
+        issueType: 'sell_more_than_lots',
+        severity: 'warning',
+        before: { requestedQuantity, cachedQuantity: holding?.shares || 0, sellableQuantity: reconciliation.sellableQuantity },
+        after: { blocked: true },
+        actionTaken: 'sell_blocked_insufficient_fifo_lots',
+        createdAt: soldAt
+      });
+      const error = new Error(reconciliation.repaired
+        ? 'Bestand wurde korrigiert. Nicht genug verkaufbare Aktien vorhanden.'
+        : 'Nicht genug verkaufbare Aktien vorhanden.');
       error.status = 409;
+      error.issueType = 'sell_more_than_lots';
       throw error;
     }
 
-    const soldAt = new Date(now).toISOString();
-    const grossProceeds = round2(Number(company.current_price || 0) * requestedQuantity);
+    const pricing = calculateBoundedTradePricing(db, company, requestedQuantity, 'sell', { investorId, createdAt: soldAt });
+    assertRecentPriceWindowHealthy(db, company, pricing.nextPrice, { investorId, createdAt: soldAt });
+    const grossProceeds = round2(pricing.executionPrice * requestedQuantity);
     const taxRate = 0.02;
     const taxAmount = round2(grossProceeds * taxRate);
     const netProceeds = round2(grossProceeds - taxAmount);
@@ -3478,7 +4240,7 @@ export function sellMarketShare(db, { investorId, companyId, quantity = 1 }, now
       FROM market_orders
       WHERE investor_id = ? AND company_id = ? AND COALESCE(remaining_quantity, quantity) > 0
       ORDER BY created_at ASC
-    `).all(investorId, companyId);
+    `).all(investorId, company.id);
     const updateOrderLot = db.prepare(`
       UPDATE market_orders
       SET remaining_quantity = ?, realized_profit = realized_profit + ?, closed_at = ?
@@ -3489,7 +4251,7 @@ export function sellMarketShare(db, { investorId, companyId, quantity = 1 }, now
       const lotQuantity = roundShares(order.remainingQuantity);
       const closedQuantity = Math.min(lotQuantity, remainingToClose);
       const lotCost = round2(closedQuantity * Number(order.unitPrice || 0));
-      const lotGross = round2(closedQuantity * Number(company.current_price || 0));
+      const lotGross = round2(closedQuantity * pricing.executionPrice);
       const lotTax = round2(taxAmount * (closedQuantity / requestedQuantity));
       const lotRealizedProfit = round2((lotGross - lotTax) - lotCost);
       const nextRemaining = lotQuantity - closedQuantity;
@@ -3503,40 +4265,23 @@ export function sellMarketShare(db, { investorId, companyId, quantity = 1 }, now
       );
     });
     if (remainingToClose > 0) {
-      const fallbackCost = round2(remainingToClose * Number(company.current_price || 0));
-      const fallbackTax = round2(taxAmount * (remainingToClose / requestedQuantity));
-      const fallbackRealized = round2((round2(remainingToClose * Number(company.current_price || 0)) - fallbackTax) - fallbackCost);
-      soldCostBasis += fallbackCost;
-      db.prepare(`
-        INSERT INTO market_orders (
-          id, investor_id, company_id, quantity, unit_price, total_value,
-          remaining_quantity, realized_profit, closed_at, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?)
-      `).run(
-        crypto.randomUUID(),
+      writeMarketIntegrityLog(db, {
         investorId,
-        companyId,
-        remainingToClose,
-        Number(company.current_price || 0),
-        fallbackCost,
-        fallbackRealized,
-        soldAt,
-        soldAt
-      );
+        companyId: company.id,
+        issueType: 'sell_more_than_lots',
+        severity: 'critical',
+        before: { requestedQuantity, remainingToClose },
+        after: { blocked: true },
+        actionTaken: 'transaction_rollback_fifo_lots_exhausted',
+        createdAt: soldAt
+      });
+      const error = new Error('Bestand wurde korrigiert. Nicht genug verkaufbare Aktien vorhanden.');
+      error.status = 409;
+      error.issueType = 'sell_more_than_lots';
+      throw error;
     }
     const realizedProfit = round2(netProceeds - soldCostBasis);
-    if (holding.shares === requestedQuantity) {
-      db.prepare(`
-        DELETE FROM market_holdings
-        WHERE investor_id = ? AND company_id = ?
-      `).run(investorId, companyId);
-    } else {
-      db.prepare(`
-        UPDATE market_holdings
-        SET shares = shares - ?
-        WHERE investor_id = ? AND company_id = ?
-      `).run(requestedQuantity, investorId, companyId);
-    }
+    setHoldingCache(db, investorId, company.id, getSellableLotQuantity(db, investorId, company.id));
     db.prepare(`
       UPDATE market_investors
       SET balance = balance + ?
@@ -3550,7 +4295,7 @@ export function sellMarketShare(db, { investorId, companyId, quantity = 1 }, now
     `).run(
       crypto.randomUUID(),
       investorId,
-      companyId,
+      company.id,
       requestedQuantity,
       grossProceeds,
       taxAmount,
@@ -3566,23 +4311,21 @@ export function sellMarketShare(db, { investorId, companyId, quantity = 1 }, now
         updated_at = excluded.updated_at
     `).run(taxAmount, soldAt);
 
-    const priceImpact = Math.max(0.75, 1 - (0.0125 * Math.sqrt(requestedQuantity)));
-    const nextPrice = Math.max(25, Math.round(company.current_price * priceImpact * 100) / 100);
     db.prepare(`
       UPDATE market_companies
       SET previous_price = current_price, current_price = ?, updated_at = ?
       WHERE id = ?
-    `).run(nextPrice, soldAt, companyId);
+    `).run(pricing.nextPrice, soldAt, company.id);
     db.prepare(`
       INSERT INTO market_history (id, company_id, price, recorded_at)
       VALUES (?, ?, ?, ?)
-    `).run(crypto.randomUUID(), companyId, nextPrice, soldAt);
-    updateOwnershipStructure(db, companyId, now);
+    `).run(crypto.randomUUID(), company.id, pricing.nextPrice, soldAt);
+    updateOwnershipStructure(db, company.id, now);
     writePortfolioSnapshot(db, investorId, soldAt);
 
     return {
-      companyId,
-      price: company.current_price,
+      companyId: company.id,
+      price: pricing.executionPrice,
       quantity: requestedQuantity,
       soldAt,
       grossProceeds,
@@ -3593,7 +4336,22 @@ export function sellMarketShare(db, { investorId, companyId, quantity = 1 }, now
       costBasis: round2(soldCostBasis),
       realizedProfit
     };
-  })();
+  });
+  try {
+    return execute();
+  } catch (error) {
+    writeMarketIntegrityLog(db, {
+      investorId,
+      companyId,
+      issueType: error.issueType || 'transaction_rollback',
+      severity: error.issueType === 'sell_more_than_lots' ? 'warning' : 'critical',
+      before: { action: 'sell', quantity },
+      after: { error: error.message },
+      actionTaken: 'sell_transaction_rolled_back',
+      createdAt: transactionStartedAt
+    });
+    throw error;
+  }
 }
 
 export function updateEconomyPolicy(db, { taxRate, subsidy }) {
@@ -3633,11 +4391,21 @@ export function runMarketTick(db, inflationRate = 0, now = Date.now(), state = n
     SELECT sector_name AS sectorName, resource_type AS resourceType,
       demand_score AS demandScore, supply_score AS supplyScore,
       market_multiplier AS marketMultiplier, import_dependency AS importDependency,
-      export_strength AS exportStrength
-    FROM sector_resource_demand
+      export_strength AS exportStrength, pressure_score AS pressureScore,
+      momentum, trend, volatility, chain_impulse AS chainImpulse,
+      e.market_sentiment AS marketSentiment
+    FROM sector_resource_demand d
+    LEFT JOIN sector_economy_state e ON e.sector_id = d.sector_id
   `).all().map((row) => [`${row.sectorName}::${row.resourceType}`, row]));
   db.transaction(() => {
     companies.forEach((company) => {
+      if (
+        Number(company.is_embargoed || 0)
+        || ['embargo', 'suspended', 'insolvent', 'takeover'].includes(normalizeMarketStatus(company.market_status))
+        || company.acquired_by_company_id
+      ) {
+        return;
+      }
       const demandData = company.sector && company.resource_key
         ? demandMap.get(`${company.sector}::${company.resource_key}`)
         : null;
@@ -3646,9 +4414,20 @@ export function runMarketTick(db, inflationRate = 0, now = Date.now(), state = n
       const eventImpact = Number(activeEvent?.impact || 0);
       const inflationImpact = Math.min(0.08, Math.max(0, inflationRate)) * 0.25;
       const demandImpact = demandData
-        ? ((Number(demandData.marketMultiplier || 1) - 1) * 0.14) + ((Number(demandData.demandScore || 1) - Number(demandData.supplyScore || 1)) * 0.015)
+        ? ((Number(demandData.marketMultiplier || 1) - 1) * 0.14)
+          + ((Number(demandData.demandScore || 1) - Number(demandData.supplyScore || 1)) * 0.015)
+          + (Number(demandData.pressureScore || 0) * 0.006)
+          + (Number(demandData.momentum || 0) * 0.018)
+          + (Number(demandData.trend || 0) * 0.07)
+          + (Number(demandData.chainImpulse || 0) * 0.012)
+          + ((MARKET_SENTIMENT_EFFECTS[demandData.marketSentiment] || 0) * 0.06)
+          - (Math.max(0, Number(demandData.volatility || 0) - 0.2) * 0.012)
         : 0;
-      const nextPrice = Math.max(25, Math.round(company.current_price * (1 + pullToBase + noise + eventImpact + inflationImpact + demandImpact) * 100) / 100);
+      const rawMove = pullToBase + noise + eventImpact + inflationImpact + demandImpact;
+      const boundedMove = clamp(rawMove, -MAX_SINGLE_TRADE_MOVE, MAX_SINGLE_TRADE_MOVE);
+      const nextPrice = Math.max(25, Math.round(company.current_price * (1 + boundedMove) * 100) / 100);
+      assertPriceIsFinite(db, company.id, nextPrice, { createdAt: recordedAt, currentPrice: company.current_price, rawMove, boundedMove, source: 'market_tick' });
+      assertRecentPriceWindowHealthy(db, company, nextPrice, { createdAt: recordedAt, source: 'market_tick' });
       updateCompany.run(nextPrice, recordedAt, company.id);
       insertHistory.run(crypto.randomUUID(), company.id, nextPrice, recordedAt);
       updateOwnershipStructure(db, company.id, now);

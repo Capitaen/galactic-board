@@ -11121,6 +11121,7 @@ function renderEconomyMetricCard(label, metric) {
 function renderSectorResourcePriceRows(resourcePrices = []) {
   return resourcePrices.map((price) => {
     const change = Number(price.change || 0);
+    const chainLabel = price.chainSourceResource ? (RESOURCE_LABELS[price.chainSourceResource] || price.chainSourceResource) : 'Keine';
     return `<tr>
       <td>${escapeLoginManagerText(price.label || RESOURCE_LABELS[price.resourceType] || price.resourceType)}</td>
       <td>${formatCredits(price.currentPrice)}</td>
@@ -11128,8 +11129,21 @@ function renderSectorResourcePriceRows(resourcePrices = []) {
       <td>${Number(price.demandScore || 0).toFixed(2).replace('.', ',')}</td>
       <td>${Number(price.supplyScore || 0).toFixed(2).replace('.', ',')}</td>
       <td>${Number(price.speculationScore || 0).toFixed(2).replace('.', ',')}</td>
+      <td>${Number(price.pressureScore || 0).toFixed(2).replace('.', ',')}</td>
+      <td>${Number(price.momentum || 0).toFixed(2).replace('.', ',')}</td>
+      <td>${Number(price.volatility || 0).toFixed(2).replace('.', ',')}</td>
+      <td>${escapeLoginManagerText(chainLabel)} (${Number(price.chainImpulse || 0).toFixed(2).replace('.', ',')})</td>
     </tr>`;
-  }).join('') || '<tr><td colspan="6">Noch keine Ressourcenpreise.</td></tr>';
+  }).join('') || '<tr><td colspan="10">Noch keine Ressourcenpreise.</td></tr>';
+}
+
+function renderSectorStockpileCards(stockpiles = {}) {
+  return RESOURCE_KEYS.map((key) => `
+    <div class="stat-card">
+      <strong>${escapeLoginManagerText(RESOURCE_LABELS[key] || key)} Lager</strong>
+      <span>${Number(stockpiles[key] || 0).toFixed(2).replace('.', ',')}</span>
+    </div>
+  `).join('');
 }
 
 function renderSectorAssetTable(title, rows = []) {
@@ -11233,12 +11247,14 @@ function renderSectorEconomySection() {
         <div class="stat-card"><strong>Kontrollstatus</strong><span>${escapeLoginManagerText(selected.economy?.controlStatus || 'Neutral')}</span></div>
         <div class="stat-card"><strong>Embargo</strong><span>${selected.economy?.isEmbargoed ? 'Aktiv' : 'Nein'}</span></div>
         <div class="stat-card"><strong>Wirtschaft</strong><span>${escapeLoginManagerText(selected.economy?.economyState || 'Normal')}</span></div>
+        <div class="stat-card"><strong>Marktstimmung</strong><span>${escapeLoginManagerText(selected.economy?.marketSentiment || 'Neutral')}</span></div>
         ${renderEconomyMetricCard('Verbraucher', selected.economy?.consumerStrength)}
         ${renderEconomyMetricCard('Industrie', selected.economy?.industryStrength)}
         ${renderEconomyMetricCard('Logistik', selected.economy?.logisticsStrength)}
         ${renderEconomyMetricCard('Kriegsdruck', selected.economy?.warPressure)}
         ${renderEconomyMetricCard('Importabhängigkeit', selected.economy?.importDependency)}
         ${renderEconomyMetricCard('Exportstärke', selected.economy?.exportStrength)}
+        ${renderSectorStockpileCards(selected.economy?.stockpiles || {})}
       </div>
       ${warning}
       ${excluded}
@@ -11267,7 +11283,7 @@ function renderSectorEconomySection() {
           <div class="workspace-card">
             <h3>Ressourcenpreise</h3>
             <table class="data-table">
-              <thead><tr><th>Ressource</th><th>Preis</th><th>Änderung</th><th>Nachfrage</th><th>Angebot</th><th>Spekulation</th></tr></thead>
+              <thead><tr><th>Ressource</th><th>Preis</th><th>Änderung</th><th>Nachfrage</th><th>Angebot</th><th>Spekulation</th><th>Druck</th><th>Momentum</th><th>Volatilität</th><th>Kettenquelle</th></tr></thead>
               <tbody>${renderSectorResourcePriceRows(selected.resourcePrices || [])}</tbody>
             </table>
           </div>
