@@ -3,3 +3,7 @@ server/.env
 server/data.sqlite
 server/data.sqlite-shm
 server/data.sqlite-wal
+server/data.inspect.sqlite
+server/*.sqlite.bak*
+server/data.sqlite.bak*
+server/db-backups/

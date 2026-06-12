@@ -1,2 +1,11 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# SQLite databases are binary. Never let Git normalize bytes here.
+*.sqlite -text
+*.sqlite-* -text
+*.sqlite.* -text
+*.db -text
+server/data.sqlite -text
+server/data.sqlite-wal -text
+server/data.sqlite-shm -text
