@@ -2109,6 +2109,10 @@ const economyViewState = {
   canPurchase: true,
   activeSection: 'overview',
   selectedCompanyId: '',
+  featuredCompanies: [],
+  searchResults: [],
+  companySearchLoading: false,
+  companySearchError: '',
   companyDetailById: {},
   companyDetailLoadingId: '',
   companyDetailError: '',
@@ -2217,6 +2221,7 @@ let adminModeEnabled = true;
 let activeOverlayModalId = '';
 let lastFocusedElementBeforeModal = null;
 let tutorialCheckPromise = null;
+let economySearchTimer = null;
 let planetHyperlaneDegreeCache = { signature: '', map: new Map() };
 let tutorialFlowState = {
   shouldPrompt: false,
@@ -11929,11 +11934,40 @@ function getMarketCooldownRemaining() {
 function updateEconomySectorQuery(input) {
   const cursor = input.selectionStart ?? input.value.length;
   economyViewState.sectorQuery = input.value;
+  economyViewState.companySearchError = '';
+  if (economySearchTimer) window.clearTimeout(economySearchTimer);
+  const nextQuery = String(input.value || '').trim();
+  if (nextQuery) {
+    economySearchTimer = window.setTimeout(() => {
+      void fetchEconomyCompanySearch(nextQuery, economyViewState.resourceFilter || 'all');
+    }, 180);
+  } else {
+    economyViewState.searchResults = [];
+  }
   renderEconomyView();
   const nextInput = document.getElementById('economySectorSearch');
   if (!nextInput) return;
   nextInput.focus();
   nextInput.setSelectionRange(cursor, cursor);
+}
+
+function getActiveEconomyCompanies() {
+  const query = String(economyViewState.sectorQuery || '').trim();
+  if (query) return economyViewState.searchResults || [];
+  return economyViewState.featuredCompanies || economyViewState.companies || [];
+}
+
+function getEconomyCompanyById(companyId) {
+  const normalizedCompanyId = String(companyId || '').trim();
+  if (!normalizedCompanyId) return null;
+  return (
+    (economyViewState.companyDetailById && economyViewState.companyDetailById[normalizedCompanyId])
+    || getActiveEconomyCompanies().find((entry) => entry.id === normalizedCompanyId)
+    || (economyViewState.companies || []).find((entry) => entry.id === normalizedCompanyId)
+    || (economyViewState.topLastHour || []).find((entry) => entry.id === normalizedCompanyId)
+    || (economyViewState.portfolio?.positions || []).find((entry) => entry.companyId === normalizedCompanyId)
+    || null
+  );
 }
 
 function renderMarketSparkline(companyId) {
@@ -11953,7 +11987,7 @@ function renderMarketSparkline(companyId) {
 }
 
 function renderMarketDetailChart(companyId) {
-  const company = economyViewState.companies.find((entry) => entry.id === companyId);
+  const company = getEconomyCompanyById(companyId);
   const rangeKey = economyViewState.marketRange || 'today';
   const cutoff = getMarketRangeCutoff(rangeKey);
   const points = (economyViewState.history?.[companyId] || [])
@@ -12207,7 +12241,7 @@ function updateMarketQuantity(kind, companyId, value) {
   if (range) range.value = String(Math.min(quantity, Number(range.max || quantity)));
   if (output) output.value = range?.value || String(quantity);
   if (kind === 'sell') {
-    const company = economyViewState.companies.find((entry) => entry.id === companyId);
+    const company = getEconomyCompanyById(companyId);
     const preview = document.getElementById(`sellPreview_${companyId}`);
     if (company && preview) {
       preview.outerHTML = renderSellPreview(company, range?.value || quantity);
@@ -12234,10 +12268,16 @@ async function fetchEconomyView(options = {}) {
   economyViewState.error = '';
   if (renderLoading && activeMainTab === 'economy') renderEconomyView();
   try {
-    const response = await fetch('/api/economy/market', { credentials: 'include' });
+    const response = await fetch('/api/economy/market/summary', { credentials: 'include' });
     const payload = await readJsonResponse(response, 'Wirtschaftsdaten konnten nicht geladen werden.');
     if (!response.ok) throw new Error(payload.error || 'Wirtschaftsdaten konnten nicht geladen werden.');
-    Object.assign(economyViewState, payload, { loaded: true, lastLoadedAt: Date.now() });
+    Object.assign(economyViewState, payload, {
+      loaded: true,
+      lastLoadedAt: Date.now(),
+      companies: payload.companies || [],
+      featuredCompanies: payload.companies || [],
+      searchResults: String(economyViewState.sectorQuery || '').trim() ? economyViewState.searchResults : []
+    });
     loadedSuccessfully = true;
     if (options.markBootReady) markBootTask('economyReady', true);
   } catch (error) {
@@ -12248,6 +12288,36 @@ async function fetchEconomyView(options = {}) {
     if (activeMainTab === 'economy') renderEconomyView();
   }
   return loadedSuccessfully;
+}
+
+async function fetchEconomyCompanySearch(query, resourceFilter = 'all') {
+  const normalizedQuery = String(query || '').trim();
+  if (!normalizedQuery) {
+    economyViewState.searchResults = [];
+    economyViewState.companySearchLoading = false;
+    economyViewState.companySearchError = '';
+    if (activeMainTab === 'economy') renderEconomyView();
+    return;
+  }
+  economyViewState.companySearchLoading = true;
+  economyViewState.companySearchError = '';
+  if (activeMainTab === 'economy') renderEconomyView();
+  try {
+    const url = `/api/economy/market/search?q=${encodeURIComponent(normalizedQuery)}&resource=${encodeURIComponent(resourceFilter || 'all')}&limit=60`;
+    const response = await fetch(url, { credentials: 'include' });
+    const payload = await readJsonResponse(response, 'Aktiensuche konnte nicht geladen werden.');
+    if (!response.ok) throw new Error(payload.error || 'Aktiensuche konnte nicht geladen werden.');
+    economyViewState.searchResults = payload.companies || [];
+    economyViewState.history = {
+      ...(economyViewState.history || {}),
+      ...(payload.history || {})
+    };
+  } catch (error) {
+    economyViewState.companySearchError = error.message;
+  } finally {
+    economyViewState.companySearchLoading = false;
+    if (activeMainTab === 'economy') renderEconomyView();
+  }
 }
 
 async function fetchMarketCompanyDetail(companyId, options = {}) {
@@ -12344,6 +12414,9 @@ function openMarketCompanyOverview(companyId) {
 async function refreshSelectedMarketCompany() {
   const companyId = String(economyViewState.selectedCompanyId || '').trim();
   await fetchEconomyView({ renderLoading: false });
+  if (String(economyViewState.sectorQuery || '').trim()) {
+    await fetchEconomyCompanySearch(economyViewState.sectorQuery, economyViewState.resourceFilter || 'all');
+  }
   if (companyId) await fetchMarketCompanyDetail(companyId, { renderLoading: false, force: true });
   if (activeMainTab === 'economy') renderEconomyView();
 }
@@ -12705,11 +12778,11 @@ function renderEconomyView() {
   const pool = getFactionResourcePool('GAR');
   const cooldown = getMarketCooldownRemaining();
   const holdings = new Map((economyViewState.holdings || []).map((holding) => [holding.companyId, Number(holding.shares || 0)]));
-  const securitiesValue = (economyViewState.companies || []).reduce((sum, company) => (
-    sum + ((holdings.get(company.id) || 0) * Number(company.currentPrice || 0))
-  ), 0);
+  const securitiesValue = Number(economyViewState.portfolio?.holdingsValue || 0);
   const portfolioBalance = Number(economyViewState.investor?.balance || 0);
-  const portfolioValue = portfolioBalance + securitiesValue;
+  const portfolioValue = economyViewState.portfolioEnabled
+    ? Number(economyViewState.portfolio?.totalValue || (portfolioBalance + securitiesValue))
+    : (portfolioBalance + securitiesValue);
   const cooldownText = economyViewState.consumerMode
     ? (cooldown > 0 ? formatDuration(cooldown) : 'Nachfrage verfügbar')
     : (economyViewState.portfolioEnabled ? 'Direkt verfügbar' : 'Nicht verfügbar');
@@ -12723,12 +12796,7 @@ function renderEconomyView() {
   };
   const marketQuery = String(economyViewState.sectorQuery || '').trim().toLocaleLowerCase('de');
   const resourceFilter = economyViewState.resourceFilter || 'all';
-  const filteredCompanies = (economyViewState.companies || []).filter((company) => {
-    const companyResources = Array.isArray(company.resourceRefs) && company.resourceRefs.length ? company.resourceRefs : [company.resourceKey];
-    const matchesResource = resourceFilter === 'all' || companyResources.includes(resourceFilter);
-    const searchable = `${company.sector || ''} ${company.name || ''} ${company.symbol || ''}`.toLocaleLowerCase('de');
-    return matchesResource && (!marketQuery || searchable.includes(marketQuery));
-  });
+  const filteredCompanies = getActiveEconomyCompanies();
   const visibleCompanies = filteredCompanies.slice(0, 60);
   const topLastHour = (economyViewState.topLastHour || []).slice(0, 50);
   const acpRows = economyViewState.acp?.current || [];
@@ -12741,16 +12809,17 @@ function renderEconomyView() {
     return;
   }
   if (economyViewState.activeSection === 'detail') {
-    const companySummary = economyViewState.companies.find((entry) => entry.id === economyViewState.selectedCompanyId);
-    if (!companySummary) {
+    const companySummary = getEconomyCompanyById(economyViewState.selectedCompanyId);
+    if (!companySummary && !economyViewState.companyDetailById?.[economyViewState.selectedCompanyId]) {
       economyViewState.activeSection = 'trade';
       renderEconomyView();
       return;
     }
-    const company = economyViewState.companyDetailById?.[companySummary.id] || companySummary;
-    const companyDetailLoaded = Boolean(economyViewState.companyDetailById?.[companySummary.id]);
-    const companyDetailLoading = economyViewState.companyDetailLoadingId === companySummary.id;
-    const shares = holdings.get(company.id) || 0;
+    const companyKey = String(companySummary?.id || companySummary?.companyId || economyViewState.selectedCompanyId || '').trim();
+    const company = economyViewState.companyDetailById?.[companyKey] || companySummary;
+    const companyDetailLoaded = Boolean(economyViewState.companyDetailById?.[companyKey]);
+    const companyDetailLoading = economyViewState.companyDetailLoadingId === companyKey;
+    const shares = holdings.get(company.id || company.companyId) || 0;
     const rangeCutoff = getMarketRangeCutoff();
     const prices = (economyViewState.history?.[company.id] || [])
       .filter((point) => Date.parse(point.recordedAt) >= rangeCutoff)
@@ -12788,7 +12857,7 @@ function renderEconomyView() {
         <div class="stat-card"><strong>Private Standorte</strong><span>${Number(company.corporateAssetCount || company.corporateAssets?.length || 0)}</span></div>
         <div class="stat-card"><strong>Aktive Projekte</strong><span>${Number(company.activeCorporateProjectCount || 0)}</span></div>
       </div>
-      <div class="workspace-section"><h3>Kursverlauf</h3>${renderMarketRangeControls()}${renderMarketDetailChart(company.id)}</div>
+      <div class="workspace-section"><h3>Kursverlauf</h3>${renderMarketRangeControls()}${renderMarketDetailChart(company.id || company.companyId)}</div>
       <div class="workspace-section"><h3>Anteilseigner</h3><div class="workspace-card">${renderOwnershipPie(company)}</div></div>
       <div class="workspace-section workspace-columns">
         ${renderSectorAssetTable('Private Standorte', (company.corporateAssets || []).map((asset) => ({
@@ -12862,7 +12931,7 @@ function renderEconomyView() {
             : 'Diese Admin-Rolle besitzt kein persönliches Portfolio und kann nicht handeln.')}</p>
         <div class="form-grid">
           <div class="form-row"><label>Sektor oder Holding suchen</label><input id="economySectorSearch" type="search" value="${escapeLoginManagerText(economyViewState.sectorQuery || '')}" placeholder="z. B. Corellian" oninput="updateEconomySectorQuery(this)"></div>
-          <div class="form-row"><label>Ressource</label><select onchange="economyViewState.resourceFilter=this.value; renderEconomyView()">
+          <div class="form-row"><label>Ressource</label><select onchange="economyViewState.resourceFilter=this.value; if (economyViewState.sectorQuery.trim()) { void fetchEconomyCompanySearch(economyViewState.sectorQuery, this.value); } renderEconomyView();">
             <option value="all" ${resourceFilter === 'all' ? 'selected' : ''}>Alle Ressourcen</option>
             <option value="quadraniumErz" ${resourceFilter === 'quadraniumErz' ? 'selected' : ''}>Metalle</option>
             <option value="agrinium" ${resourceFilter === 'agrinium' ? 'selected' : ''}>Technologien</option>
@@ -12871,7 +12940,10 @@ function renderEconomyView() {
             <option value="kavamSalz" ${resourceFilter === 'kavamSalz' ? 'selected' : ''}>Versorgungsgüter</option>
           </select></div>
         </div>
-        <p class="muted">${filteredCompanies.length} Aktien gefunden${filteredCompanies.length > visibleCompanies.length ? `, die ersten ${visibleCompanies.length} werden angezeigt` : ''}.</p>
+        ${economyViewState.companySearchError ? `<div class="muted-box">${escapeLoginManagerText(economyViewState.companySearchError)}</div>` : ''}
+        <p class="muted">${marketQuery
+          ? `${economyViewState.companySearchLoading ? 'Suche läuft...' : `${filteredCompanies.length} Treffer`} für "${escapeLoginManagerText(economyViewState.sectorQuery)}"`
+          : `${filteredCompanies.length} Vorschau-Aktien geladen`}${filteredCompanies.length > visibleCompanies.length ? `, die ersten ${visibleCompanies.length} werden angezeigt` : ''}.</p>
         <div class="project-grid">
           ${visibleCompanies.map((company) => {
             const shares = holdings.get(company.id) || 0;
@@ -13054,7 +13126,7 @@ function renderEconomyView() {
       <div class="workspace-card">
         <table class="data-table">
           <thead><tr><th>Zeit</th><th>Investor</th><th>Aktion</th><th>Holding</th><th>Menge</th><th>Preis</th></tr></thead>
-          <tbody>${(economyViewState.institutionalTrades || []).slice(0, 12).map((trade) => `<tr><td>${formatMarketDateTime(trade.createdAt)}</td><td>${escapeLoginManagerText(trade.investorName || 'Institution')}</td><td>${escapeLoginManagerText(trade.action)}</td><td>${escapeLoginManagerText(economyViewState.companies.find((company) => company.id === trade.companyId)?.name || trade.companyId)}</td><td>${trade.quantity}</td><td>${formatCredits(trade.price)}</td></tr>`).join('') || '<tr><td colspan="6">Noch keine institutionellen Aktivitäten.</td></tr>'}</tbody>
+          <tbody>${(economyViewState.institutionalTrades || []).slice(0, 12).map((trade) => `<tr><td>${formatMarketDateTime(trade.createdAt)}</td><td>${escapeLoginManagerText(trade.investorName || 'Institution')}</td><td>${escapeLoginManagerText(trade.action)}</td><td>${escapeLoginManagerText(getEconomyCompanyById(trade.companyId)?.name || trade.companyId)}</td><td>${trade.quantity}</td><td>${formatCredits(trade.price)}</td></tr>`).join('') || '<tr><td colspan="6">Noch keine institutionellen Aktivitäten.</td></tr>'}</tbody>
         </table>
       </div>
     </div>

@@ -23,12 +23,14 @@ import {
   purchaseMarketDemand,
   readCompanyOwnership,
   readCampaignState,
+  readMarketSummary,
   readMarketCompanyDetail,
   readEconomySector,
   readEconomySectorHoldings,
   readMarketSnapshot,
   readPortfolio,
   readPortfolioHistory,
+  searchMarketCompanies,
   repairAllMarket,
   repairCompanyHoldings,
   repairInvestorCompany,
@@ -1308,6 +1310,69 @@ app.get('/api/economy/companies/:companyId/ownership', (req, res) => {
     res.json({ ownership: readCompanyOwnership(db, String(req.params.companyId || '')) });
   } catch (error) {
     res.status(error.status || 500).json({ error: error.message || 'Anteilseigner konnten nicht geladen werden.' });
+  }
+});
+
+app.get('/api/economy/market/summary', (req, res) => {
+  try {
+    const session = getSession(req);
+    const portfolioEnabled = hasPersonalMarketPortfolio(session);
+    const investorId = portfolioEnabled ? `user_${session.id}` : '';
+    const consumerKey = session ? '' : getMarketConsumerKey(req);
+    const { state } = readCampaignState(db);
+    const inflationRate = Math.min(0.25, Number(state.resources?.GAR?.credits || 0) / 2000000);
+    try {
+      runMarketTick(db, inflationRate, Date.now(), state);
+    } catch (tickError) {
+      console.error('Economy market summary tick failed', tickError);
+    }
+    const snapshot = readMarketSummary(db, investorId, session?.id || '');
+    const factionAccounts = {
+      ...snapshot.factionAccounts,
+      GAR: {
+        faction: 'GAR',
+        credits: Number(state.resources?.GAR?.credits || 0),
+        updatedAt: new Date().toISOString()
+      },
+      KUS: {
+        faction: 'KUS',
+        credits: Number(state.resources?.KUS?.credits || 0),
+        updatedAt: new Date().toISOString()
+      }
+    };
+    res.json({
+      ...snapshot,
+      factionAccounts,
+      portfolioEnabled,
+      consumerMode: !session,
+      canPurchase: portfolioEnabled || !session,
+      factionAccountKey: getMarketFactionAccountKey(session?.role),
+      inflationRate,
+      nextPurchaseAt: consumerKey ? getConsumerNextPurchaseAt(db, consumerKey) : null
+    });
+  } catch (error) {
+    console.error('Economy market summary endpoint failed', error);
+    res.status(error.status || 500).json({ error: error.message || 'Wirtschaftszusammenfassung konnte nicht geladen werden.' });
+  }
+});
+
+app.get('/api/economy/market/search', (req, res) => {
+  try {
+    const { state } = readCampaignState(db);
+    const inflationRate = Math.min(0.25, Number(state.resources?.GAR?.credits || 0) / 2000000);
+    try {
+      runMarketTick(db, inflationRate, Date.now(), state);
+    } catch (tickError) {
+      console.error('Economy market search tick failed', tickError);
+    }
+    res.json(searchMarketCompanies(db, {
+      query: String(req.query?.q || ''),
+      resourceFilter: String(req.query?.resource || 'all'),
+      limit: Number(req.query?.limit || 60)
+    }));
+  } catch (error) {
+    console.error('Economy market search endpoint failed', error);
+    res.status(error.status || 500).json({ error: error.message || 'Aktiensuche konnte nicht geladen werden.' });
   }
 });
 
