@@ -14,7 +14,15 @@ const RESOURCE_MARKET_CONFIG = {
 
 const RESOURCE_KEYS = Object.keys(RESOURCE_MARKET_CONFIG);
 const DEMAND_TICK_MS = 15 * 1000;
+const SOLVENCY_TICK_MS = 10 * 60 * 1000;
 const INSTITUTIONAL_TICK_MS = 10 * 60 * 1000;
+const CORPORATE_BUILD_TICK_MS = 30 * 60 * 1000;
+const CORPORATE_PRODUCTION_TICK_MS = 15 * 60 * 1000;
+const CORPORATE_FINANCE_TICK_MS = 15 * 60 * 1000;
+const CORPORATE_BUILD_DURATION_MS = 10 * 60 * 60 * 1000;
+const CORPORATE_MAX_ACTIVE_PROJECTS = 5;
+const CORPORATE_MAX_COMPLETED_48H = 5;
+const CORPORATE_COMPLETION_WINDOW_MS = 48 * 60 * 60 * 1000;
 const ACP_HISTORY_WINDOW_MS = 183 * 24 * 60 * 60 * 1000;
 const MAX_INTELLIGENCE_REPORTS = 80;
 const MAX_TRADE_HISTORY_ROWS = 6000;
@@ -45,6 +53,44 @@ const MARKET_SENTIMENT_EFFECTS = {
   Neutral: 0,
   Positiv: 0.05,
   Euphorisch: 0.1
+};
+
+const CORPORATE_STRATEGIES = [
+  'conservative',
+  'aggressive_growth',
+  'monopoly_builder',
+  'war_profiteer',
+  'infrastructure_supplier',
+  'distressed_survivor',
+  'export_focused',
+  'local_dominance'
+];
+
+const CORPORATE_BUILDING_CONFIG = {
+  corporate_metal_mine: { resourceType: 'quadraniumErz', label: 'Private Metallmine', productionPerHour: 18, revenuePerHour: 145, maintenanceCostPerHour: 32, strategicValue: 0.58 },
+  corporate_foundry: { resourceType: 'quadraniumErz', label: 'Private Gießerei', productionPerHour: 14, revenuePerHour: 138, maintenanceCostPerHour: 34, strategicValue: 0.63 },
+  corporate_heavy_industry: { resourceType: 'quadraniumErz', label: 'Schwerindustrie-Komplex', productionPerHour: 11, revenuePerHour: 164, maintenanceCostPerHour: 46, strategicValue: 0.72 },
+  corporate_tech_complex: { resourceType: 'agrinium', label: 'Technologie-Komplex', productionPerHour: 10, revenuePerHour: 176, maintenanceCostPerHour: 44, strategicValue: 0.76 },
+  corporate_research_lab: { resourceType: 'agrinium', label: 'Forschungslabor', productionPerHour: 8, revenuePerHour: 188, maintenanceCostPerHour: 52, strategicValue: 0.81 },
+  corporate_droid_component_factory: { resourceType: 'agrinium', label: 'Droidenkomponenten-Fabrik', productionPerHour: 12, revenuePerHour: 172, maintenanceCostPerHour: 43, strategicValue: 0.74 },
+  corporate_fuel_refinery: { resourceType: 'tibannaGas', label: 'Treibstoffraffinerie', productionPerHour: 16, revenuePerHour: 159, maintenanceCostPerHour: 35, strategicValue: 0.68 },
+  corporate_fuel_depot: { resourceType: 'tibannaGas', label: 'Treibstoffdepot', productionPerHour: 9, revenuePerHour: 124, maintenanceCostPerHour: 24, strategicValue: 0.51 },
+  corporate_logistics_hub: { resourceType: 'tibannaGas', label: 'Logistik-Hub', productionPerHour: 7, revenuePerHour: 141, maintenanceCostPerHour: 28, strategicValue: 0.65 },
+  corporate_chemical_plant: { resourceType: 'baradium', label: 'Chemieanlage', productionPerHour: 11, revenuePerHour: 151, maintenanceCostPerHour: 37, strategicValue: 0.66 },
+  corporate_baradium_facility: { resourceType: 'baradium', label: 'Baradium-Anlage', productionPerHour: 8, revenuePerHour: 182, maintenanceCostPerHour: 49, strategicValue: 0.83 },
+  corporate_medical_chem_lab: { resourceType: 'baradium', label: 'Medizinisches Chemielabor', productionPerHour: 9, revenuePerHour: 169, maintenanceCostPerHour: 41, strategicValue: 0.71 },
+  corporate_supply_depot: { resourceType: 'kavamSalz', label: 'Versorgungsdepot', productionPerHour: 13, revenuePerHour: 117, maintenanceCostPerHour: 21, strategicValue: 0.47 },
+  corporate_agri_industry: { resourceType: 'kavamSalz', label: 'Agrarindustrie', productionPerHour: 15, revenuePerHour: 126, maintenanceCostPerHour: 23, strategicValue: 0.49 },
+  corporate_consumer_goods_factory: { resourceType: 'kavamSalz', label: 'Konsumgüterfabrik', productionPerHour: 12, revenuePerHour: 139, maintenanceCostPerHour: 28, strategicValue: 0.57 },
+  corporate_medical_supply_factory: { resourceType: 'kavamSalz', label: 'Medizinische Versorgungsgüterfabrik', productionPerHour: 10, revenuePerHour: 154, maintenanceCostPerHour: 33, strategicValue: 0.7 }
+};
+
+const CORPORATE_BUILDING_COSTS = {
+  quadraniumErz: { quadraniumErz: 980, agrinium: 280, tibannaGas: 140, baradium: 210, kavamSalz: 280, credits: 3780 },
+  agrinium: { quadraniumErz: 760, agrinium: 460, tibannaGas: 180, baradium: 260, kavamSalz: 220, credits: 4120 },
+  tibannaGas: { quadraniumErz: 840, agrinium: 240, tibannaGas: 320, baradium: 180, kavamSalz: 190, credits: 3960 },
+  baradium: { quadraniumErz: 720, agrinium: 300, tibannaGas: 160, baradium: 330, kavamSalz: 180, credits: 4010 },
+  kavamSalz: { quadraniumErz: 610, agrinium: 180, tibannaGas: 110, baradium: 150, kavamSalz: 360, credits: 3380 }
 };
 
 const MANUAL_SECTOR_NAME_MAP = {
@@ -246,6 +292,115 @@ function displayMarketStatus(status) {
     takeover: 'Übernahme läuft',
     insolvent: 'Insolvent'
   })[normalizeMarketStatus(status)] || 'Handelbar';
+}
+
+function safeNumber(value, fallback = 0, min = -Infinity, max = Infinity) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return fallback;
+  return clamp(numeric, min, max);
+}
+
+function sanitizeResourceBag(input, defaultValue = 0) {
+  const bag = typeof input === 'string' ? safeJsonParse(input, {}) : (input && typeof input === 'object' ? input : {});
+  return Object.fromEntries(RESOURCE_KEYS.map((key) => [key, round2(safeNumber(bag[key], defaultValue, 0, 1e9))]));
+}
+
+function emptyResourceBag() {
+  return Object.fromEntries(RESOURCE_KEYS.map((key) => [key, 0]));
+}
+
+function sumResourceBag(values = []) {
+  return values.reduce((accumulator, entry) => {
+    const bag = sanitizeResourceBag(entry);
+    RESOURCE_KEYS.forEach((key) => {
+      accumulator[key] = round2(safeNumber(accumulator[key], 0, 0, 1e9) + safeNumber(bag[key], 0, 0, 1e9));
+    });
+    return accumulator;
+  }, emptyResourceBag());
+}
+
+function getCorporateBuildingMeta(buildingType) {
+  return CORPORATE_BUILDING_CONFIG[String(buildingType || '')] || null;
+}
+
+function chooseCorporateStrategy(companyId) {
+  const digest = crypto.createHash('sha1').update(`strategy:${companyId}`).digest('hex');
+  const index = parseInt(digest.slice(0, 8), 16) % CORPORATE_STRATEGIES.length;
+  return CORPORATE_STRATEGIES[index];
+}
+
+function parseIsoToMs(value) {
+  const parsed = Date.parse(value || '');
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function getRuntimeStateNumber(db, key, fallback = 0) {
+  const row = db.prepare('SELECT state_value FROM economy_runtime_state WHERE state_key = ?').get(key);
+  return safeNumber(row?.state_value, fallback, 0, Number.MAX_SAFE_INTEGER);
+}
+
+function setRuntimeStateNumber(db, key, value, updatedAt = new Date().toISOString()) {
+  db.prepare(`
+    INSERT INTO economy_runtime_state (state_key, state_value, updated_at)
+    VALUES (?, ?, ?)
+    ON CONFLICT(state_key) DO UPDATE SET
+      state_value = excluded.state_value,
+      updated_at = excluded.updated_at
+  `).run(key, String(Math.floor(safeNumber(value, 0, 0, Number.MAX_SAFE_INTEGER))), updatedAt);
+}
+
+function canRunCadence(db, key, intervalMs, now) {
+  const lastTick = getRuntimeStateNumber(db, key, 0);
+  return !lastTick || now - lastTick >= intervalMs;
+}
+
+function getPlanetInfrastructureModifier(state, planetId) {
+  const slots = Array.isArray(state?.planetResources?.[planetId]) ? state.planetResources[planetId] : [];
+  const developmentSlots = slots.filter((slot) => typeof slot === 'string' && slot.includes('development')).length;
+  const civilianSlots = slots.filter((slot) => typeof slot === 'string' && slot.startsWith('civilian_')).length;
+  return {
+    productionBonus: clamp((developmentSlots * 0.04) + (civilianSlots * 0.01), 0, 0.24),
+    maintenanceRelief: clamp((developmentSlots * 0.02), 0, 0.12),
+    stabilityBonus: clamp((developmentSlots * 0.03), 0, 0.18)
+  };
+}
+
+function getPlanetConflictPressure(state, planetId) {
+  const fleets = Array.isArray(state?.fleets) ? state.fleets : [];
+  const present = fleets.filter((fleet) => (fleet?.locationId || fleet?.planetId) === planetId);
+  const factions = new Set(present.map((fleet) => String(fleet?.faction || fleet?.owner || '')).filter(Boolean));
+  if (factions.size >= 2) return 0.22;
+  return present.length >= 4 ? 0.08 : 0;
+}
+
+function getCompanyStrengthScore(company) {
+  return clamp(
+    safeNumber(company.currentPrice, 0) / Math.max(1, safeNumber(company.basePrice, 1))
+    + safeNumber(company.confidenceIndex, 1, 0, 1.5) * 0.35
+    + (1 - safeNumber(company.debtIndex, 0.2, 0, 1)) * 0.25
+    + Math.min(1, safeNumber(company.corporateCash, 0, 0, 1e9) / 15000) * 0.4
+    + Math.min(1, safeNumber(company.privateAssetValue, 0, 0, 1e9) / 22000) * 0.3
+    - safeNumber(company.bankruptcyRisk, 0, 0, 1) * 0.8,
+    0,
+    3
+  );
+}
+
+function getCompanyActivityWindowStats(db, companyId, now) {
+  const activeProjects = db.prepare(`
+    SELECT COUNT(*) AS count
+    FROM corporate_build_projects
+    WHERE company_id = ? AND status IN ('planned', 'building')
+  `).get(companyId)?.count || 0;
+  const completed48h = db.prepare(`
+    SELECT COUNT(*) AS count
+    FROM corporate_build_projects
+    WHERE company_id = ? AND status = 'completed' AND completes_at >= ?
+  `).get(companyId, new Date(now - CORPORATE_COMPLETION_WINDOW_MS).toISOString())?.count || 0;
+  return {
+    activeProjects: Number(activeProjects || 0),
+    completed48h: Number(completed48h || 0)
+  };
 }
 
 function getHoldingCompanyId(sectorName, resourceKey) {
@@ -741,6 +896,49 @@ export function createDb(projectRoot) {
       estimated_benefit REAL NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS economy_runtime_state (
+      state_key TEXT PRIMARY KEY,
+      state_value TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS corporate_build_projects (
+      id TEXT PRIMARY KEY,
+      company_id TEXT NOT NULL,
+      sector_id TEXT NOT NULL,
+      planet_id TEXT,
+      building_type TEXT NOT NULL,
+      resource_type TEXT NOT NULL,
+      status TEXT NOT NULL,
+      started_at TEXT NOT NULL,
+      completes_at TEXT NOT NULL,
+      cost_resources_json TEXT NOT NULL DEFAULT '{}',
+      cost_credits REAL NOT NULL DEFAULT 0,
+      expected_roi REAL NOT NULL DEFAULT 0,
+      reason TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS corporate_assets (
+      id TEXT PRIMARY KEY,
+      company_id TEXT NOT NULL,
+      sector_id TEXT NOT NULL,
+      planet_id TEXT,
+      building_type TEXT NOT NULL,
+      resource_type TEXT NOT NULL,
+      production_per_hour REAL NOT NULL DEFAULT 0,
+      revenue_per_hour REAL NOT NULL DEFAULT 0,
+      maintenance_cost_per_hour REAL NOT NULL DEFAULT 0,
+      condition_index REAL NOT NULL DEFAULT 1,
+      risk_index REAL NOT NULL DEFAULT 0,
+      damage_index REAL NOT NULL DEFAULT 0,
+      blockade_index REAL NOT NULL DEFAULT 0,
+      strategic_value REAL NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
     CREATE UNIQUE INDEX IF NOT EXISTS idx_radio_command_log_unique_target
       ON radio_command_log (discord_message_id, target_fleet_id, target_planet_id, status);
 
@@ -776,6 +974,12 @@ export function createDb(projectRoot) {
 
     CREATE INDEX IF NOT EXISTS idx_holding_mergers_created_at
       ON holding_mergers (created_at DESC);
+
+    CREATE INDEX IF NOT EXISTS idx_corporate_build_projects_company_status
+      ON corporate_build_projects (company_id, status, completes_at DESC);
+
+    CREATE INDEX IF NOT EXISTS idx_corporate_assets_company_updated_at
+      ON corporate_assets (company_id, updated_at DESC);
   `);
 
   const userColumns = new Set(db.prepare('PRAGMA table_info(users)').all().map((column) => column.name));
@@ -839,6 +1043,57 @@ export function createDb(projectRoot) {
   }
   if (!marketCompanyColumns.has('ownership_updated_at')) {
     db.exec('ALTER TABLE market_companies ADD COLUMN ownership_updated_at INTEGER');
+  }
+  if (!marketCompanyColumns.has('risk_since')) {
+    db.exec('ALTER TABLE market_companies ADD COLUMN risk_since INTEGER');
+  }
+  if (!marketCompanyColumns.has('suspended_since')) {
+    db.exec('ALTER TABLE market_companies ADD COLUMN suspended_since INTEGER');
+  }
+  if (!marketCompanyColumns.has('insolvent_since')) {
+    db.exec('ALTER TABLE market_companies ADD COLUMN insolvent_since INTEGER');
+  }
+  if (!marketCompanyColumns.has('corporate_cash')) {
+    db.exec('ALTER TABLE market_companies ADD COLUMN corporate_cash REAL NOT NULL DEFAULT 0');
+  }
+  if (!marketCompanyColumns.has('corporate_resources_json')) {
+    db.exec("ALTER TABLE market_companies ADD COLUMN corporate_resources_json TEXT NOT NULL DEFAULT '{}'");
+  }
+  if (!marketCompanyColumns.has('corporate_strategy')) {
+    db.exec("ALTER TABLE market_companies ADD COLUMN corporate_strategy TEXT NOT NULL DEFAULT 'conservative'");
+  }
+  if (!marketCompanyColumns.has('expansion_score')) {
+    db.exec('ALTER TABLE market_companies ADD COLUMN expansion_score REAL NOT NULL DEFAULT 0');
+  }
+  if (!marketCompanyColumns.has('monopoly_score')) {
+    db.exec('ALTER TABLE market_companies ADD COLUMN monopoly_score REAL NOT NULL DEFAULT 0');
+  }
+  if (!marketCompanyColumns.has('corporate_build_cooldown_until')) {
+    db.exec('ALTER TABLE market_companies ADD COLUMN corporate_build_cooldown_until INTEGER');
+  }
+  if (!marketCompanyColumns.has('last_corporate_build_at')) {
+    db.exec('ALTER TABLE market_companies ADD COLUMN last_corporate_build_at INTEGER');
+  }
+  if (!marketCompanyColumns.has('corporate_builds_48h')) {
+    db.exec('ALTER TABLE market_companies ADD COLUMN corporate_builds_48h INTEGER NOT NULL DEFAULT 0');
+  }
+  if (!marketCompanyColumns.has('private_asset_value')) {
+    db.exec('ALTER TABLE market_companies ADD COLUMN private_asset_value REAL NOT NULL DEFAULT 0');
+  }
+  if (!marketCompanyColumns.has('private_production_json')) {
+    db.exec("ALTER TABLE market_companies ADD COLUMN private_production_json TEXT NOT NULL DEFAULT '{}'");
+  }
+  if (!marketCompanyColumns.has('state_contract_revenue_per_hour')) {
+    db.exec('ALTER TABLE market_companies ADD COLUMN state_contract_revenue_per_hour REAL NOT NULL DEFAULT 0');
+  }
+  if (!marketCompanyColumns.has('state_contract_output_json')) {
+    db.exec("ALTER TABLE market_companies ADD COLUMN state_contract_output_json TEXT NOT NULL DEFAULT '{}'");
+  }
+  if (!marketCompanyColumns.has('state_contract_score')) {
+    db.exec('ALTER TABLE market_companies ADD COLUMN state_contract_score REAL NOT NULL DEFAULT 0');
+  }
+  if (!marketCompanyColumns.has('state_backed_slot_count')) {
+    db.exec('ALTER TABLE market_companies ADD COLUMN state_backed_slot_count INTEGER NOT NULL DEFAULT 0');
   }
   const marketOrderColumns = new Set(db.prepare('PRAGMA table_info(market_orders)').all().map((column) => column.name));
   if (!marketOrderColumns.has('remaining_quantity')) {
@@ -919,6 +1174,21 @@ export function createDb(projectRoot) {
     UPDATE market_investors
     SET portfolio_enabled = 0
     WHERE user_id IS NULL OR trim(user_id) = ''
+  `).run();
+  db.prepare(`
+    UPDATE market_companies
+    SET corporate_strategy = CASE
+      WHEN corporate_strategy IS NULL OR trim(corporate_strategy) = '' THEN 'conservative'
+      ELSE corporate_strategy
+    END,
+    corporate_resources_json = CASE
+      WHEN corporate_resources_json IS NULL OR trim(corporate_resources_json) = '' THEN '{}'
+      ELSE corporate_resources_json
+    END,
+    private_production_json = CASE
+      WHEN private_production_json IS NULL OR trim(private_production_json) = '' THEN '{}'
+      ELSE private_production_json
+    END
   `).run();
 
   const legacyFactionAdminRoles = [
@@ -1031,8 +1301,10 @@ export function createDb(projectRoot) {
     INSERT INTO market_companies (
       id, symbol, name, faction, sector, resource_key, sector_id, resource_refs_json,
       market_status, bankruptcy_risk, debt_index, confidence_index, is_embargoed,
+      corporate_cash, corporate_resources_json, corporate_strategy, expansion_score, monopoly_score,
+      corporate_builds_48h, private_asset_value, private_production_json,
       base_price, current_price, previous_price, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const updateSectorHolding = db.prepare(`
     UPDATE market_companies
@@ -1041,6 +1313,8 @@ export function createDb(projectRoot) {
         WHEN resource_refs_json IS NULL OR resource_refs_json = '' OR resource_refs_json = '[]' THEN ?
         ELSE resource_refs_json
       END,
+      corporate_cash = CASE WHEN corporate_cash <= 0 THEN ? ELSE corporate_cash END,
+      corporate_strategy = CASE WHEN corporate_strategy IS NULL OR trim(corporate_strategy) = '' THEN ? ELSE corporate_strategy END,
       base_price = ?, updated_at = ?
     WHERE id = ?
   `);
@@ -1116,6 +1390,7 @@ export function createDb(projectRoot) {
         validCompanyIds.add(companyId);
         const symbol = getHoldingSymbol(sector, resourceKey);
         if (existingCompany) {
+          const corporateCashSeed = round2(price * 34);
           updateSectorHolding.run(
             symbol,
             `${sector} ${holdingLabel}`,
@@ -1124,11 +1399,14 @@ export function createDb(projectRoot) {
             resourceKey,
             sectorId,
             JSON.stringify([resourceKey]),
+            corporateCashSeed,
+            chooseCorporateStrategy(companyId),
             price,
             migrationTime,
             companyId
           );
         } else {
+          const corporateCashSeed = round2(price * 34);
           insertSectorHolding.run(
             companyId,
             symbol,
@@ -1143,6 +1421,14 @@ export function createDb(projectRoot) {
             0.1,
             1,
             0,
+            corporateCashSeed,
+            JSON.stringify(emptyResourceBag()),
+            chooseCorporateStrategy(companyId),
+            0.2,
+            0,
+            0,
+            0,
+            JSON.stringify(emptyResourceBag()),
             price,
             price,
             price,
@@ -1162,6 +1448,7 @@ export function createDb(projectRoot) {
       deleteCompany.run(id);
     });
   })();
+  seedCorporateAssetsForHoldings(db, campaignState, Date.now());
 
   const seedInstitutionalInvestor = db.prepare(`
     INSERT INTO institutional_investors (
@@ -1971,6 +2258,270 @@ export function readCompanyOwnership(db, companyId) {
     controllingShareholder: ownership.controllingShareholder || '',
     shareholders: ownership.rows
   };
+}
+
+export function runCorporateBuildTick(db, state, now = Date.now()) {
+  if (!state || !canRunCadence(db, 'last_corporate_build_tick', CORPORATE_BUILD_TICK_MS, now)) return 0;
+  const rows = db.prepare(`
+    SELECT id, name, sector_id AS sectorId, resource_refs_json AS resourceRefsJson,
+      market_status AS marketStatus, is_embargoed AS isEmbargoed,
+      bankruptcy_risk AS bankruptcyRisk, debt_index AS debtIndex, confidence_index AS confidenceIndex,
+      corporate_cash AS corporateCash, corporate_resources_json AS corporateResourcesJson,
+      corporate_strategy AS corporateStrategy, expansion_score AS expansionScore,
+      monopoly_score AS monopolyScore, private_asset_value AS privateAssetValue,
+      current_price AS currentPrice, base_price AS basePrice,
+      corporate_build_cooldown_until AS corporateBuildCooldownUntil
+    FROM market_companies
+    WHERE id LIKE 'sector_holding_%' AND acquired_by_company_id IS NULL
+  `).all();
+  const demandRows = db.prepare(`
+    SELECT sector_id AS sectorId, resource_type AS resourceType, demand_score AS demandScore,
+      supply_score AS supplyScore, market_multiplier AS marketMultiplier
+    FROM sector_resource_demand
+  `).all();
+  const demandBySector = new Map();
+  demandRows.forEach((row) => {
+    if (!demandBySector.has(row.sectorId)) demandBySector.set(row.sectorId, []);
+    demandBySector.get(row.sectorId).push(row);
+  });
+  const sectorStateMap = new Map(db.prepare(`
+    SELECT sector_id AS sectorId, is_embargoed AS isEmbargoed, war_pressure AS warPressure
+    FROM sector_economy_state
+  `).all().map((row) => [row.sectorId, row]));
+  const insertProject = db.prepare(`
+    INSERT INTO corporate_build_projects (
+      id, company_id, sector_id, planet_id, building_type, resource_type, status,
+      started_at, completes_at, cost_resources_json, cost_credits, expected_roi,
+      reason, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const updateCompany = db.prepare(`
+    UPDATE market_companies
+    SET corporate_cash = ?, corporate_resources_json = ?, last_corporate_build_at = ?,
+      corporate_build_cooldown_until = ?, expansion_score = ?, monopoly_score = ?, updated_at = ?
+    WHERE id = ?
+  `);
+  let started = 0;
+  db.transaction(() => {
+    rows.forEach((company) => {
+      if (normalizeMarketStatus(company.marketStatus) !== 'tradeable' || Number(company.isEmbargoed || 0)) return;
+      const sectorState = sectorStateMap.get(company.sectorId) || {};
+      if (Number(sectorState.isEmbargoed || 0)) return;
+      const activity = getCompanyActivityWindowStats(db, company.id, now);
+      if (activity.activeProjects >= CORPORATE_MAX_ACTIVE_PROJECTS || activity.completed48h >= CORPORATE_MAX_COMPLETED_48H) return;
+      if (safeNumber(company.corporateBuildCooldownUntil, 0, 0, Number.MAX_SAFE_INTEGER) > now) return;
+      const opportunities = evaluateCorporateBuildOpportunities(company, sectorState, demandBySector.get(company.sectorId) || [], state);
+      const choice = opportunities[0];
+      if (!choice) return;
+      const cost = calculateCorporateBuildCost(company, choice.buildingType, sectorState);
+      if (!cost || safeNumber(company.corporateCash, 0, 0, 1e9) < cost.costCredits) return;
+      const planets = getSectorPlanetsForCompany(state, company);
+      const currentAssets = readCompanyCorporateAssets(db, state, company.id);
+      const targetPlanet = pickCorporateAssetPlanet(planets, `${company.id}:build`, currentAssets, true);
+      if (!targetPlanet) return;
+      const charged = chargeCorporateBuildCost(company, cost);
+      const createdAt = new Date(now).toISOString();
+      updateCompany.run(
+        charged.nextCash,
+        JSON.stringify(charged.nextResources),
+        now,
+        now + (choice.expectedRoi > 0.25 ? (12 * 60 * 60 * 1000) : (18 * 60 * 60 * 1000)),
+        clamp(safeNumber(company.expansionScore, 0.2, 0, 1) + 0.04, 0, 1),
+        clamp(safeNumber(company.monopolyScore, 0, 0, 1) + (choice.expectedRoi >= 0.22 ? 0.03 : 0.01), 0, 1),
+        createdAt,
+        company.id
+      );
+      insertProject.run(
+        crypto.randomUUID(),
+        company.id,
+        company.sectorId,
+        targetPlanet.id,
+        choice.buildingType,
+        choice.resourceType,
+        'building',
+        createdAt,
+        new Date(now + CORPORATE_BUILD_DURATION_MS).toISOString(),
+        JSON.stringify(cost.costResources),
+        cost.costCredits,
+        choice.expectedRoi,
+        choice.reason,
+        createdAt,
+        createdAt
+      );
+      insertMarketEvent(db, {
+        eventType: 'corporate_build_started',
+        title: 'Privates Holding-Bauprojekt',
+        description: `${company.name} startet den privaten Ausbau von ${getCorporateBuildingMeta(choice.buildingType)?.label || choice.buildingType}.`,
+        impact: 0.02,
+        startedAt: createdAt
+      });
+      started += 1;
+    });
+    setRuntimeStateNumber(db, 'last_corporate_build_tick', now, new Date(now).toISOString());
+  })();
+  return started;
+}
+
+export function completeCorporateBuildProjects(db, state, now = Date.now()) {
+  const due = db.prepare(`
+    SELECT id, company_id AS companyId, sector_id AS sectorId, planet_id AS planetId,
+      building_type AS buildingType, resource_type AS resourceType
+    FROM corporate_build_projects
+    WHERE status = 'building' AND completes_at <= ?
+  `).all(new Date(now).toISOString());
+  if (!due.length) return 0;
+  const insertAsset = db.prepare(`
+    INSERT INTO corporate_assets (
+      id, company_id, sector_id, planet_id, building_type, resource_type,
+      production_per_hour, revenue_per_hour, maintenance_cost_per_hour,
+      condition_index, risk_index, damage_index, blockade_index, strategic_value,
+      created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const markComplete = db.prepare(`UPDATE corporate_build_projects SET status = 'completed', updated_at = ? WHERE id = ?`);
+  let completed = 0;
+  db.transaction(() => {
+    const sectorMaps = getSectorMaps(state);
+    due.forEach((project) => {
+      const meta = getCorporateBuildingMeta(project.buildingType);
+      if (!meta) return;
+      const createdAt = new Date(now).toISOString();
+      insertAsset.run(
+        crypto.randomUUID(),
+        project.companyId,
+        project.sectorId,
+        project.planetId,
+        project.buildingType,
+        project.resourceType,
+        meta.productionPerHour,
+        meta.revenuePerHour,
+        meta.maintenanceCostPerHour,
+        1,
+        0.07,
+        0,
+        0,
+        meta.strategicValue,
+        createdAt,
+        createdAt
+      );
+      markComplete.run(createdAt, project.id);
+      updateCompanyCorporateSummary(db, project.companyId, now);
+      const company = db.prepare('SELECT name FROM market_companies WHERE id = ?').get(project.companyId);
+      const planet = (state?.planets || []).find((entry) => entry.id === project.planetId);
+      const sectorName = sectorMaps.byId.get(String(project.sectorId || ''))?.name || '';
+      insertMarketEvent(db, {
+        eventType: 'corporate_build_completed',
+        title: 'Privates Holding-Projekt abgeschlossen',
+        description: `${company?.name || 'Eine Holding'} eroeffnet ${meta.label || project.buildingType}${sectorName ? ` im ${sectorName}-Sektor` : ''}${planet?.name ? ` auf ${planet.name}` : ''}.`,
+        impact: 0.025,
+        startedAt: createdAt
+      });
+      completed += 1;
+    });
+  })();
+  return completed;
+}
+
+export function runCorporateProductionTick(db, state, now = Date.now()) {
+  if (!state || !canRunCadence(db, 'last_corporate_production_tick', CORPORATE_PRODUCTION_TICK_MS, now)) return 0;
+  const assets = db.prepare(`
+    SELECT a.id, a.company_id AS companyId, a.planet_id AS planetId, a.resource_type AS resourceType,
+      a.production_per_hour AS productionPerHour, a.revenue_per_hour AS revenuePerHour,
+      a.maintenance_cost_per_hour AS maintenanceCostPerHour, a.condition_index AS conditionIndex,
+      a.risk_index AS riskIndex, a.damage_index AS damageIndex, a.blockade_index AS blockadeIndex,
+      c.corporate_resources_json AS corporateResourcesJson, c.corporate_cash AS corporateCash
+    FROM corporate_assets a
+    LEFT JOIN market_companies c ON c.id = a.company_id
+    WHERE c.acquired_by_company_id IS NULL
+  `).all();
+  const companyUpdates = new Map();
+  const updateAsset = db.prepare(`
+    UPDATE corporate_assets
+    SET condition_index = ?, risk_index = ?, damage_index = ?, blockade_index = ?, updated_at = ?
+    WHERE id = ?
+  `);
+  const updateCompany = db.prepare(`
+    UPDATE market_companies
+    SET corporate_resources_json = ?, corporate_cash = ?, updated_at = ?
+    WHERE id = ?
+  `);
+  db.transaction(() => {
+    assets.forEach((asset) => {
+      const infra = getPlanetInfrastructureModifier(state, asset.planetId);
+      const conflictPressure = getPlanetConflictPressure(state, asset.planetId);
+      const nextDamage = clamp(safeNumber(asset.damageIndex, 0, 0, 1) + conflictPressure - infra.stabilityBonus * 0.25, 0, 1);
+      const nextBlockade = clamp(safeNumber(asset.blockadeIndex, 0, 0, 1) + (conflictPressure > 0.2 ? 0.06 : -0.03), 0, 1);
+      const nextCondition = clamp(safeNumber(asset.conditionIndex, 1, 0, 1.2) - nextDamage * 0.02 + infra.stabilityBonus * 0.015, 0.35, 1.1);
+      const effectiveProduction = safeNumber(asset.productionPerHour, 0, 0, 1e6)
+        * nextCondition
+        * (1 + infra.productionBonus)
+        * (1 - nextDamage * 0.45)
+        * (1 - nextBlockade * 0.35);
+      const effectiveRevenue = safeNumber(asset.revenuePerHour, 0, 0, 1e6)
+        * (0.75 + infra.productionBonus)
+        * (1 - nextDamage * 0.35)
+        * (1 - nextBlockade * 0.28);
+      if (!companyUpdates.has(asset.companyId)) {
+        companyUpdates.set(asset.companyId, {
+          cash: safeNumber(asset.corporateCash, 0, 0, 1e9),
+          resources: sanitizeResourceBag(asset.corporateResourcesJson)
+        });
+      }
+      const entry = companyUpdates.get(asset.companyId);
+      entry.resources[asset.resourceType] = round2(safeNumber(entry.resources[asset.resourceType], 0, 0, 1e9) + effectiveProduction);
+      entry.cash = round2(entry.cash + effectiveRevenue);
+      updateAsset.run(nextCondition, clamp(safeNumber(asset.riskIndex, 0.08, 0, 1) + conflictPressure * 0.4, 0, 1), nextDamage, nextBlockade, new Date(now).toISOString(), asset.id);
+    });
+    companyUpdates.forEach((entry, companyId) => {
+      updateCompany.run(JSON.stringify(entry.resources), entry.cash, new Date(now).toISOString(), companyId);
+      updateCompanyCorporateSummary(db, companyId, now);
+    });
+    setRuntimeStateNumber(db, 'last_corporate_production_tick', now, new Date(now).toISOString());
+  })();
+  return companyUpdates.size;
+}
+
+export function runCorporateFinanceTick(db, state, now = Date.now()) {
+  if (!state || !canRunCadence(db, 'last_corporate_finance_tick', CORPORATE_FINANCE_TICK_MS, now)) return 0;
+  const companies = db.prepare(`
+    SELECT id, debt_index AS debtIndex, confidence_index AS confidenceIndex,
+      corporate_cash AS corporateCash, private_asset_value AS privateAssetValue,
+      bankruptcy_risk AS bankruptcyRisk
+    FROM market_companies
+    WHERE id LIKE 'sector_holding_%' AND acquired_by_company_id IS NULL
+  `).all();
+  const financeRows = db.prepare(`
+    SELECT company_id AS companyId,
+      SUM(revenue_per_hour * condition_index * (1 - damage_index * 0.3) * (1 - blockade_index * 0.2)) AS revenue,
+      SUM(maintenance_cost_per_hour * (1 + damage_index * 0.5 + blockade_index * 0.3)) AS maintenance
+    FROM corporate_assets
+    GROUP BY company_id
+  `).all();
+  const financeMap = new Map(financeRows.map((row) => [row.companyId, row]));
+  const updateCompany = db.prepare(`
+    UPDATE market_companies
+    SET corporate_cash = ?, debt_index = ?, confidence_index = ?, bankruptcy_risk = ?, updated_at = ?
+    WHERE id = ?
+  `);
+  db.transaction(() => {
+    companies.forEach((company) => {
+      const finance = financeMap.get(company.id) || {};
+      const revenue = safeNumber(finance.revenue, 0, 0, 1e9);
+      const maintenance = safeNumber(finance.maintenance, 0, 0, 1e9);
+      const interest = safeNumber(company.debtIndex, 0, 0, 1) * 48;
+      const net = revenue - maintenance - interest;
+      const cashReserve = round2(Math.max(0, safeNumber(company.corporateCash, 0, 0, 1e9) + net));
+      const nextDebt = clamp(safeNumber(company.debtIndex, 0.1, 0, 1) + (net < 0 ? 0.004 : -0.003), 0, 1);
+      const nextConfidence = clamp(safeNumber(company.confidenceIndex, 1, 0, 1.4) + (net >= 0 ? 0.004 : -0.005), 0, 1.2);
+      const assetCover = Math.min(0.35, safeNumber(company.privateAssetValue, 0, 0, 1e9) / 90000);
+      const cashCover = Math.min(0.28, cashReserve / 50000);
+      const nextRisk = clamp(safeNumber(company.bankruptcyRisk, 0, 0, 1) + (net < 0 ? 0.018 : -0.014) - assetCover - cashCover, 0, 1);
+      updateCompany.run(cashReserve, nextDebt, nextConfidence, nextRisk, new Date(now).toISOString(), company.id);
+      updateCompanyCorporateSummary(db, company.id, now);
+    });
+    setRuntimeStateNumber(db, 'last_corporate_finance_tick', now, new Date(now).toISOString());
+  })();
+  return companies.length;
 }
 export function readCampaignState(db) {
   const row = db.prepare(
@@ -2821,8 +3372,279 @@ export function runCivilianDemandTick(state, options = {}) {
       )
     `).run();
   })();
-  refreshHoldingSolvency(db, now);
   return { ran: true, recordedAt };
+}
+
+function getSectorPlanetsForCompany(state, company) {
+  const { byId } = getSectorMaps(state);
+  const sector = byId.get(String(company?.sectorId || ''));
+  return Array.isArray(sector?.planets) ? sector.planets : [];
+}
+
+function pickCorporateAssetPlanet(planets, companyId, existingAssets = [], preferredEmpty = true) {
+  if (!Array.isArray(planets) || !planets.length) return null;
+  const existingPlanetCounts = new Map();
+  existingAssets.forEach((asset) => {
+    const planetId = String(asset?.planetId || '');
+    if (!planetId) return;
+    existingPlanetCounts.set(planetId, (existingPlanetCounts.get(planetId) || 0) + 1);
+  });
+  const sorted = [...planets].sort((left, right) => {
+    const countDiff = (existingPlanetCounts.get(left.id) || 0) - (existingPlanetCounts.get(right.id) || 0);
+    if (preferredEmpty && countDiff !== 0) return countDiff;
+    return stableNoise(`${companyId}:${left.id}`, 0.25) - stableNoise(`${companyId}:${right.id}`, 0.25);
+  });
+  return sorted[0] || planets[0] || null;
+}
+
+function hydrateCorporateAssetRow(asset, state) {
+  const meta = getCorporateBuildingMeta(asset.buildingType);
+  const planet = (state?.planets || []).find((entry) => entry.id === asset.planetId) || null;
+  return {
+    ...asset,
+    label: meta?.label || asset.buildingType,
+    planetName: planet?.name || '',
+    owner: planet?.owner || '',
+    infrastructureType: 'corporate_private'
+  };
+}
+
+function readCompanyCorporateAssets(db, state, companyId) {
+  return db.prepare(`
+    SELECT id, company_id AS companyId, sector_id AS sectorId, planet_id AS planetId,
+      building_type AS buildingType, resource_type AS resourceType,
+      production_per_hour AS productionPerHour, revenue_per_hour AS revenuePerHour,
+      maintenance_cost_per_hour AS maintenanceCostPerHour, condition_index AS conditionIndex,
+      risk_index AS riskIndex, damage_index AS damageIndex, blockade_index AS blockadeIndex,
+      strategic_value AS strategicValue, created_at AS createdAt, updated_at AS updatedAt
+    FROM corporate_assets
+    WHERE company_id = ?
+    ORDER BY created_at DESC
+  `).all(companyId).map((asset) => hydrateCorporateAssetRow(asset, state));
+}
+
+function readCompanyCorporateProjects(db, companyId, state = null) {
+  return db.prepare(`
+    SELECT id, company_id AS companyId, sector_id AS sectorId, planet_id AS planetId,
+      building_type AS buildingType, resource_type AS resourceType, status,
+      started_at AS startedAt, completes_at AS completesAt,
+      cost_resources_json AS costResourcesJson, cost_credits AS costCredits,
+      expected_roi AS expectedRoi, reason, created_at AS createdAt, updated_at AS updatedAt
+    FROM corporate_build_projects
+    WHERE company_id = ?
+    ORDER BY created_at DESC
+  `).all(companyId).map((project) => ({
+    ...project,
+    costResources: sanitizeResourceBag(project.costResourcesJson),
+    planetName: state ? ((state.planets || []).find((entry) => entry.id === project.planetId)?.name || '') : ''
+  }));
+}
+
+function updateCompanyCorporateSummary(db, companyId, now = Date.now()) {
+  const assets = db.prepare(`
+    SELECT resource_type AS resourceType, production_per_hour AS productionPerHour,
+      revenue_per_hour AS revenuePerHour, maintenance_cost_per_hour AS maintenanceCostPerHour,
+      condition_index AS conditionIndex, damage_index AS damageIndex, blockade_index AS blockadeIndex,
+      strategic_value AS strategicValue
+    FROM corporate_assets
+    WHERE company_id = ?
+  `).all(companyId);
+  const completed48h = db.prepare(`
+    SELECT COUNT(*) AS count
+    FROM corporate_build_projects
+    WHERE company_id = ? AND status = 'completed' AND completes_at >= ?
+  `).get(companyId, new Date(now - CORPORATE_COMPLETION_WINDOW_MS).toISOString())?.count || 0;
+  const productionBag = emptyResourceBag();
+  let assetValue = 0;
+  assets.forEach((asset) => {
+    const effectiveProduction = safeNumber(asset.productionPerHour, 0, 0, 1e6)
+      * clamp(safeNumber(asset.conditionIndex, 1, 0, 1.2) - safeNumber(asset.damageIndex, 0, 0, 1), 0, 1.2)
+      * (1 - safeNumber(asset.blockadeIndex, 0, 0, 0.95));
+    const resourceType = String(asset.resourceType || '');
+    if (RESOURCE_KEYS.includes(resourceType)) {
+      productionBag[resourceType] = round2(safeNumber(productionBag[resourceType], 0, 0, 1e9) + effectiveProduction);
+    }
+    assetValue += (
+      safeNumber(asset.revenuePerHour, 0, 0, 1e9) * 18
+      + safeNumber(asset.productionPerHour, 0, 0, 1e9) * 24
+      + safeNumber(asset.strategicValue, 0, 0, 2) * 600
+      - safeNumber(asset.maintenanceCostPerHour, 0, 0, 1e9) * 8
+    ) * clamp(safeNumber(asset.conditionIndex, 1, 0, 1.4), 0.2, 1.2);
+  });
+  db.prepare(`
+    UPDATE market_companies
+    SET private_asset_value = ?, private_production_json = ?, corporate_builds_48h = ?, updated_at = ?
+    WHERE id = ?
+  `).run(round2(Math.max(0, assetValue)), JSON.stringify(productionBag), Number(completed48h || 0), new Date(now).toISOString(), companyId);
+  return {
+    privateAssetValue: round2(Math.max(0, assetValue)),
+    privateProduction: productionBag,
+    corporateBuilds48h: Number(completed48h || 0)
+  };
+}
+
+function seedCorporateAssetsForHoldings(db, state, now = Date.now()) {
+  const companies = db.prepare(`
+    SELECT id, sector_id AS sectorId, resource_refs_json AS resourceRefsJson
+    FROM market_companies
+    WHERE id LIKE 'sector_holding_%' AND acquired_by_company_id IS NULL
+  `).all();
+  const insertAsset = db.prepare(`
+    INSERT INTO corporate_assets (
+      id, company_id, sector_id, planet_id, building_type, resource_type,
+      production_per_hour, revenue_per_hour, maintenance_cost_per_hour,
+      condition_index, risk_index, damage_index, blockade_index, strategic_value,
+      created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const createdAt = new Date(now).toISOString();
+  db.transaction(() => {
+    companies.forEach((company) => {
+      const currentAssets = db.prepare('SELECT id, planet_id AS planetId FROM corporate_assets WHERE company_id = ?').all(company.id);
+      if (currentAssets.length) {
+        updateCompanyCorporateSummary(db, company.id, now);
+        return;
+      }
+      const resources = parseResourceRefs(company);
+      const primaryResource = resources[0] || 'quadraniumErz';
+      const primaryBuilding = Object.entries(CORPORATE_BUILDING_CONFIG).find(([, meta]) => meta.resourceType === primaryResource)?.[0];
+      const planets = getSectorPlanetsForCompany(state, company);
+      const primaryPlanet = pickCorporateAssetPlanet(planets, company.id, currentAssets, true);
+      if (primaryBuilding && primaryPlanet) {
+        const meta = getCorporateBuildingMeta(primaryBuilding);
+        insertAsset.run(
+          crypto.randomUUID(),
+          company.id,
+          company.sectorId,
+          primaryPlanet.id,
+          primaryBuilding,
+          meta.resourceType,
+          meta.productionPerHour,
+          meta.revenuePerHour,
+          meta.maintenanceCostPerHour,
+          1,
+          0.08,
+          0,
+          0,
+          meta.strategicValue,
+          createdAt,
+          createdAt
+        );
+      }
+      if (stableNoise(`extra-asset:${company.id}`, 0.5) + 0.5 <= 0.3) {
+        const alternatives = Object.entries(CORPORATE_BUILDING_CONFIG)
+          .filter(([, meta]) => resources.includes(meta.resourceType) && meta.resourceType !== primaryResource);
+        const [extraType, extraMeta] = alternatives[0] || [];
+        const existingAfterPrimary = db.prepare('SELECT planet_id AS planetId FROM corporate_assets WHERE company_id = ?').all(company.id);
+        const extraPlanet = pickCorporateAssetPlanet(planets, `${company.id}:extra`, existingAfterPrimary, true) || primaryPlanet;
+        if (extraType && extraPlanet) {
+          insertAsset.run(
+            crypto.randomUUID(),
+            company.id,
+            company.sectorId,
+            extraPlanet.id,
+            extraType,
+            extraMeta.resourceType,
+            extraMeta.productionPerHour,
+            extraMeta.revenuePerHour,
+            extraMeta.maintenanceCostPerHour,
+            0.96,
+            0.1,
+            0,
+            0,
+            extraMeta.strategicValue,
+            createdAt,
+            createdAt
+          );
+        }
+      }
+      updateCompanyCorporateSummary(db, company.id, now);
+    });
+  })();
+}
+
+export function calculateCorporateBuildCost(company, buildingType, sectorState = {}) {
+  const meta = getCorporateBuildingMeta(buildingType);
+  if (!meta) return null;
+  const base = CORPORATE_BUILDING_COSTS[meta.resourceType] || CORPORATE_BUILDING_COSTS.quadraniumErz;
+  const debtPenalty = safeNumber(company?.debtIndex, 0.2, 0, 1) * 0.18;
+  const confidencePenalty = (1 - clamp(safeNumber(company?.confidenceIndex, 1, 0, 1.4), 0, 1.4)) * 0.12;
+  const warPenalty = safeNumber(sectorState?.warPressure, 0, 0, 2) * 0.14;
+  const embargoPenalty = sectorState?.isEmbargoed ? 0.24 : 0;
+  const creditRelief = Math.min(0.08, Math.max(0, safeNumber(company?.confidenceIndex, 1, 0, 1.2) - 0.9) * 0.08);
+  const monopolyRelief = Math.min(0.06, safeNumber(company?.monopolyScore, 0, 0, 1) * 0.05);
+  const multiplier = clamp(1 + debtPenalty + confidencePenalty + warPenalty + embargoPenalty - creditRelief - monopolyRelief, 0.82, 1.9);
+  const costResources = Object.fromEntries(RESOURCE_KEYS.map((key) => [key, round2(safeNumber(base[key], 0, 0, 1e9) * multiplier)]));
+  return {
+    resourceType: meta.resourceType,
+    buildingType,
+    costResources,
+    costCredits: round2(safeNumber(base.credits, 0, 0, 1e9) * multiplier)
+  };
+}
+
+export function evaluateCorporateBuildOpportunities(company, sectorState, demandData = [], state = null) {
+  const resources = parseResourceRefs(company);
+  const demandByResource = new Map((Array.isArray(demandData) ? demandData : []).map((entry) => [entry.resourceType, entry]));
+  const strategy = String(company?.corporateStrategy || 'conservative');
+  const strategyBias = {
+    conservative: -0.05,
+    aggressive_growth: 0.08,
+    monopoly_builder: 0.04,
+    war_profiteer: 0.03,
+    infrastructure_supplier: 0.02,
+    distressed_survivor: -0.14,
+    export_focused: 0.03,
+    local_dominance: 0.05
+  }[strategy] || 0;
+  return Object.entries(CORPORATE_BUILDING_CONFIG)
+    .filter(([, meta]) => resources.includes(meta.resourceType))
+    .map(([buildingType, meta]) => {
+      const demand = demandByResource.get(meta.resourceType) || {};
+      const sectorMultiplier = safeNumber(demand.marketMultiplier, 1, 0.3, 2.4);
+      const demandGap = safeNumber(demand.demandScore, 1, 0, 5) - safeNumber(demand.supplyScore, 1, 0, 5);
+      const cashBuffer = Math.min(1.25, safeNumber(company.corporateCash, 0, 0, 1e9) / 9000);
+      const riskPenalty = safeNumber(company.bankruptcyRisk, 0, 0, 1) * 0.5;
+      const warPenalty = safeNumber(sectorState?.warPressure, 0, 0, 2) * (strategy === 'war_profiteer' ? 0.04 : 0.15);
+      const embargoPenalty = sectorState?.isEmbargoed ? 0.6 : 0;
+      const monopolyBoost = safeNumber(company.monopolyScore, 0, 0, 1) * (strategy === 'monopoly_builder' ? 0.18 : 0.06);
+      const expansionBoost = safeNumber(company.expansionScore, 0, 0, 1) * 0.08;
+      const infrastructureBoost = state && company?.sectorId
+        ? average(getSectorPlanetsForCompany(state, company).map((planet) => getPlanetInfrastructureModifier(state, planet.id).productionBonus))
+        : 0;
+      const expectedRoi = round2(
+        (sectorMultiplier - 0.94) * 0.7
+        + Math.max(0, demandGap) * 0.16
+        + monopolyBoost
+        + expansionBoost
+        + infrastructureBoost
+        + strategyBias
+        + cashBuffer * 0.12
+        - riskPenalty
+        - warPenalty
+        - embargoPenalty
+      );
+      return {
+        buildingType,
+        resourceType: meta.resourceType,
+        expectedRoi,
+        reason: `${RESOURCE_MARKET_CONFIG[meta.resourceType]?.label || meta.resourceType}: Nachfrage ${round2(sectorMultiplier)} / Luecke ${round2(demandGap)}`
+      };
+    })
+    .filter((entry) => entry.expectedRoi > 0)
+    .sort((left, right) => right.expectedRoi - left.expectedRoi);
+}
+
+function chargeCorporateBuildCost(company, cost) {
+  const resources = sanitizeResourceBag(company.corporateResourcesJson);
+  const nextResources = { ...resources };
+  RESOURCE_KEYS.forEach((key) => {
+    nextResources[key] = round2(Math.max(0, safeNumber(resources[key], 0, 0, 1e9) - safeNumber(cost.costResources[key], 0, 0, 1e9)));
+  });
+  return {
+    nextCash: round2(Math.max(0, safeNumber(company.corporateCash, 0, 0, 1e9) - safeNumber(cost.costCredits, 0, 0, 1e9))),
+    nextResources
+  };
 }
 
 export function calculateCivilianMineYield(db, sectorName, resourceType, amount, state, options = {}) {
@@ -3127,13 +3949,24 @@ export function runInstitutionalInvestorTick(state, options = {}) {
 }
 
 export function readMarketSnapshot(db, investorId = '', userId = '') {
+  const campaignState = readCampaignState(db).state;
   const portfolio = investorId ? ensureRecentPortfolioSnapshot(db, investorId) : null;
   const companies = db.prepare(`
     SELECT id, symbol, name, faction, base_price AS basePrice,
       sector, sector_id AS sectorId, resource_key AS resourceKey, resource_refs_json AS resourceRefsJson,
       market_status AS marketStatus, bankruptcy_risk AS bankruptcyRisk,
       debt_index AS debtIndex, confidence_index AS confidenceIndex,
+      risk_since AS riskSince, suspended_since AS suspendedSince, insolvent_since AS insolventSince,
       is_embargoed AS isEmbargoed, acquired_by_company_id AS acquiredByCompanyId,
+      corporate_cash AS corporateCash, corporate_resources_json AS corporateResourcesJson,
+      corporate_strategy AS corporateStrategy, expansion_score AS expansionScore,
+      monopoly_score AS monopolyScore, corporate_build_cooldown_until AS corporateBuildCooldownUntil,
+      last_corporate_build_at AS lastCorporateBuildAt, corporate_builds_48h AS corporateBuilds48h,
+      private_asset_value AS privateAssetValue, private_production_json AS privateProductionJson,
+      state_contract_revenue_per_hour AS stateContractRevenuePerHour,
+      state_contract_output_json AS stateContractOutputJson,
+      state_contract_score AS stateContractScore,
+      state_backed_slot_count AS stateBackedSlotCount,
       merged_name AS mergedName, current_price AS currentPrice,
       previous_price AS previousPrice, total_shares AS totalShares,
       free_float_shares AS freeFloatShares, locked_institutional_shares AS lockedInstitutionalShares,
@@ -3145,9 +3978,43 @@ export function readMarketSnapshot(db, investorId = '', userId = '') {
     ...company,
     resourceRefs: parseResourceRefs(company),
     majorShareholders: safeJsonParse(company.majorShareholdersJson, []),
+    corporateResources: sanitizeResourceBag(company.corporateResourcesJson),
+    privateProduction: sanitizeResourceBag(company.privateProductionJson),
+    stateContractOutput: sanitizeResourceBag(company.stateContractOutputJson),
     marketStatusLabel: displayMarketStatus(company.marketStatus),
     isEmbargoed: Boolean(company.isEmbargoed)
   }));
+  const corporateAssetsByCompany = new Map();
+  db.prepare(`
+    SELECT id, company_id AS companyId, sector_id AS sectorId, planet_id AS planetId,
+      building_type AS buildingType, resource_type AS resourceType,
+      production_per_hour AS productionPerHour, revenue_per_hour AS revenuePerHour,
+      maintenance_cost_per_hour AS maintenanceCostPerHour, condition_index AS conditionIndex,
+      risk_index AS riskIndex, damage_index AS damageIndex, blockade_index AS blockadeIndex,
+      strategic_value AS strategicValue, created_at AS createdAt, updated_at AS updatedAt
+    FROM corporate_assets
+    ORDER BY created_at DESC
+  `).all().forEach((asset) => {
+    if (!corporateAssetsByCompany.has(asset.companyId)) corporateAssetsByCompany.set(asset.companyId, []);
+    corporateAssetsByCompany.get(asset.companyId).push(asset);
+  });
+  const corporateProjectsByCompany = new Map();
+  db.prepare(`
+    SELECT id, company_id AS companyId, sector_id AS sectorId, planet_id AS planetId,
+      building_type AS buildingType, resource_type AS resourceType, status,
+      started_at AS startedAt, completes_at AS completesAt, cost_resources_json AS costResourcesJson,
+      cost_credits AS costCredits, expected_roi AS expectedRoi, reason, created_at AS createdAt, updated_at AS updatedAt
+    FROM corporate_build_projects
+    ORDER BY created_at DESC
+  `).all().forEach((project) => {
+    if (!corporateProjectsByCompany.has(project.companyId)) corporateProjectsByCompany.set(project.companyId, []);
+    corporateProjectsByCompany.get(project.companyId).push({ ...project, costResources: sanitizeResourceBag(project.costResourcesJson) });
+  });
+  companies.forEach((company) => {
+    company.corporateAssets = readCompanyCorporateAssets(db, campaignState, company.id);
+    company.corporateProjects = readCompanyCorporateProjects(db, company.id, campaignState);
+    company.solvencyDiagnosis = diagnoseHoldingSolvency(db, company.id);
+  });
   const historyCutoff = new Date(Date.now() - ACP_HISTORY_WINDOW_MS).toISOString();
   const historyRows = db.prepare(`
     SELECT h.company_id AS companyId, h.price, h.recorded_at AS recordedAt, c.resource_key AS resourceKey
@@ -3440,7 +4307,7 @@ function prettifyInfrastructureName(key) {
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-function getSectorInfrastructure(state, sector, economy) {
+function getSectorInfrastructure(db, state, sector, economy) {
   const slotsByPlanet = state?.planetResources || {};
   const buildJobs = Array.isArray(state?.buildJobs) ? state.buildJobs : [];
   const buildingJobsByPlanet = new Map();
@@ -3451,7 +4318,7 @@ function getSectorInfrastructure(state, sector, economy) {
     if (!buildingJobsByPlanet.has(planetId)) buildingJobsByPlanet.set(planetId, []);
     buildingJobsByPlanet.get(planetId).push(job);
   });
-  const output = { civilian: [], military: [], infrastructure: [] };
+  const output = { civilian: [], military: [], infrastructure: [], private: [] };
   sector.planets.forEach((planet) => {
     const slots = Array.isArray(slotsByPlanet?.[planet.id]) ? slotsByPlanet[planet.id] : [];
     slots.forEach((slot, index) => {
@@ -3492,10 +4359,36 @@ function getSectorInfrastructure(state, sector, economy) {
       else output.infrastructure.push(entry);
     });
   });
+  db.prepare(`
+    SELECT a.id, c.name AS companyName, a.planet_id AS planetId, a.resource_type AS resourceType,
+      a.production_per_hour AS productionPerHour, a.building_type AS buildingType,
+      a.condition_index AS conditionIndex, a.damage_index AS damageIndex, a.blockade_index AS blockadeIndex
+    FROM corporate_assets a
+    LEFT JOIN market_companies c ON c.id = a.company_id
+    WHERE a.sector_id = ?
+    ORDER BY a.created_at DESC
+  `).all(sector.id).forEach((asset) => {
+    const planet = sector.planets.find((entry) => entry.id === asset.planetId);
+    const meta = getCorporateBuildingMeta(asset.buildingType);
+    output.private.push({
+      id: asset.id,
+      name: meta?.label || asset.buildingType,
+      planetName: planet?.name || '',
+      resourceType: asset.resourceType,
+      resourceLabel: asset.resourceType ? sectorResourceLabel(asset.resourceType) : 'Privat',
+      owner: asset.companyName || 'Holding',
+      productionRatePerHour: round2(safeNumber(asset.productionPerHour, 0, 0, 1e6)),
+      status: safeNumber(asset.damageIndex, 0, 0, 1) > 0.3 ? 'Beschaedigt' : (safeNumber(asset.blockadeIndex, 0, 0, 1) > 0.3 ? 'Blockiert' : 'Aktiv'),
+      yieldType: 'Private Holding-Produktion',
+      conditionIndex: round2(asset.conditionIndex),
+      damageIndex: round2(asset.damageIndex),
+      blockadeIndex: round2(asset.blockadeIndex)
+    });
+  });
   return output;
 }
 
-function getSectorHoldings(db, sectorId, economy) {
+function getSectorHoldings(db, state, sectorId, economy) {
   const dayCutoff = new Date(Date.now() - (24 * 60 * 60 * 1000)).toISOString();
   const rows = db.prepare(`
     SELECT id, symbol, name, faction, sector, sector_id AS sectorId,
@@ -3503,6 +4396,13 @@ function getSectorHoldings(db, sectorId, economy) {
       base_price AS basePrice, current_price AS currentPrice, previous_price AS previousPrice,
       market_status AS marketStatus, bankruptcy_risk AS bankruptcyRisk,
       debt_index AS debtIndex, confidence_index AS confidenceIndex,
+      corporate_cash AS corporateCash, corporate_strategy AS corporateStrategy,
+      expansion_score AS expansionScore, monopoly_score AS monopolyScore,
+      private_asset_value AS privateAssetValue, private_production_json AS privateProductionJson,
+      state_contract_revenue_per_hour AS stateContractRevenuePerHour,
+      state_contract_output_json AS stateContractOutputJson,
+      state_contract_score AS stateContractScore,
+      state_backed_slot_count AS stateBackedSlotCount,
       is_embargoed AS isEmbargoed, acquired_by_company_id AS acquiredByCompanyId,
       merged_name AS mergedName, total_shares AS totalShares,
       free_float_shares AS freeFloatShares, locked_institutional_shares AS lockedInstitutionalShares,
@@ -3541,12 +4441,25 @@ function getSectorHoldings(db, sectorId, economy) {
       dailyChangePercent: previous > 0 ? round2(((current - previous) / previous) * 100) : 0,
       economyState: economy?.economyState || 'Normal',
       bankruptcyRisk: round2(Number(company.bankruptcyRisk || 0)),
+      corporateCash: round2(company.corporateCash),
+      corporateStrategy: company.corporateStrategy || 'conservative',
+      expansionScore: round2(company.expansionScore),
+      monopolyScore: round2(company.monopolyScore),
+      privateAssetValue: round2(company.privateAssetValue),
+      privateProduction: sanitizeResourceBag(company.privateProductionJson),
+      stateContractRevenuePerHour: round2(company.stateContractRevenuePerHour),
+      stateContractOutput: sanitizeResourceBag(company.stateContractOutputJson),
+      stateContractScore: round2(company.stateContractScore),
+      stateBackedSlotCount: Number(company.stateBackedSlotCount || 0),
       totalShares: roundShares(company.totalShares),
       freeFloatShares: roundShares(company.freeFloatShares),
       lockedInstitutionalShares: roundShares(company.lockedInstitutionalShares),
       marketCap: round2(company.marketCap),
       majorShareholders: safeJsonParse(company.majorShareholdersJson, []),
       controllingShareholder: company.controllingShareholder || '',
+      corporateAssets: readCompanyCorporateAssets(db, state, company.id),
+      corporateProjects: readCompanyCorporateProjects(db, company.id, state),
+      solvencyDiagnosis: diagnoseHoldingSolvency(db, company.id),
       marketStatus,
       marketStatusLabel: displayMarketStatus(marketStatus),
       isEmbargoed: marketStatus === 'embargo',
@@ -3605,12 +4518,14 @@ export function readEconomySector(db, state, sectorId) {
       exclusionReason: 'Dieser Sektor hat keine Wirtschaft und keine Holdings.',
       economy,
       mines: { civilian: [], military: [], infrastructure: [] },
+      privateAssets: [],
+      corporateProjects: [],
       holdings: [],
       resourcePrices: [],
       purchases: []
     };
   }
-  const infrastructure = getSectorInfrastructure(state, sector, economy);
+  const infrastructure = getSectorInfrastructure(db, state, sector, economy);
   return {
     id: sector.id,
     name: sector.name,
@@ -3621,7 +4536,21 @@ export function readEconomySector(db, state, sectorId) {
       military: infrastructure.military
     },
     infrastructure: infrastructure.infrastructure,
-    holdings: getSectorHoldings(db, sector.id, economy),
+    privateAssets: infrastructure.private,
+    corporateProjects: db.prepare(`
+      SELECT p.id, p.company_id AS companyId, c.name AS companyName, p.planet_id AS planetId,
+        p.building_type AS buildingType, p.resource_type AS resourceType, p.status,
+        p.started_at AS startedAt, p.completes_at AS completesAt, p.expected_roi AS expectedRoi, p.reason
+      FROM corporate_build_projects p
+      LEFT JOIN market_companies c ON c.id = p.company_id
+      WHERE p.sector_id = ? AND p.status IN ('planned', 'building')
+      ORDER BY p.created_at DESC
+    `).all(sector.id).map((project) => ({
+      ...project,
+      label: getCorporateBuildingMeta(project.buildingType)?.label || project.buildingType,
+      planetName: sector.planets.find((entry) => entry.id === project.planetId)?.name || ''
+    })),
+    holdings: getSectorHoldings(db, state, sector.id, economy),
     resourcePrices: getSectorResourcePrices(db, sector.id),
     purchases: getRecentSectorPurchases(db, sector.id)
   };
@@ -3979,6 +4908,252 @@ export function refreshHoldingSolvency(db, now = Date.now()) {
       });
     });
   })();
+}
+
+function buildHoldingSolvencyDiagnosticsV2(db, company) {
+  const assetSummary = db.prepare(`
+    SELECT
+      COALESCE(SUM(production_per_hour * condition_index * (1 - damage_index * 0.35) * (1 - blockade_index * 0.2)), 0) AS production,
+      COALESCE(SUM(revenue_per_hour * condition_index * (1 - damage_index * 0.3) * (1 - blockade_index * 0.2)), 0) AS revenue,
+      COALESCE(SUM(maintenance_cost_per_hour * (1 + damage_index * 0.4 + blockade_index * 0.25)), 0) AS maintenance
+    FROM corporate_assets
+    WHERE company_id = ?
+  `).get(company.id) || {};
+  const pricePressure = clamp(1 - (safeNumber(company.currentPrice, 0) / Math.max(1, safeNumber(company.basePrice, 1))), -0.4, 0.8);
+  const demandPressure = clamp(1 - safeNumber(company.marketMultiplier, 1), -0.35, 0.75);
+  const embargoPressure = Number(company.sectorEmbargoed || company.isEmbargoed || 0) ? 0.25 : 0;
+  const recessionPressure = company.economyState === 'Rezession' ? 0.14 : company.economyState === 'Abschwung' ? 0.08 : -0.04;
+  const financeRelief = Math.min(0.18, safeNumber(company.corporateCash, 0, 0, 1e9) / 50000)
+    + Math.min(0.14, safeNumber(company.privateAssetValue, 0, 0, 1e9) / 90000)
+    + Math.min(0.08, safeNumber(company.stateContractRevenuePerHour, 0, 0, 1e9) / 1200)
+    + Math.min(0.06, safeNumber(company.stateContractScore, 0, 0, 2) * 0.12)
+    + Math.min(0.1, safeNumber(assetSummary.revenue, 0, 0, 1e9) / 1600)
+    - Math.min(0.12, safeNumber(assetSummary.maintenance, 0, 0, 1e9) / 900);
+  const sentimentPressure = (
+    company.marketSentiment === 'Panik' ? 0.16
+      : company.marketSentiment === 'Negativ' ? 0.07
+        : company.marketSentiment === 'Euphorisch' ? -0.05
+          : company.marketSentiment === 'Positiv' ? -0.03
+            : 0
+  ) - Math.min(0.08, financeRelief * 0.45);
+  const cyclePressure = clamp(
+    safeNumber(company.pressureScore, 0) * 0.035
+      - safeNumber(company.momentum, 0) * 0.045
+      - safeNumber(company.trend, 0) * 0.06
+      + Math.max(0, safeNumber(company.volatility, 0.08) - 0.22) * 0.09
+      + safeNumber(company.warPressure, 0) * 0.035
+      - Math.max(0, safeNumber(company.chainImpulse, 0)) * 0.025
+      + safeNumber(company.debtIndex, 0.1, 0, 1) * 0.08
+      - Math.min(0.12, financeRelief),
+    -0.12,
+    0.22
+  );
+  const computedPressure = clamp(pricePressure * 0.14 + demandPressure * 0.18 + embargoPressure + recessionPressure + sentimentPressure + cyclePressure, 0, 1);
+  const nextRisk = clamp(safeNumber(company.bankruptcyRisk, 0, 0, 1) * 0.92 + computedPressure * 0.08, 0, 1);
+  return {
+    currentPrice: round2(company.currentPrice),
+    basePrice: round2(company.basePrice),
+    pricePressure: round2(pricePressure),
+    marketMultiplier: round2(company.marketMultiplier),
+    demandPressure: round2(demandPressure),
+    recessionPressure: round2(recessionPressure),
+    sentimentPressure: round2(sentimentPressure),
+    cyclePressure: round2(cyclePressure),
+    oldRisk: round2(company.bankruptcyRisk),
+    computedPressure: round2(computedPressure),
+    nextRisk: round2(nextRisk),
+    debtIndex: round2(company.debtIndex),
+    confidenceIndex: round2(company.confidenceIndex),
+    marketStatus: normalizeMarketStatus(company.marketStatus)
+  };
+}
+
+export function diagnoseHoldingSolvency(db, symbolOrId) {
+  const company = db.prepare(`
+    SELECT c.id, c.current_price AS currentPrice, c.base_price AS basePrice,
+      c.bankruptcy_risk AS bankruptcyRisk, c.debt_index AS debtIndex, c.confidence_index AS confidenceIndex,
+      c.market_status AS marketStatus, c.is_embargoed AS isEmbargoed, c.corporate_cash AS corporateCash,
+      c.private_asset_value AS privateAssetValue, c.state_contract_revenue_per_hour AS stateContractRevenuePerHour,
+      c.state_contract_score AS stateContractScore,
+      s.market_multiplier AS marketMultiplier, e.is_embargoed AS sectorEmbargoed,
+      s.pressure_score AS pressureScore, s.momentum, s.trend, s.volatility,
+      s.chain_impulse AS chainImpulse, e.economy_state AS economyState,
+      e.market_sentiment AS marketSentiment, e.war_pressure AS warPressure
+    FROM market_companies c
+    LEFT JOIN sector_resource_demand s ON s.sector_id = c.sector_id AND s.resource_type = c.resource_key
+    LEFT JOIN sector_economy_state e ON e.sector_id = c.sector_id
+    WHERE c.id = ? OR c.symbol = ?
+    LIMIT 1
+  `).get(symbolOrId, symbolOrId);
+  if (!company) return null;
+  return buildHoldingSolvencyDiagnosticsV2(db, company);
+}
+
+function runHoldingSolvencyTick(db, now = Date.now()) {
+  if (!canRunCadence(db, 'last_solvency_tick', SOLVENCY_TICK_MS, now)) {
+    return { ran: false, reason: 'cooldown' };
+  }
+  const recordedAt = new Date(now).toISOString();
+  const rows = db.prepare(`
+    SELECT c.id, c.name, c.sector, c.sector_id AS sectorId, c.resource_key AS resourceKey,
+      c.resource_refs_json AS resourceRefsJson, c.current_price AS currentPrice, c.base_price AS basePrice,
+      c.bankruptcy_risk AS bankruptcyRisk, c.debt_index AS debtIndex, c.confidence_index AS confidenceIndex,
+      c.market_status AS marketStatus, c.is_embargoed AS isEmbargoed,
+      c.risk_since AS riskSince, c.suspended_since AS suspendedSince, c.insolvent_since AS insolventSince,
+      c.corporate_cash AS corporateCash, c.private_asset_value AS privateAssetValue,
+      c.state_contract_revenue_per_hour AS stateContractRevenuePerHour,
+      c.state_contract_score AS stateContractScore,
+      s.market_multiplier AS marketMultiplier, e.is_embargoed AS sectorEmbargoed,
+      s.pressure_score AS pressureScore, s.momentum, s.trend, s.volatility,
+      s.chain_impulse AS chainImpulse, e.economy_state AS economyState,
+      e.market_sentiment AS marketSentiment, e.war_pressure AS warPressure
+    FROM market_companies c
+    LEFT JOIN sector_resource_demand s ON s.sector_id = c.sector_id AND s.resource_type = c.resource_key
+    LEFT JOIN sector_economy_state e ON e.sector_id = c.sector_id
+    WHERE c.id LIKE 'sector_holding_%' AND c.acquired_by_company_id IS NULL
+  `).all();
+  const updateRisk = db.prepare(`
+    UPDATE market_companies
+    SET bankruptcy_risk = ?, debt_index = ?, confidence_index = ?, market_status = ?, is_embargoed = ?,
+      risk_since = ?, suspended_since = ?, insolvent_since = ?, updated_at = ?
+    WHERE id = ?
+  `);
+  db.transaction(() => {
+    const decisions = rows.map((company) => {
+      const diagnostics = buildHoldingSolvencyDiagnosticsV2(db, company);
+      const nextRisk = safeNumber(diagnostics.nextRisk, 0, 0, 1);
+      const nextDebt = clamp(safeNumber(company.debtIndex, 0.1, 0, 1) + (nextRisk > 0.62 ? 0.006 : -0.004), 0, 1);
+      const nextConfidence = clamp(safeNumber(company.confidenceIndex, 1, 0, 1) + (nextRisk > 0.65 ? -0.006 : 0.004), 0, 1);
+      const embargoed = Number(company.sectorEmbargoed || company.isEmbargoed || 0) ? 1 : 0;
+      const previousStatus = normalizeMarketStatus(company.marketStatus);
+      let riskSince = safeNumber(company.riskSince, 0, 0, Number.MAX_SAFE_INTEGER);
+      let suspendedSince = safeNumber(company.suspendedSince, 0, 0, Number.MAX_SAFE_INTEGER);
+      let insolventSince = safeNumber(company.insolventSince, 0, 0, Number.MAX_SAFE_INTEGER);
+      if (nextRisk >= 0.8) riskSince = riskSince || now;
+      if (nextRisk < 0.7) {
+        riskSince = 0;
+        suspendedSince = 0;
+      }
+      let nextStatus = previousStatus;
+      let wantsInsolvent = false;
+      let recovered = false;
+      if (embargoed) nextStatus = 'embargo';
+      else if (previousStatus === 'insolvent' || previousStatus === 'takeover') nextStatus = previousStatus;
+      else if (nextRisk > 0.92) {
+        insolventSince = insolventSince || now;
+        suspendedSince = suspendedSince || now;
+        wantsInsolvent = (now - insolventSince) >= (45 * 60 * 1000);
+        nextStatus = wantsInsolvent ? 'insolvent' : 'suspended';
+      } else if (nextRisk > 0.8) {
+        suspendedSince = suspendedSince || now;
+        nextStatus = (now - riskSince) >= (20 * 60 * 1000) ? 'suspended' : previousStatus;
+      } else if (previousStatus === 'suspended' && nextRisk < 0.7) {
+        nextStatus = 'tradeable';
+        recovered = true;
+        suspendedSince = 0;
+      } else if (nextRisk < 0.7 && previousStatus !== 'embargo') nextStatus = 'tradeable';
+      if (nextStatus !== 'insolvent' && nextRisk <= 0.92) insolventSince = 0;
+      return { company, nextRisk, nextDebt, nextConfidence, embargoed, nextStatus, wantsInsolvent, recovered, riskSince, suspendedSince, insolventSince };
+    });
+    const bySector = new Map();
+    decisions.forEach((decision) => {
+      if (!bySector.has(decision.company.sectorId)) bySector.set(decision.company.sectorId, []);
+      bySector.get(decision.company.sectorId).push(decision);
+    });
+    bySector.forEach((sectorDecisions, sectorId) => {
+      const total = sectorDecisions.length;
+      const newInsolvent = sectorDecisions.filter((decision) => decision.wantsInsolvent && normalizeMarketStatus(decision.company.marketStatus) !== 'insolvent');
+      if (!total || (newInsolvent.length / total) <= 0.15) return;
+      writeMarketIntegrityLog(db, {
+        issueType: 'mass_insolvency_guard',
+        severity: 'warning',
+        before: { sectorId, proposedNewInsolvent: newInsolvent.length, total },
+        after: { action: 'downgraded_to_suspended' },
+        actionTaken: 'mass_insolvency_guard_applied',
+        createdAt: recordedAt
+      });
+      insertMarketEvent(db, {
+        eventType: 'mass_insolvency_guard',
+        title: 'Automatische Insolvenzwelle ausgesetzt',
+        description: 'Galaktische Boersenaufsicht setzt automatische Insolvenzwelle aus.',
+        impact: -0.01,
+        startedAt: recordedAt
+      });
+      newInsolvent.forEach((decision) => {
+        decision.nextStatus = 'suspended';
+        decision.wantsInsolvent = false;
+        decision.suspendedSince = decision.suspendedSince || now;
+        decision.insolventSince = 0;
+      });
+    });
+    decisions.forEach((decision) => {
+      updateRisk.run(round2(decision.nextRisk), round2(decision.nextDebt), round2(decision.nextConfidence), decision.nextStatus, decision.embargoed, decision.riskSince || null, decision.suspendedSince || null, decision.insolventSince || null, recordedAt, decision.company.id);
+      if (decision.nextStatus === 'insolvent' && normalizeMarketStatus(decision.company.marketStatus) !== 'insolvent') {
+        insertMarketEvent(db, {
+          eventType: 'holding_bankruptcy',
+          title: 'Holding-Insolvenz',
+          description: `${decision.company.name} meldet nach anhaltender Schwaeche im Sektor ${decision.company.sector} Insolvenz an; Handel wird ausgesetzt.`,
+          impact: -0.12,
+          startedAt: recordedAt
+        });
+      }
+      if (decision.recovered && normalizeMarketStatus(decision.company.marketStatus) === 'suspended') {
+        insertMarketEvent(db, {
+          eventType: 'holding_recovery',
+          title: 'Handel wieder aufgenommen',
+          description: `${decision.company.name}: Handel wieder aufgenommen nach Stabilisierung.`,
+          impact: 0.03,
+          startedAt: recordedAt
+        });
+      }
+    });
+    const takeoverBySector = new Map();
+    db.prepare(`
+      SELECT id, name, sector_id AS sectorId, resource_refs_json AS resourceRefsJson,
+        current_price AS currentPrice, base_price AS basePrice, bankruptcy_risk AS bankruptcyRisk,
+        market_status AS marketStatus, private_asset_value AS privateAssetValue, corporate_cash AS corporateCash
+      FROM market_companies
+      WHERE id LIKE 'sector_holding_%' AND acquired_by_company_id IS NULL
+    `).all().forEach((company) => {
+      if (!takeoverBySector.has(company.sectorId)) takeoverBySector.set(company.sectorId, []);
+      takeoverBySector.get(company.sectorId).push(company);
+    });
+    takeoverBySector.forEach((sectorCompanies, sectorId) => {
+      const weak = sectorCompanies.find((company) => normalizeMarketStatus(company.marketStatus) === 'insolvent' || safeNumber(company.bankruptcyRisk, 0, 0, 1) >= 0.96);
+      const strong = sectorCompanies.filter((company) => company.id !== weak?.id && normalizeMarketStatus(company.marketStatus) === 'tradeable').sort((left, right) => getCompanyStrengthScore(right) - getCompanyStrengthScore(left))[0];
+      if (!weak || !strong) return;
+      const mergerExists = db.prepare(`SELECT 1 FROM holding_mergers WHERE acquiring_company_id = ? AND acquired_company_id = ? LIMIT 1`).get(strong.id, weak.id);
+      if (mergerExists) return;
+      const combinedResources = [...new Set([...parseResourceRefs(strong), ...parseResourceRefs(weak)])];
+      const newName = combinedResources.length > 2 ? `${strong.name.split(' ')[0]} Industrial Holdings` : `${strong.name} & ${weak.name.replace(strong.name.split(' ')[0], '').trim()}`;
+      db.prepare(`
+        UPDATE market_companies
+        SET name = ?, merged_name = ?, resource_refs_json = ?, market_status = 'tradeable',
+          bankruptcy_risk = MAX(0, bankruptcy_risk - 0.12), confidence_index = confidence_index + 0.08,
+          corporate_cash = corporate_cash + ?, private_asset_value = private_asset_value + ?, updated_at = ?
+        WHERE id = ?
+      `).run(newName, newName, JSON.stringify(combinedResources), safeNumber(weak.corporateCash, 0, 0, 1e9), safeNumber(weak.privateAssetValue, 0, 0, 1e9), recordedAt, strong.id);
+      db.prepare(`UPDATE market_companies SET acquired_by_company_id = ?, market_status = 'takeover', updated_at = ? WHERE id = ?`).run(strong.id, recordedAt, weak.id);
+      db.prepare(`UPDATE corporate_assets SET company_id = ?, updated_at = ? WHERE company_id = ?`).run(strong.id, recordedAt, weak.id);
+      db.prepare(`UPDATE corporate_build_projects SET company_id = ?, updated_at = ? WHERE company_id = ? AND status IN ('planned', 'building')`).run(strong.id, recordedAt, weak.id);
+      updateCompanyCorporateSummary(db, strong.id, now);
+      db.prepare(`
+        INSERT INTO holding_mergers (
+          id, acquiring_company_id, acquired_company_id, sector_id, old_name, new_name,
+          acquired_resources_json, reason, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(crypto.randomUUID(), strong.id, weak.id, sectorId, `${strong.name} / ${weak.name}`, newName, JSON.stringify(combinedResources), 'Insolvenz / Konsolidierung', recordedAt);
+      insertMarketEvent(db, {
+        eventType: 'holding_merger',
+        title: 'Holding-Uebernahme',
+        description: `${strong.name} uebernimmt ${weak.name} nach anhaltender Rezession.`,
+        impact: 0.04,
+        startedAt: recordedAt
+      });
+    });
+    setRuntimeStateNumber(db, 'last_solvency_tick', now, recordedAt);
+  })();
+  return { ran: true, recordedAt };
 }
 
 export function purchaseMarketShare(db, investorId, companyId, now = Date.now()) {
@@ -4372,6 +5547,11 @@ export function runMarketTick(db, inflationRate = 0, now = Date.now(), state = n
   if (state) {
     runCivilianDemandTick(state, { db, now });
     runInstitutionalInvestorTick(state, { db, now, inflationRate });
+    completeCorporateBuildProjects(db, state, now);
+    runCorporateProductionTick(db, state, now);
+    runCorporateFinanceTick(db, state, now);
+    runCorporateBuildTick(db, state, now);
+    runHoldingSolvencyTick(db, now);
   }
   const companies = db.prepare('SELECT * FROM market_companies').all();
   if (!companies.length) return false;
@@ -4413,6 +5593,10 @@ export function runMarketTick(db, inflationRate = 0, now = Date.now(), state = n
       const noise = (Math.random() - 0.5) * 0.04;
       const eventImpact = Number(activeEvent?.impact || 0);
       const inflationImpact = Math.min(0.08, Math.max(0, inflationRate)) * 0.25;
+      const stateContractImpact = Math.min(0.05,
+        (safeNumber(company.state_contract_score, 0, 0, 2) * 0.018)
+        + Math.min(0.022, safeNumber(company.state_contract_revenue_per_hour, 0, 0, 1e9) / 12000)
+      );
       const demandImpact = demandData
         ? ((Number(demandData.marketMultiplier || 1) - 1) * 0.14)
           + ((Number(demandData.demandScore || 1) - Number(demandData.supplyScore || 1)) * 0.015)
@@ -4423,7 +5607,7 @@ export function runMarketTick(db, inflationRate = 0, now = Date.now(), state = n
           + ((MARKET_SENTIMENT_EFFECTS[demandData.marketSentiment] || 0) * 0.06)
           - (Math.max(0, Number(demandData.volatility || 0) - 0.2) * 0.012)
         : 0;
-      const rawMove = pullToBase + noise + eventImpact + inflationImpact + demandImpact;
+      const rawMove = pullToBase + noise + eventImpact + inflationImpact + demandImpact + stateContractImpact;
       const boundedMove = clamp(rawMove, -MAX_SINGLE_TRADE_MOVE, MAX_SINGLE_TRADE_MOVE);
       const nextPrice = Math.max(25, Math.round(company.current_price * (1 + boundedMove) * 100) / 100);
       assertPriceIsFinite(db, company.id, nextPrice, { createdAt: recordedAt, currentPrice: company.current_price, rawMove, boundedMove, source: 'market_tick' });

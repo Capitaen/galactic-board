@@ -101,6 +101,9 @@ const INFRASTRUCTURE_KEYS = [
   ...Object.keys(CIVILIAN_INFRASTRUCTURE_BONUSES)
 ];
 const MAX_CIVILIAN_PRODUCTION_BONUS = 0.30;
+const STATE_CIVILIAN_HOLDING_REVENUE_SHARE = 0.28;
+const STATE_MILITARY_HOLDING_REVENUE_SHARE = 0.18;
+const STATE_SLOT_STOCK_IMPACT_FACTOR = 0.06;
 const RESOURCE_FACTIONS = ['GAR', 'KUS'];
 const RESOURCE_PRODUCTION_TICK_MS = 60 * 60 * 1000;
 const RESOURCE_RESET_VERSION = 'resource_reset_2026_05_01';
@@ -504,6 +507,88 @@ function getFactionProductionRateFromState(state, faction = 'GAR') {
   return totals;
 }
 
+function applyStateInfrastructureHoldingEffects(state, ticks = 1, now = Date.now()) {
+  const effectiveTicks = Math.max(0, Number(ticks || 0));
+  if (!effectiveTicks) return;
+  const companyRows = db.prepare(`
+    SELECT id, sector, resource_key AS resourceKey, corporate_cash AS corporateCash,
+      state_contract_output_json AS stateContractOutputJson
+    FROM market_companies
+    WHERE id LIKE 'sector_holding_%' AND acquired_by_company_id IS NULL
+  `).all();
+  const companyMap = new Map(companyRows.map((company) => [`${String(company.sector || '').trim()}::${company.resourceKey}`, company]));
+  const aggregates = new Map();
+  for (const planet of Array.isArray(state?.planets) ? state.planets : []) {
+    if (planet?.owner !== 'GAR') continue;
+    const sectorName = String(planet?.sector || '').trim();
+    if (!sectorName) continue;
+    const bonuses = createEmptyFactionResources();
+    const slots = getPlanetResourceSlotsFromState(state, planet.id);
+    for (const slot of slots) {
+      if (!slot) continue;
+      for (const key of RESOURCE_KEYS) bonuses[key] += Number(CIVILIAN_INFRASTRUCTURE_BONUSES[slot]?.[key] || 0);
+    }
+    for (const slot of slots) {
+      if (!slot) continue;
+      const resourceKey = INFRASTRUCTURE_PRODUCTION_RESOURCES[slot] || CIVILIAN_CREDIT_YIELDS[slot]?.resource || '';
+      if (!resourceKey) continue;
+      const company = companyMap.get(`${sectorName}::${resourceKey}`);
+      if (!company) continue;
+      if (!aggregates.has(company.id)) {
+        aggregates.set(company.id, {
+          revenuePerHour: 0,
+          stateContractScore: 0,
+          backedSlotCount: 0,
+          output: createEmptyFactionResources()
+        });
+      }
+      const entry = aggregates.get(company.id);
+      const boostedAmount = 1 * (1 + Math.min(MAX_CIVILIAN_PRODUCTION_BONUS, bonuses[resourceKey] || 0));
+      if (CIVILIAN_CREDIT_YIELDS[slot]) {
+        const civilianRevenue = calculateCivilianMineYield(db, sectorName, resourceKey, boostedAmount, state, { additionalMultiplier: 1 });
+        entry.revenuePerHour += civilianRevenue * STATE_CIVILIAN_HOLDING_REVENUE_SHARE;
+        entry.stateContractScore += STATE_SLOT_STOCK_IMPACT_FACTOR;
+        entry.output.credits += civilianRevenue;
+      } else if (INFRASTRUCTURE_PRODUCTION_RESOURCES[slot]) {
+        const quantity = boostedAmount;
+        const basePrice = Number({ quadraniumErz: 420, agrinium: 560, tibannaGas: 480, baradium: 450, kavamSalz: 360 }[resourceKey] || 250);
+        entry.revenuePerHour += quantity * basePrice * STATE_MILITARY_HOLDING_REVENUE_SHARE;
+        entry.stateContractScore += STATE_SLOT_STOCK_IMPACT_FACTOR * 0.9;
+        entry.output[resourceKey] += quantity;
+      }
+      entry.backedSlotCount += 1;
+    }
+  }
+  const updateCompany = db.prepare(`
+    UPDATE market_companies
+    SET corporate_cash = ?, state_contract_revenue_per_hour = ?, state_contract_output_json = ?,
+      state_contract_score = ?, state_backed_slot_count = ?, updated_at = ?
+    WHERE id = ?
+  `);
+  const updatedAt = new Date(now).toISOString();
+  db.transaction(() => {
+    companyRows.forEach((company) => {
+      const aggregate = aggregates.get(company.id) || {
+        revenuePerHour: 0,
+        stateContractScore: 0,
+        backedSlotCount: 0,
+        output: createEmptyFactionResources()
+      };
+      const currentCash = Number(company.corporateCash || 0);
+      const nextCash = Math.round((currentCash + (aggregate.revenuePerHour * effectiveTicks)) * 100) / 100;
+      updateCompany.run(
+        nextCash,
+        Math.round(Number(aggregate.revenuePerHour || 0) * 100) / 100,
+        JSON.stringify(aggregate.output),
+        Math.round(Number(aggregate.stateContractScore || 0) * 100) / 100,
+        Number(aggregate.backedSlotCount || 0),
+        updatedAt,
+        company.id
+      );
+    });
+  })();
+}
+
 function applyOneTimeResourceReset(previousState, now = Date.now()) {
   const nextState = JSON.parse(JSON.stringify(previousState || {}));
   nextState.meta = nextState.meta || {};
@@ -558,6 +643,7 @@ function applyServerProductionTicks(previousState, now = Date.now()) {
       ) * 100) / 100;
     }
   });
+  applyStateInfrastructureHoldingEffects(nextState, ticks, now);
   nextState.lastResourceTickAt = lastTick + (ticks * RESOURCE_PRODUCTION_TICK_MS);
   nextState.meta = nextState.meta || {};
   nextState.meta.economy = {

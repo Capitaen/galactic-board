@@ -256,9 +256,63 @@ Admins koennen Embargos ueber `POST /api/economy/sectors/:sectorId/embargo` setz
 
 Die bestehende Einzelressource `resource_key` bleibt erhalten, damit alte Portfolios, Kurse und History-Daten weiter funktionieren. Neue Mehrfachressourcen einer uebernommenen Holding liegen in `resource_refs_json`.
 
-Das Insolvenzrisiko steigt durch schwache Nachfrage, fallende Kurse, Embargo, Rezession, Schulden und sinkendes Vertrauen. Bei hohem Risiko kann der Handel ausgesetzt oder die Holding als insolvent markiert werden. Das erzeugt ein Ereignis.
+Die Solvenzlogik steckt in `refreshHoldingSolvency` in `server/src/db.js`. Sie bewertet ausschliesslich sektorale Holdings (`id LIKE 'sector_holding_%'`) und berechnet fuer jede Holding pro Tick einen neuen Wert fuer:
 
-Starke Holdings im gleichen Sektor koennen insolvente oder extrem schwache Holdings uebernehmen. Dabei wird:
+- `bankruptcy_risk`
+- `debt_index`
+- `confidence_index`
+- `market_status`
+- `is_embargoed`
+
+Die Formel arbeitet additiv aus mehreren Druckkomponenten:
+
+```text
+pricePressure      = 1 - (currentPrice / basePrice)
+demandPressure     = 1 - marketMultiplier
+embargoPressure    = 0.25 bei Embargo
+recessionPressure  = +0.14 in Rezession, +0.08 im Abschwung, -0.04 in guten Lagen
+sentimentPressure  = Panik/Negativ positiv auf Risiko, Positiv/Euphorisch negativ auf Risiko
+cyclePressure      = Mischung aus pressureScore, momentum, trend, volatility, warPressure, chainImpulse
+
+nextRisk = clamp(
+  oldRisk * 0.78
+  + pricePressure * 0.14
+  + demandPressure * 0.18
+  + embargoPressure
+  + recessionPressure
+  + sentimentPressure
+  + cyclePressure,
+  0,
+  1
+)
+```
+
+Wichtig ist dabei:
+
+- fallende Kurse gegenueber dem Basiskurs erhoehen direkt das Insolvenzrisiko,
+- ein `marketMultiplier` unter `1` wird als Nachfrageschwaeche interpretiert,
+- Embargos wirken sehr hart und sofort,
+- Rezession, Panik und negative Marktstimmung addieren weiteren konstanten Druck,
+- positive Signale bauen Risiko nur langsam ab.
+
+Aus `nextRisk` folgen dann die Sekundaerwerte:
+
+```text
+wenn nextRisk > 0.62: debt_index +0.035, sonst -0.018
+wenn nextRisk > 0.65: confidence_index -0.04, sonst +0.02
+```
+
+Statusschwellen:
+
+- ab `0.80`: `suspended`
+- ab `0.92`: `insolvent`
+- unter `0.70`: Rueckkehr von `suspended`/`embargo` zu `tradeable`
+
+Das ist wichtig fuer das Gesamtverhalten: Schulden und Vertrauensverlust sind nicht nur Anzeigeparameter, sondern werden bei haeufigen Ticks sehr schnell zu einem systematischen Beschleuniger.
+
+### Uebernahmen
+
+Wenn in einem Sektor eine Holding insolvent oder extrem gefaehrdet ist und gleichzeitig eine andere Holding im selben Sektor noch `tradeable` ist, kann die starke Holding die schwache uebernehmen. Dabei wird:
 
 1. die starke Holding um die Ressourcen der schwachen Holding erweitert,
 2. der Name dynamisch zusammengefuehrt oder zu einer Industrial-Holding verdichtet,
@@ -267,6 +321,104 @@ Starke Holdings im gleichen Sektor koennen insolvente oder extrem schwache Holdi
 5. ein galaktisches Ereignis erzeugt.
 
 Bestehende Portfolio-Bestaende bleiben erhalten, weil die urspruenglichen Firmen-IDs nicht geloescht werden.
+
+## Warum fast alle Firmen insolvent gehen koennen
+
+Der wichtigste technische Grund ist nicht eine einzelne Zahl, sondern die Kopplung der Solvenzlogik an den sehr schnellen Wirtschaftstick.
+
+### 1. Der Solvenz-Tick laeuft effektiv alle 15 Sekunden
+
+`runMarketTick` wird an mehreren Stellen aufgerufen:
+
+- beim Laden von `/api/economy/market`
+- beim Laden von `/api/economy/sectors`
+- beim Laden einzelner Sektordetails
+- im Server-Maintenance-Loop
+
+Gleichzeitig ist `DEMAND_TICK_MS = 15 * 1000`. Wenn der Tick laeuft, wird zuerst `runCivilianDemandTick(...)` ausgefuehrt und **direkt danach** `refreshHoldingSolvency(db, now)`.
+
+Das bedeutet praktisch:
+
+- Nachfrage, Sektorpreise und Solvenz werden im 15-Sekunden-Rhythmus fortgeschrieben,
+- Ressourcenproduktion und viele eigentliche Wirtschaftsgrundlagen laufen aber auf Stundenbasis,
+- Schulden und Vertrauensverlust koennen dadurch in Minuten eskalieren, obwohl die reale Spielwirtschaft viel traeger gedacht ist.
+
+### 2. Die Solvenzformel ist fuer langsame Ticks plausibel, fuer 15-Sekunden-Ticks aber sehr aggressiv
+
+Die Formel enthaelt mehrere additive Druckquellen gleichzeitig:
+
+- Preis unter Basiskurs
+- schwache lokale Nachfrage
+- Rezession/Abschwung
+- negative Marktstimmung
+- Kriegsdruck
+- Volatilitaet
+- Embargo
+
+Schon wenn mehrere dieser Faktoren leicht negativ sind, steigt `nextRisk` dauerhaft. Weil der Tick sehr oft laeuft, werden diese kleinen negativen Delta-Werte extrem oft hintereinander angewandt. Das fuehrt dazu, dass Holdings nicht ueber Wochen oder Tage, sondern in kurzer Live-Zeit von `tradeable` zu `suspended` und dann `insolvent` rutschen.
+
+### 3. Hoher Risk-Wert erhoeht Schulden und senkt Vertrauen ebenfalls alle 15 Sekunden
+
+Sobald `nextRisk` ueber `0.62` oder `0.65` liegt, passiert pro Tick:
+
+- `debt_index` steigt,
+- `confidence_index` sinkt.
+
+Dadurch entsteht ein technischer Rueckkopplungseffekt:
+
+- negative Marktlage erzeugt Risk,
+- Risk verschlechtert Debt und Confidence,
+- diese Werte werden zwar nicht direkt voll in derselben Formel multipliziert, markieren aber einen dauerhaften Krisenzustand,
+- Holdings erreichen dadurch schnell die Schwellwerte fuer `suspended` und `insolvent`.
+
+### 4. Suspendierte und insolvente Holdings erholen sich kaum noch
+
+Im normalen `runMarketTick` werden Holdings mit folgenden Stati von der regulaeren Preisfortschreibung ausgeschlossen:
+
+- `embargo`
+- `suspended`
+- `insolvent`
+- `takeover`
+
+Das heisst:
+
+- eine gesunde Holding bekommt laufend Preisupdates,
+- eine ausgesetzte oder insolvente Holding nimmt an der normalen Kurserholung nicht mehr teil,
+- damit fehlt ein grosser Teil des natuerlichen Rueckwegs in die Normalitaet.
+
+Technisch ausgedrueckt: Die Logik hat einen starken Kriseneintritt, aber nur einen schwachen automatischen Erholungspfad.
+
+### 5. Bei leerer oder falscher Kampagnendatenbank verstaerkt sich das Problem
+
+Wenn `app_state`, `manualSectors`, Flotten oder sektorale Wirtschaftsdaten unvollstaendig sind, arbeiten die Wirtschaftsjoins nur noch mit Teilinformationen. Das fuehrt zwar nicht immer allein zur Insolvenz, aber die Marktlogik verliert damit:
+
+- stabile Sektorzuordnung,
+- glaubwuerdige Nachfragebeziehungen,
+- realistische BLUFOR/OPFOR-Verteilung,
+- konsistente Produktions- und Infrastrukturgrundlagen.
+
+In so einem Zustand kippt das System schneller in uniforme Krisenmuster, weil viele Holdings nicht mehr von differenzierten lokalen Faktoren profitieren.
+
+### Technische Kurzdiagnose
+
+Wenn fast alle Firmen insolvent gehen, ist die wahrscheinlichste Ursache im aktuellen Stand:
+
+1. `refreshHoldingSolvency` laeuft zu haeufig, naemlich im 15-Sekunden-Takt.
+2. Die Risikoschwellen (`0.80` fuer `suspended`, `0.92` fuer `insolvent`) werden dadurch zu schnell erreicht.
+3. Suspendierte/insolvente Holdings sind von normaler Kursfortschreibung ausgeschlossen und erholen sich kaum.
+4. Falsche oder beschaedigte SQLite-Daten verstaerken die Instabilitaet zusaetzlich.
+
+### Praktische Folgerung fuer Balancing
+
+Wenn das System stabiler werden soll, gibt es technisch mehrere Stellhebel:
+
+- `refreshHoldingSolvency` deutlich seltener ausfuehren, zum Beispiel minuetlich oder stuendlich statt alle 15 Sekunden,
+- `debt_index` und `confidence_index` langsamer veraendern,
+- Schwellen fuer `suspended` und `insolvent` anheben,
+- explizite Erholungspfade fuer suspendierte Holdings einfuehren,
+- Solvenz nur bei echten Nachfrage-/Produktions-Ticks und nicht bei jedem API-getriebenen Markttick fortschreiben.
+
+Der wichtigste einzelne Punkt ist aber die Tickfrequenz. Die aktuelle Formel wirkt eher wie eine Tages- oder Stundensimulation, wird aber momentan wie eine Sekundensimulation gefahren.
 
 ## Senatsminen und BLUFOR-Regel
 
