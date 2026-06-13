@@ -270,6 +270,7 @@ body {
 }
 #homeBtn { position:absolute; top:22px; right:22px; z-index:40; font-size:18px; }
 #muteBtn { position:absolute; top:22px; right:74px; z-index:40; font-size:16px; }
+#layersBtn { position:absolute; top:22px; right:126px; z-index:96; font-size:18px; }
 .panel {
   position:absolute;
   overflow:hidden;
@@ -873,6 +874,26 @@ textarea { min-height:82px; resize:vertical; }
 .overlay-modal-settings { max-width:760px; }
 .overlay-modal-credits { max-width:520px; }
 .overlay-modal-tutorial { max-width:820px; }
+.overlay-modal.settings-drop {
+  align-items:flex-start;
+  justify-content:flex-end;
+  padding:78px 20px 20px;
+}
+.overlay-modal.settings-drop .overlay-modal-backdrop {
+  background:transparent;
+  backdrop-filter:none;
+}
+.overlay-modal.settings-drop .overlay-modal-card {
+  width:min(420px, calc(100vw - 32px));
+  max-height:calc(100vh - 108px);
+  border-radius:18px;
+  transform-origin:top right;
+  animation:settingsDropIn .18s ease;
+}
+@keyframes settingsDropIn {
+  from { opacity:0; transform:translateY(-10px) scale(.98); }
+  to { opacity:1; transform:translateY(0) scale(1); }
+}
 .overlay-panel {
   padding:24px 24px 22px;
 }
@@ -1418,6 +1439,14 @@ a { color:#8bc7ff; }
     top:max(12px, env(safe-area-inset-top));
     right:12px;
   }
+  #muteBtn {
+    top:max(12px, env(safe-area-inset-top));
+    right:60px;
+  }
+  #layersBtn {
+    top:max(12px, env(safe-area-inset-top));
+    right:108px;
+  }
   #layersPanel {
     left:12px;
     top:162px;
@@ -1567,10 +1596,10 @@ a { color:#8bc7ff; }
   <div class="toolstack">
     <button class="toolbtn" id="zoomIn">+</button>
     <button class="toolbtn" id="zoomOut">−</button>
-    <button class="toolbtn" id="layersBtn" title="Einstellungen">⚙</button>
   </div>
   <button class="toolbtn" id="homeBtn">⌂</button>
   <button class="toolbtn" id="muteBtn" title="OGG-Sounds stummschalten">🔊</button>
+  <button class="toolbtn" id="layersBtn" title="Einstellungen">⚙</button>
 
   <div id="topbar">
     <div class="topbar-title">Galactic Campaign Board</div>
@@ -1668,7 +1697,7 @@ a { color:#8bc7ff; }
     </div>
   </div>
 
-  <div id="settingsModal" class="overlay-modal" aria-hidden="true">
+  <div id="settingsModal" class="overlay-modal settings-drop" aria-hidden="true">
     <div class="overlay-modal-backdrop" data-close-modal="settingsModal"></div>
     <div class="overlay-modal-card overlay-modal-settings" role="dialog" aria-modal="true" aria-labelledby="settingsModalTitle">
       <div id="settingsModalContent"></div>
@@ -1709,6 +1738,7 @@ const STARTUP_LAYERS = {
   planets: true,
   planetLabels: false,
   hyperlanes: false,
+  conflictPulse: true,
   garFleets: true,
   kusFleets: true,
   grid: true,
@@ -2248,6 +2278,7 @@ const bootLoadState = {
   }
 };
 let mapImageLoaded = false;
+let buildProjectsViewTab = 'infrastructure';
 let activeMainTab = 'map';
 let activeShipyardFactionOverride = 'GAR';
 let fleetManagementSearchQuery = '';
@@ -3898,7 +3929,7 @@ function getSettingsToggleDefinitions() {
     { id: 'planetLabels', label: 'Planetennamen', description: 'Blendet Planetennamen direkt auf der Karte ein.' },
     { id: 'hyperlanes', label: 'Hyperraumrouten', description: 'Zeigt Hyperraumrouten und manuelle Verbindungen.' },
     { id: 'majorTradeRoutes', label: 'Große Handelsrouten', description: 'Nutzen aktuell dieselbe Darstellung wie die Haupt-Hyperraumrouten.', checked: () => Boolean(layers.hyperlanes), onToggle: (next) => setLayerPreference('hyperlanes', next) },
-    { id: 'conflictPulse', label: 'Konfliktanzeige', description: 'Verwendet die vorhandene Sektor- und Kontrollansicht als Konfliktlage.', checked: () => Boolean(layers.sectorLabels), onToggle: (next) => setLayerPreference('sectorLabels', next) },
+    { id: 'conflictPulse', label: 'Konfliktanzeige', description: 'Zeigt sektorale Konfliktfarben an. Ausgeschaltet bleiben Sektoren sichtbar, aber neutral grau.', checked: () => Boolean(layers.conflictPulse), onToggle: (next) => setLayerPreference('conflictPulse', next) },
     { id: 'republicSectors', label: 'Republik-Sektoren', description: 'Zeigt die sektorale Kontrollfärbung und Beschriftung an.', checked: () => Boolean(layers.sectorLabels), onToggle: (next) => setLayerPreference('sectorLabels', next) },
     { id: 'neutralSectors', label: 'Neutrale Sektoren', description: 'Nutzen dieselbe Sektorebene wie die übrige Kontrollfärbung.', checked: () => Boolean(layers.sectorLabels), onToggle: (next) => setLayerPreference('sectorLabels', next) },
     { id: 'grid', label: 'Raster', description: 'Galaktisches Raster und Ringsegmente ein- oder ausblenden.' },
@@ -3914,7 +3945,7 @@ function setLayerPreference(layerId, enabled, renderAfter = true) {
   layers[layerId] = Boolean(enabled);
   saveClientUiPrefs();
   const affectsTacticalCanvas = ['grid', 'hyperlanes', 'sectorLabels'].includes(layerId);
-  const affectsInfluence = layerId === 'sectorLabels';
+  const affectsInfluence = layerId === 'sectorLabels' || layerId === 'conflictPulse';
   const affectsRouteNetwork = layerId === 'hyperlanes';
   markDirty({
     layers: true,
@@ -5210,21 +5241,28 @@ function normalizePlanetImageUrl(url) {
 
 function buildPlanetIntelText(planet, info) {
   const localNote = sanitizePlanetInfoText(planet?.description);
+  const routeCount = getPlanetHyperlaneDegree(planet?.id);
+  const routeNames = getPlanetRouteNames(planet?.id);
+  const slotUsage = planet ? getPlanetSlotUsage(planet.id) : { used: 0, total: 10 };
   const remoteNote = sanitizePlanetInfoText(info?.description);
   if (localNote !== PLANET_INFO_PLACEHOLDER) return localNote;
   if (remoteNote !== PLANET_INFO_PLACEHOLDER) return remoteNote;
-  return PLANET_INFO_PLACEHOLDER;
+  if (!planet) return PLANET_INFO_PLACEHOLDER;
+  return `${planet.name} liegt im Sektor ${sanitizePlanetInfoText(planet.sector, 'Unbekannter Sektor')} auf Raster ${sanitizePlanetInfoText(planet.grid, '—')} und steht aktuell unter ${getOwnerLabel(planet.owner)}-Kontrolle. Aktuell bestehen ${routeCount} Hyperraum-Verbindung${routeCount === 1 ? '' : 'en'}${routeNames.length ? ` über ${routeNames.join(', ')}` : ''}. Infrastrukturbelegung: ${slotUsage.used}/${slotUsage.total} Slots.`;
 }
 
 function buildPlanetCardInfo(planet, info = {}) {
   const localOverride = PLANET_INFO_LOCAL_OVERRIDES[planet.id] || {};
   const demographicProfile = buildPlanetDemographicProfile(planet);
+  const routeNames = getPlanetRouteNames(planet.id);
+  const hyperlaneStatus = getPlanetHyperlaneStatus(planet.id);
+  const slotUsage = getPlanetSlotUsage(planet.id);
   return {
-    climate: sanitizePlanetInfoText(info.climate || localOverride.climate),
+    climate: sanitizePlanetInfoText(localOverride.climate || (hyperlaneStatus.isLogisticsHub ? 'Logistik-Knoten' : (hyperlaneStatus.isRoutePlanet ? 'Routenanbindung vorhanden' : 'Isolierte Versorgungslage'))),
     population: demographicProfile.currentPopulationLabel,
-    lorePopulation: sanitizePlanetInfoText(info.population || localOverride.population),
-    strategic: sanitizePlanetInfoText(info.strategic || localOverride.strategic || (planet.isCoreWorld ? 'Hauptplanet' : 'Regulär')),
-    description: sanitizePlanetInfoText(info.description || localOverride.description || planet.description),
+    lorePopulation: sanitizePlanetInfoText(`${slotUsage.used}/10 Infrastruktur-Slots belegt`),
+    strategic: sanitizePlanetInfoText(localOverride.strategic || `${routeNames.length || hyperlaneStatus.degree} Hyperraum-Verbindung${(routeNames.length || hyperlaneStatus.degree) === 1 ? '' : 'en'}` || (planet.isCoreWorld ? 'Hauptplanet' : 'Regulär')),
+    description: sanitizePlanetInfoText(planet.description || localOverride.description || info.description),
     image: normalizePlanetImageUrl(info.image || localOverride.image || planet.image),
     demographicProfile
   };
@@ -5750,7 +5788,8 @@ function createBuildJobRecord(data = {}) {
     finishesAt: data.finishesAt || Date.now(),
     faction: data.faction || 'GAR',
     status: data.status || 'building',
-    producedShipId: data.producedShipId || ''
+    producedShipId: data.producedShipId || '',
+    completedAt: Number(data.completedAt || 0) || 0
   };
 }
 
@@ -5774,6 +5813,21 @@ function createReadyShipFromBuild(data = {}) {
 
 function processBuildJobs(now = Date.now()) {
   let changed = false;
+  const retentionMs = 48 * 60 * 60 * 1000;
+  state.meta = state.meta || {};
+  state.meta.buildProjectActivity = Array.isArray(state.meta.buildProjectActivity) ? state.meta.buildProjectActivity : [];
+  const logBuildActivity = (job, title, details = '') => {
+    state.meta.buildProjectActivity.unshift({
+      id: `activity_${Math.random().toString(36).slice(2, 10)}`,
+      createdAt: now,
+      faction: job.faction || 'GAR',
+      jobType: job.jobType || 'ship',
+      title,
+      details,
+      location: getBuildJobLocationName(job)
+    });
+    state.meta.buildProjectActivity = state.meta.buildProjectActivity.slice(0, 80);
+  };
   state.buildJobs.forEach((job) => {
     if (job.status !== 'building' || now < job.finishesAt) return;
     if (job.jobType === 'transport') {
@@ -5785,6 +5839,8 @@ function processBuildJobs(now = Date.now()) {
         addFactionResources(job.faction || 'GAR', refund);
       }
       job.status = 'completed';
+      job.completedAt = now;
+      logBuildActivity(job, 'Transport abgeschlossen', `${RESOURCE_LABELS[job.resourceKey] || job.resourceKey}: ${formatResourceAmount(job.amount)} nach ${getSectorDisplayName(job.targetSectorId)}`);
       changed = true;
       return;
     }
@@ -5806,6 +5862,8 @@ function processBuildJobs(now = Date.now()) {
       setPlanetResourceSlots(job.buildLocationPlanetId, slots);
       syncWarehouseStoreForPlanet(job.buildLocationPlanetId);
       job.status = 'completed';
+      job.completedAt = now;
+      logBuildActivity(job, 'Bauprojekt abgeschlossen', `${getMineProjectMeta(buildingKey)?.label || buildingKey} auf ${getBuildJobLocationName(job)}`);
       changed = true;
       return;
     }
@@ -5826,8 +5884,17 @@ function processBuildJobs(now = Date.now()) {
     if (!ship) return;
     job.producedShipId = ship.id;
     job.status = 'ready';
+    job.completedAt = now;
+    logBuildActivity(job, 'Schiff fertiggestellt', `${job.shipName || meta.displayName} in ${getBuildJobLocationName(job)}`);
     changed = true;
   });
+  const beforeLength = state.buildJobs.length;
+  state.buildJobs = state.buildJobs.filter((job) => (
+    job.status === 'building'
+    || !job.completedAt
+    || (now - Number(job.completedAt || 0)) < retentionMs
+  ));
+  if (state.buildJobs.length !== beforeLength) changed = true;
   return changed;
 }
 
@@ -5896,6 +5963,10 @@ function getBuildJobLocationName(job) {
     return `${source} -> ${target}`;
   }
   return planetIndex.get(job?.buildLocationPlanetId)?.name || '—';
+}
+
+function getSectorDisplayName(sectorId) {
+  return getLogisticsSectorChoices().find((entry) => entry.id === sectorId)?.name || 'Unbekannter Sektor';
 }
 
 function getBuildJobTypeLabel(job) {
@@ -9037,7 +9108,9 @@ function renderInfluenceClouds() {
       const summary = getManualSectorControlSummary(sector);
       if (!summary.total) return;
       const influenceState = getSectorInfluenceState(summary);
-      const palette = getSectorInfluencePalette(influenceState.dominantOwner || 'NEUTRAL');
+      const palette = layers.conflictPulse
+        ? getSectorInfluencePalette(influenceState.dominantOwner || 'NEUTRAL')
+        : { fill: 'rgba(142,152,170,.16)', edge: 'rgba(180,188,201,.66)' };
       const fill = palette.fill;
       const edge = palette.edge;
       if (!fill || !edge || !traceSectorPolygonPath(influenceCtx, sector.points)) return;
@@ -10300,10 +10373,10 @@ function openPlanet(id) {
       <div class="planet-card-stats">
         <div class="planet-card-stat"><p class="planet-card-stat-label">Region</p><p class="planet-card-stat-value small">${escapeHtml(getRegionLabel(p.region))}</p></div>
         <div class="planet-card-stat"><p class="planet-card-stat-label">Sektor</p><p class="planet-card-stat-value small">${escapeHtml(sanitizePlanetInfoText(p.sector))}</p></div>
-        <div class="planet-card-stat"><p class="planet-card-stat-label">Klima</p><p class="planet-card-stat-value small">${escapeHtml(cardInfo.climate)}</p></div>
-        <div class="planet-card-stat"><p class="planet-card-stat-label">Bevölkerung</p><p class="planet-card-stat-value small">${escapeHtml(cardInfo.population)}</p></div>
-        <div class="planet-card-stat"><p class="planet-card-stat-label">Basis</p><p class="planet-card-stat-value small">${escapeHtml(demographicProfile.basePopulationLabel)}</p></div>
-        <div class="planet-card-stat"><p class="planet-card-stat-label">Strategisch</p><p class="planet-card-stat-value small">${escapeHtml(cardInfo.strategic)}</p></div>
+        <div class="planet-card-stat"><p class="planet-card-stat-label">Versorgungslage</p><p class="planet-card-stat-value small">${escapeHtml(cardInfo.climate)}</p></div>
+        <div class="planet-card-stat"><p class="planet-card-stat-label">Aktive Bevölkerung</p><p class="planet-card-stat-value small">${escapeHtml(cardInfo.population)}</p></div>
+        <div class="planet-card-stat"><p class="planet-card-stat-label">Grundprofil</p><p class="planet-card-stat-value small">${escapeHtml(demographicProfile.basePopulationLabel)}</p></div>
+        <div class="planet-card-stat"><p class="planet-card-stat-label">Hyperraumstatus</p><p class="planet-card-stat-value small">${escapeHtml(cardInfo.strategic)}</p></div>
         <div class="planet-card-stat"><p class="planet-card-stat-label">Raster</p><p class="planet-card-stat-value small">${escapeHtml(sanitizePlanetInfoText(p.grid, '—'))}</p></div>
       </div>
       <div class="planet-card-section">
@@ -10319,7 +10392,7 @@ function openPlanet(id) {
         <div class="planet-card-chip-group" style="margin-top:10px">
           ${demographicProfile.consumption.map((row) => `<span class="planet-card-chip">${escapeHtml(row.label)}: ${escapeHtml(String(row.demandPerDay))}/Tag (${escapeHtml(row.level)})</span>`).join('')}
         </div>
-        <p class="muted" style="margin-top:10px">Lore-/Wiki-Referenz: ${escapeHtml(cardInfo.lorePopulation || PLANET_INFO_PLACEHOLDER)}. Verbrauchswerte reagieren live auf gebaute Infrastruktur und aktive Minen.</p>
+        <p class="muted" style="margin-top:10px">Systemstatus: ${escapeHtml(cardInfo.lorePopulation || PLANET_INFO_PLACEHOLDER)}. Verbrauchswerte reagieren live auf gebaute Infrastruktur und aktive Minen.</p>
         <p class="muted" style="margin-top:10px">${escapeHtml(demographicProfile.note)}</p>
       </div>
       <div class="planet-card-section">
@@ -13284,6 +13357,10 @@ function renderBuildProjectsView() {
   const buildJobs = state.buildJobs
     .filter((job) => (role === 'Admin' ? true : job.faction === faction))
     .sort((a, b) => Number(a.finishesAt || 0) - Number(b.finishesAt || 0));
+  const visibleBuildJobs = buildJobs.filter((job) => job.status === 'building' || (job.completedAt && (Date.now() - Number(job.completedAt || 0)) < (48 * 60 * 60 * 1000)));
+  const buildActivity = (Array.isArray(state.meta?.buildProjectActivity) ? state.meta.buildProjectActivity : [])
+    .filter((entry) => role === 'Admin' || entry.faction === faction)
+    .slice(0, 18);
   const requestedCategory = document.getElementById('infrastructureCategory')?.value || 'military';
   const selectedCategory = ['military', 'civilian', 'development', 'storage'].includes(requestedCategory)
     ? requestedCategory
@@ -13309,6 +13386,7 @@ function renderBuildProjectsView() {
   const canStartMineProject = canBuildMineProjects();
   const canManageLogistics = canManageWarehouseLogistics();
   const storageBuildBlocked = selectedCategory === 'storage' && selectedPlanet && !selectedPlanet.storageEligible;
+  const activeTab = buildProjectsViewTab === 'logistics' ? 'logistics' : 'infrastructure';
   workspacePanel.innerHTML = `
     <div class="workspace-head">
       <div>
@@ -13316,12 +13394,15 @@ function renderBuildProjectsView() {
         <p>Schiffs- und Infrastrukturprojekte mit gemeinsamem Ressourcenpool. Senat baut GAR-Infrastruktur, Navy und Eventleitung sehen die laufenden Projekte zur Abstimmung.</p>
       </div>
       <div class="toolbar-row">
+        <button class="mini-btn ${activeTab === 'infrastructure' ? 'active' : ''}" onclick="setBuildProjectsViewTab('infrastructure')">Infrastruktur</button>
+        <button class="mini-btn ${activeTab === 'logistics' ? 'active' : ''}" onclick="setBuildProjectsViewTab('logistics')">Logistik & Lager</button>
         <button class="mini-btn" onclick="renderBuildProjectsView()">Aktualisieren</button>
       </div>
     </div>
     <div class="workspace-grid">
       ${RESOURCE_KEYS.map((key) => `<div class="stat-card"><strong>${RESOURCE_LABELS[key]}</strong><span>${formatResourceAmount(faction === 'GAR' && STORAGE_RESOURCE_KEYS.includes(key) ? (garWarehouseTotals[key] + Number(pool[key] || 0)) : pool[key])}</span></div>`).join('')}
     </div>
+    ${activeTab === 'infrastructure' ? `
     <div class="workspace-section workspace-columns">
       <div class="workspace-card">
         <h3>Infrastrukturprojekt</h3>
@@ -13386,20 +13467,39 @@ function renderBuildProjectsView() {
       </div>
       <div class="workspace-card">
         <h3>Projektübersicht</h3>
-        ${buildJobs.length ? `
+        ${visibleBuildJobs.length ? `
           <div class="project-grid">
-            ${buildJobs.map((job) => `
+            ${visibleBuildJobs.map((job) => `
               <div class="project-card">
                 <h4>${getBuildJobDisplayName(job)}</h4>
                 <p class="project-meta">${getBuildJobTypeLabel(job)} • ${getBuildJobLocationName(job)} • ${job.faction || 'GAR'}</p>
                 ${job.jobType === 'mine' ? `<p class="project-meta">Slot ${Number(job.targetSlotIndex) + 1} • ${getMineProjectMeta(job.buildingKey || job.resourceKey)?.label || 'Infrastruktur'}</p>` : ''}
                 ${getBuildJobProgressBar(job)}
+                ${job.status !== 'building' && job.completedAt ? `<p class="project-meta">Abgeschlossen: ${formatMarketDateTime(job.completedAt)}</p>` : ''}
               </div>
             `).join('')}
           </div>
         ` : '<div class="muted-box">Keine Bauprojekte vorhanden.</div>'}
       </div>
     </div>
+    <div class="workspace-section workspace-columns">
+      <div class="workspace-card">
+        <h3>Aktivitätsliste</h3>
+        ${buildActivity.length ? buildActivity.map((entry) => `
+          <div class="project-card">
+            <h4>${escapeHtml(entry.title || 'Aktivität')}</h4>
+            <p class="project-meta">${escapeHtml(entry.location || '—')} • ${escapeHtml(entry.faction || 'GAR')}</p>
+            <p>${escapeHtml(entry.details || 'Keine Zusatzdetails.')}</p>
+            <small>${formatMarketDateTime(entry.createdAt)}</small>
+          </div>
+        `).join('') : '<div class="muted-box">Noch keine abgeschlossenen Aktivitäten geloggt.</div>'}
+      </div>
+      <div class="workspace-card">
+        <h3>Hinweis</h3>
+        <p>Abgeschlossene Bauprojekte bleiben bis zu 48 Stunden in der Projektübersicht sichtbar und wandern zusätzlich dauerhaft in die Aktivitätsliste.</p>
+      </div>
+    </div>
+    ` : `
     <div class="workspace-section workspace-columns">
       <div class="workspace-card">
         <h3>Sektorlogistik</h3>
@@ -13458,6 +13558,21 @@ function renderBuildProjectsView() {
         </div>
       </div>
     </div>
+    <div class="workspace-section">
+      <div class="workspace-card">
+        <h3>Logistik-Aktivität</h3>
+        ${buildActivity.filter((entry) => entry.jobType === 'transport').length
+          ? buildActivity.filter((entry) => entry.jobType === 'transport').map((entry) => `
+            <div class="project-card">
+              <h4>${escapeHtml(entry.title || 'Transport')}</h4>
+              <p>${escapeHtml(entry.details || '')}</p>
+              <small>${formatMarketDateTime(entry.createdAt)}</small>
+            </div>
+          `).join('')
+          : '<div class="muted-box">Noch keine Transportaktivitäten geloggt.</div>'}
+      </div>
+    </div>
+    `}
   `;
   const minePlanetInput = document.getElementById('mineBuildPlanetSearch');
   if (minePlanetInput && canStartMineProject) {
@@ -13496,6 +13611,11 @@ function renderBuildProjectsView() {
       if (event.key === 'Escape') closeMineBuildPlanetResults();
     });
   }
+}
+
+function setBuildProjectsViewTab(tabId) {
+  buildProjectsViewTab = tabId === 'logistics' ? 'logistics' : 'infrastructure';
+  renderBuildProjectsView();
 }
 
 function clearSnapTarget() {
@@ -14099,6 +14219,7 @@ window.removeRadioPermissionFleet = removeRadioPermissionFleet;
 window.saveRadioPermission = saveRadioPermission;
 window.deleteRadioPermission = deleteRadioPermission;
 window.pollDiscordRadioCommands = pollDiscordRadioCommands;
+window.setBuildProjectsViewTab = setBuildProjectsViewTab;
 window.setMainTab = setMainTab;
 window.fetchEconomyView = fetchEconomyView;
 window.fetchMarketCompanyDetail = fetchMarketCompanyDetail;
