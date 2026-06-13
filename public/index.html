@@ -704,6 +704,333 @@ textarea { min-height:82px; resize:vertical; }
   gap:10px;
   margin-top:16px;
 }
+.boot-screen {
+  position:fixed;
+  inset:0;
+  z-index:2200;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:24px;
+  background:
+    radial-gradient(circle at 50% 30%, rgba(84,213,255,.12), transparent 28%),
+    radial-gradient(circle at 50% 50%, rgba(77,92,255,.12), transparent 42%),
+    linear-gradient(180deg, rgba(3,6,13,.96), rgba(2,5,11,.985));
+  opacity:0;
+  visibility:hidden;
+  transition:opacity .42s ease, visibility .42s ease;
+}
+.boot-screen.active {
+  opacity:1;
+  visibility:visible;
+}
+.boot-screen.fade-out {
+  opacity:0;
+  visibility:hidden;
+}
+.boot-screen::before {
+  content:"";
+  position:absolute;
+  inset:0;
+  pointer-events:none;
+  opacity:.18;
+  background:repeating-linear-gradient(180deg, rgba(116,233,255,.14) 0 1px, transparent 1px 5px);
+}
+.boot-screen-card {
+  position:relative;
+  width:min(560px, 92vw);
+  min-height:280px;
+  padding:30px 30px 26px;
+  border-radius:26px;
+  overflow:hidden;
+  border:1px solid rgba(111,236,255,.2);
+  background:linear-gradient(180deg, rgba(10,16,26,.92), rgba(6,10,18,.96));
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,.03),
+    inset 0 0 42px rgba(75,214,255,.05),
+    0 26px 60px rgba(0,0,0,.46);
+}
+.boot-screen-grid {
+  position:absolute;
+  inset:0;
+  opacity:.3;
+  background:
+    radial-gradient(circle at center, rgba(94,214,255,.12), transparent 38%),
+    linear-gradient(90deg, rgba(99,224,255,.09) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(99,224,255,.09) 1px, transparent 1px);
+  background-size:auto, 36px 36px, 36px 36px;
+  mask:radial-gradient(circle at center, rgba(0,0,0,.98), transparent 82%);
+}
+.boot-screen-content {
+  position:relative;
+  display:flex;
+  flex-direction:column;
+  gap:14px;
+}
+.boot-screen-kicker {
+  font-size:12px;
+  letter-spacing:.34em;
+  color:#8feaff;
+  text-transform:uppercase;
+}
+.boot-screen-content h1 {
+  margin:0;
+  font-size:clamp(24px, 3vw, 34px);
+  letter-spacing:.12em;
+  color:#ebfbff;
+}
+.boot-screen-content p {
+  margin:0;
+  color:#9ec2d8;
+  letter-spacing:.18em;
+  text-transform:uppercase;
+  font-size:12px;
+}
+.boot-progress {
+  width:100%;
+  height:14px;
+  margin-top:10px;
+  border-radius:999px;
+  overflow:hidden;
+  border:1px solid rgba(109,234,255,.22);
+  background:rgba(255,255,255,.04);
+  box-shadow:inset 0 0 16px rgba(75,208,255,.06);
+}
+.boot-progress-fill {
+  width:0%;
+  height:100%;
+  border-radius:inherit;
+  background:linear-gradient(90deg, rgba(65,129,255,.88), rgba(100,236,255,.95));
+  box-shadow:0 0 16px rgba(102,228,255,.35);
+  transition:width .28s ease;
+}
+.boot-progress-text {
+  align-self:flex-end;
+  font-size:12px;
+  letter-spacing:.24em;
+  color:#c8f8ff;
+}
+.overlay-modal {
+  position:fixed;
+  inset:0;
+  z-index:2100;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:24px;
+  opacity:0;
+  visibility:hidden;
+  pointer-events:none;
+  transition:opacity .26s ease, visibility .26s ease;
+}
+.overlay-modal.active {
+  opacity:1;
+  visibility:visible;
+  pointer-events:auto;
+}
+.overlay-modal-backdrop {
+  position:absolute;
+  inset:0;
+  background:rgba(4,8,15,.52);
+  backdrop-filter:blur(12px);
+}
+.overlay-modal-card {
+  position:relative;
+  width:min(720px, 92vw);
+  max-height:86vh;
+  overflow:auto;
+  border-radius:24px;
+  border:1px solid rgba(108,232,255,.22);
+  background:linear-gradient(180deg, rgba(14,22,34,.96), rgba(7,12,20,.98));
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,.03),
+    inset 0 0 34px rgba(74,203,255,.05),
+    0 28px 68px rgba(0,0,0,.52);
+}
+.overlay-modal-settings { max-width:760px; }
+.overlay-modal-credits { max-width:520px; }
+.overlay-modal-tutorial { max-width:820px; }
+.overlay-panel {
+  padding:24px 24px 22px;
+}
+.overlay-panel-head {
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:18px;
+  margin-bottom:18px;
+}
+.overlay-panel-title {
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+.overlay-panel-title h2 {
+  margin:0;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  letter-spacing:.18em;
+  text-transform:uppercase;
+}
+.overlay-panel-title p {
+  margin:0;
+  color:var(--muted);
+}
+.overlay-panel-close {
+  width:42px;
+  height:42px;
+  border-radius:14px;
+  font-size:20px;
+}
+.overlay-section {
+  margin-top:18px;
+  padding:16px 18px;
+  border-radius:18px;
+  border:1px solid rgba(108,232,255,.12);
+  background:rgba(255,255,255,.03);
+}
+.overlay-section h3 {
+  margin:0 0 12px;
+  font-size:15px;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  color:#c8f8ff;
+}
+.overlay-toggle-list {
+  display:grid;
+  gap:10px;
+}
+.overlay-toggle-row {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+  padding:10px 12px;
+  border-radius:14px;
+  background:rgba(255,255,255,.025);
+  border:1px solid rgba(255,255,255,.04);
+}
+.overlay-toggle-copy strong,
+.overlay-toggle-copy span {
+  display:block;
+}
+.overlay-toggle-copy strong {
+  font-size:14px;
+}
+.overlay-toggle-copy span {
+  margin-top:3px;
+  color:var(--muted);
+  font-size:12px;
+}
+.hud-switch {
+  position:relative;
+  display:inline-flex;
+  align-items:center;
+  width:54px;
+  height:30px;
+  border-radius:999px;
+  border:1px solid rgba(108,232,255,.18);
+  background:rgba(255,255,255,.05);
+  cursor:pointer;
+  flex:0 0 auto;
+}
+.hud-switch::after {
+  content:"";
+  position:absolute;
+  left:4px;
+  width:20px;
+  height:20px;
+  border-radius:50%;
+  background:#d7fbff;
+  box-shadow:0 0 10px rgba(118,238,255,.24);
+  transition:transform .2s ease, background .2s ease;
+}
+.hud-switch.active {
+  background:rgba(61,141,255,.28);
+  border-color:rgba(115,214,255,.28);
+}
+.hud-switch.active::after {
+  transform:translateX(24px);
+  background:#75ebff;
+}
+.sound-row {
+  display:flex;
+  align-items:center;
+  gap:14px;
+}
+.sound-row input[type="range"] {
+  flex:1;
+}
+.sound-row strong {
+  min-width:52px;
+  text-align:right;
+}
+.credits-card-list {
+  display:grid;
+  gap:12px;
+}
+.credits-card {
+  display:flex;
+  align-items:center;
+  gap:14px;
+  padding:16px 18px;
+  border-radius:18px;
+  background:linear-gradient(180deg, rgba(15,26,42,.92), rgba(9,15,25,.96));
+  border:1px solid rgba(92,195,255,.22);
+}
+.credits-card-index {
+  font-size:12px;
+  letter-spacing:.22em;
+  color:#8fdbff;
+}
+.credits-card-name {
+  font-size:18px;
+  font-weight:700;
+}
+.tutorial-stepper {
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-wrap:wrap;
+  margin-bottom:16px;
+}
+.tutorial-step-dot {
+  width:10px;
+  height:10px;
+  border-radius:50%;
+  background:rgba(255,255,255,.16);
+}
+.tutorial-step-dot.active {
+  background:#75ebff;
+  box-shadow:0 0 10px rgba(117,235,255,.4);
+}
+.tutorial-step-card h3 {
+  margin:0 0 10px;
+  font-size:20px;
+  letter-spacing:.04em;
+}
+.tutorial-step-card p,
+.tutorial-step-card li {
+  color:#d8ebf8;
+  line-height:1.55;
+}
+.tutorial-step-card ul {
+  margin:0;
+  padding-left:18px;
+}
+.tutorial-actions {
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  margin-top:20px;
+  flex-wrap:wrap;
+}
+.overlay-helper-text {
+  margin-top:8px;
+  color:var(--muted);
+  font-size:12px;
+}
 #statusbar {
   position:absolute;
   left:18px;
@@ -1001,6 +1328,21 @@ a { color:#8bc7ff; }
     overscroll-behavior:none;
     -webkit-text-size-adjust:100%;
   }
+  .overlay-modal {
+    padding:14px;
+  }
+  .overlay-panel {
+    padding:18px 16px 16px;
+  }
+  .overlay-toggle-row,
+  .sound-row,
+  .tutorial-actions {
+    flex-wrap:wrap;
+  }
+  .overlay-panel-close {
+    width:38px;
+    height:38px;
+  }
   #topbar {
     left:12px;
     right:60px;
@@ -1151,6 +1493,20 @@ a { color:#8bc7ff; }
 </style>
 </head>
 <body>
+<div id="bootScreen" class="boot-screen active" aria-hidden="false">
+  <div class="boot-screen-card">
+    <div class="boot-screen-grid"></div>
+    <div class="boot-screen-content">
+      <div class="boot-screen-kicker">GALAXY MAP</div>
+      <h1>GALACTIC CAMPAIGN COMMAND BOARD</h1>
+      <p id="bootStatusLabel">INITIALISIERE SYSTEME</p>
+      <div class="boot-progress">
+        <div id="bootProgressFill" class="boot-progress-fill"></div>
+      </div>
+      <div id="bootProgressText" class="boot-progress-text">0%</div>
+    </div>
+  </div>
+</div>
 <div id="app">
   <div id="orientationGuard" class="orientation-guard" aria-hidden="true">
     <div class="orientation-guard-card">
@@ -1273,6 +1629,27 @@ a { color:#8bc7ff; }
         <button class="primary" id="loginBtn">Einloggen</button>
         <button class="secondary" id="guestContinueBtn">Als Gast fortfahren</button>
       </div>
+    </div>
+  </div>
+
+  <div id="settingsModal" class="overlay-modal" aria-hidden="true">
+    <div class="overlay-modal-backdrop" data-close-modal="settingsModal"></div>
+    <div class="overlay-modal-card overlay-modal-settings" role="dialog" aria-modal="true" aria-labelledby="settingsModalTitle">
+      <div id="settingsModalContent"></div>
+    </div>
+  </div>
+
+  <div id="creditsModal" class="overlay-modal" aria-hidden="true">
+    <div class="overlay-modal-backdrop" data-close-modal="creditsModal"></div>
+    <div class="overlay-modal-card overlay-modal-credits" role="dialog" aria-modal="true" aria-labelledby="creditsModalTitle">
+      <div id="creditsModalContent"></div>
+    </div>
+  </div>
+
+  <div id="tutorialModal" class="overlay-modal" aria-hidden="true">
+    <div class="overlay-modal-backdrop" data-close-modal="tutorialModal"></div>
+    <div class="overlay-modal-card overlay-modal-tutorial" role="dialog" aria-modal="true" aria-labelledby="tutorialModalTitle">
+      <div id="tutorialModalContent"></div>
     </div>
   </div>
 </div>
@@ -1640,6 +2017,16 @@ const guestContinueBtn = document.getElementById('guestContinueBtn');
 const loginModal = document.getElementById('loginModal');
 const loginModalUser = document.getElementById('loginUser');
 const loginModalPassword = document.getElementById('loginPassword');
+const bootScreen = document.getElementById('bootScreen');
+const bootProgressFill = document.getElementById('bootProgressFill');
+const bootProgressText = document.getElementById('bootProgressText');
+const bootStatusLabel = document.getElementById('bootStatusLabel');
+const settingsModal = document.getElementById('settingsModal');
+const settingsModalContent = document.getElementById('settingsModalContent');
+const creditsModal = document.getElementById('creditsModal');
+const creditsModalContent = document.getElementById('creditsModalContent');
+const tutorialModal = document.getElementById('tutorialModal');
+const tutorialModalContent = document.getElementById('tutorialModalContent');
 const sessionUserDisplay = document.getElementById('sessionUserDisplay');
 const mainNavToggle = document.getElementById('mainNavToggle');
 const orientationGuardEl = document.getElementById('orientationGuard');
@@ -1783,6 +2170,34 @@ let hoveredRouteId = null;
 let hoveredZoneInfo = null;
 let pendingRouteHoverId = null;
 let routeHoverFrame = 0;
+let uiSoundVolume = 75;
+let adminModeEnabled = true;
+let activeOverlayModalId = '';
+let lastFocusedElementBeforeModal = null;
+let tutorialCheckPromise = null;
+let tutorialFlowState = {
+  shouldPrompt: false,
+  started: false,
+  stepIndex: -1,
+  steps: []
+};
+const SETTINGS_SOUND_VOLUME_KEY = 'gcb_ui_v1.settings.soundVolume';
+const SETTINGS_ADMIN_MODE_KEY = 'gcb_ui_v1.settings.adminMode';
+const BOOT_MIN_DURATION_MS = 800;
+const BOOT_MAX_DURATION_MS = 6000;
+const bootLoadState = {
+  startedAt: Date.now(),
+  progress: 0,
+  hidden: false,
+  timer: null,
+  forceTimer: null,
+  tasks: {
+    domReady: false,
+    mapImageReady: false,
+    campaignReady: false,
+    authReady: false
+  }
+};
 let activeMainTab = 'map';
 let activeShipyardFactionOverride = 'GAR';
 let fleetManagementSearchQuery = '';
@@ -2332,10 +2747,37 @@ function getPlanetInfluenceFaction(planet) {
   return planet.owner || 'NEUTRAL';
 }
 
+function clampUiSoundVolume(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 75;
+  return Math.max(0, Math.min(100, Math.round(numeric)));
+}
+
+function saveUiSettingsPrefs() {
+  try {
+    localStorage.setItem(SETTINGS_SOUND_VOLUME_KEY, String(clampUiSoundVolume(uiSoundVolume)));
+    localStorage.setItem(SETTINGS_ADMIN_MODE_KEY, adminModeEnabled ? '1' : '0');
+  } catch (error) {
+    console.warn('UI settings prefs could not be stored', error);
+  }
+}
+
+function loadUiSettingsPrefs() {
+  try {
+    const storedVolume = localStorage.getItem(SETTINGS_SOUND_VOLUME_KEY);
+    if (storedVolume != null) uiSoundVolume = clampUiSoundVolume(storedVolume);
+    const storedAdminMode = localStorage.getItem(SETTINGS_ADMIN_MODE_KEY);
+    if (storedAdminMode != null) adminModeEnabled = storedAdminMode !== '0';
+  } catch (error) {
+    console.warn('UI settings prefs could not be restored', error);
+  }
+}
+
 function applyAudioMuteState() {
   [hyperspaceStartAudio, hyperspaceFinishAudio, garVictoryAudio, fleetDeleteAudio, datapadClickAudio, datapadAcceptAudio, datapadDeleteAudio]
     .forEach((audio) => {
-      audio.muted = audioMuted;
+      audio.muted = audioMuted || uiSoundVolume <= 0;
+      audio.volume = clampUiSoundVolume(uiSoundVolume) / 100;
     });
   if (muteBtn) {
     muteBtn.textContent = audioMuted ? '🔇' : '🔊';
@@ -2351,9 +2793,10 @@ function toggleAudioMute() {
 }
 
 function playAudioCue(audio) {
-  if (audioMuted) return;
+  if (audioMuted || uiSoundVolume <= 0) return;
   try {
     audio.currentTime = 0;
+    audio.volume = clampUiSoundVolume(uiSoundVolume) / 100;
     const result = audio.play();
     if (result?.catch) result.catch(() => {});
   } catch (error) {
@@ -3314,6 +3757,7 @@ function saveClientUiPrefs() {
     audioMuted
   };
   localStorage.setItem(CLIENT_UI_PREFS_KEY, JSON.stringify(prefs));
+  saveUiSettingsPrefs();
 }
 
 function loadClientUiPrefs() {
@@ -3333,12 +3777,420 @@ function loadClientUiPrefs() {
   } catch (error) {
     console.warn('UI prefs could not be restored', error);
   }
+  loadUiSettingsPrefs();
 }
 
 function syncLayerCheckboxes() {
   document.querySelectorAll('[data-layer]').forEach((cb) => {
     cb.checked = Boolean(layers[cb.dataset.layer]);
   });
+  syncSettingsModalState();
+}
+
+function getOverlayModalById(modalId) {
+  if (modalId === 'settingsModal') return settingsModal;
+  if (modalId === 'creditsModal') return creditsModal;
+  if (modalId === 'tutorialModal') return tutorialModal;
+  return null;
+}
+
+function getFocusableElements(container) {
+  if (!container) return [];
+  return Array.from(container.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'))
+    .filter((element) => !element.disabled && !element.getAttribute('aria-hidden'));
+}
+
+function trapFocusInModal(event) {
+  if (event.key !== 'Tab' || !activeOverlayModalId) return;
+  const modal = getOverlayModalById(activeOverlayModalId);
+  const focusables = getFocusableElements(modal);
+  if (!focusables.length) return;
+  const first = focusables[0];
+  const last = focusables[focusables.length - 1];
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+}
+
+function closeOverlayModal(modalId, { restoreFocus = true } = {}) {
+  const modal = getOverlayModalById(modalId);
+  if (!modal) return;
+  modal.classList.remove('active');
+  modal.setAttribute('aria-hidden', 'true');
+  if (activeOverlayModalId === modalId) activeOverlayModalId = '';
+  if (restoreFocus && lastFocusedElementBeforeModal?.focus) {
+    window.setTimeout(() => lastFocusedElementBeforeModal.focus(), 20);
+  }
+}
+
+function openOverlayModal(modalId) {
+  const modal = getOverlayModalById(modalId);
+  if (!modal) return;
+  if (activeOverlayModalId && activeOverlayModalId !== modalId) {
+    closeOverlayModal(activeOverlayModalId, { restoreFocus: false });
+  }
+  lastFocusedElementBeforeModal = document.activeElement;
+  modal.classList.add('active');
+  modal.setAttribute('aria-hidden', 'false');
+  activeOverlayModalId = modalId;
+  window.setTimeout(() => {
+    const focusables = getFocusableElements(modal);
+    (focusables[0] || modal).focus?.();
+  }, 30);
+}
+
+function getSettingsToggleDefinitions() {
+  return [
+    { id: 'planetLabels', label: 'Planet Labels', description: 'Blendet Planetennamen direkt auf der Karte ein.' },
+    { id: 'hyperlanes', label: 'Hyperspace Lanes', description: 'Zeigt Hyperraumrouten und manuelle Verbindungen.' },
+    { id: 'majorTradeRoutes', label: 'Major Trade Routes', description: 'Nutzen derzeit dieselbe Hyperraumdarstellung wie die Hauptkartenrouten.', checked: () => Boolean(layers.hyperlanes), onToggle: (next) => setLayerPreference('hyperlanes', next) },
+    { id: 'conflictPulse', label: 'Conflict Pulse', description: 'Verwendet die vorhandene Sektor- und Kontrollansicht als Konfliktlage.', checked: () => Boolean(layers.sectorLabels), onToggle: (next) => setLayerPreference('sectorLabels', next) },
+    { id: 'republicSectors', label: 'Republic Sectors', description: 'Zeigt die sektorale Kontrollfärbung und Beschriftung an.', checked: () => Boolean(layers.sectorLabels), onToggle: (next) => setLayerPreference('sectorLabels', next) },
+    { id: 'neutralSectors', label: 'Neutral Sectors', description: 'Nutzen dieselbe Sektorebene wie die Republik/KUS-Kontrollfärbung.', checked: () => Boolean(layers.sectorLabels), onToggle: (next) => setLayerPreference('sectorLabels', next) },
+    { id: 'grid', label: 'Grid Overlay', description: 'Galaktisches Raster und Ringsegmente ein- oder ausblenden.' },
+    { id: 'fleetMarkers', label: 'Fleet Markers', description: 'Zeigt GAR- und KUS-Flottenmarker gesammelt an.', checked: () => Boolean(layers.garFleets && layers.kusFleets), onToggle: (next) => {
+      setLayerPreference('garFleets', next, false);
+      setLayerPreference('kusFleets', next, true);
+    }},
+    { id: 'tacticalOverlay', label: 'Tactical Overlay / Schematic Map', description: 'Wechselt zwischen Bildkarte und schematischer Einsatzdarstellung.', checked: () => viewMode === 'schematic', onToggle: (next) => setViewModePreference(next ? 'schematic' : 'image') }
+  ];
+}
+
+function setLayerPreference(layerId, enabled, renderAfter = true) {
+  layers[layerId] = Boolean(enabled);
+  saveClientUiPrefs();
+  const affectsTacticalCanvas = ['grid', 'hyperlanes', 'sectorLabels'].includes(layerId);
+  const affectsInfluence = layerId === 'sectorLabels';
+  const affectsRouteNetwork = layerId === 'hyperlanes';
+  markDirty({
+    layers: true,
+    tacticalBase: affectsTacticalCanvas,
+    influence: affectsInfluence,
+    frontline: affectsRouteNetwork,
+    routeOverlay: affectsRouteNetwork
+  });
+  if (renderAfter) syncSettingsModalState();
+}
+
+function setViewModePreference(nextMode) {
+  if (!['image', 'schematic'].includes(nextMode) || nextMode === viewMode) return;
+  viewMode = nextMode;
+  tacticalSectionCanvasCache.clear();
+  tacticalHoverAreas = { regions: [], sectors: [] };
+  tacticalBaseReady = false;
+  tacticalBuildQueued = false;
+  tacticalBuildVersion += 1;
+  saveClientUiPrefs();
+  applyViewMode();
+  render({ layers: true, frontline: true });
+  syncSettingsModalState();
+}
+
+function getCurrentSessionLabel() {
+  return currentAuthenticatedUsername ? `${currentAuthenticatedUsername} (${currentRole()})` : 'Gast / Viewer';
+}
+
+function renderSettingsModal() {
+  if (!settingsModalContent) return;
+  const toggleRows = getSettingsToggleDefinitions().map((entry) => {
+    const checked = entry.checked ? entry.checked() : Boolean(layers[entry.id]);
+    return `
+      <div class="overlay-toggle-row">
+        <div class="overlay-toggle-copy">
+          <strong>${escapeHtml(entry.label)}</strong>
+          <span>${escapeHtml(entry.description)}</span>
+        </div>
+        <button
+          type="button"
+          class="hud-switch${checked ? ' active' : ''}"
+          aria-pressed="${checked ? 'true' : 'false'}"
+          data-settings-toggle="${escapeHtml(entry.id)}"
+        ></button>
+      </div>
+    `;
+  }).join('');
+  settingsModalContent.innerHTML = `
+    <div class="overlay-panel">
+      <div class="overlay-panel-head">
+        <div class="overlay-panel-title">
+          <h2 id="settingsModalTitle">⚙ SETTINGS</h2>
+          <p>Angemeldet als: ${escapeHtml(getCurrentSessionLabel())}</p>
+        </div>
+        <button type="button" class="secondary overlay-panel-close" data-close-modal="settingsModal" aria-label="Settings schließen">×</button>
+      </div>
+      <section class="overlay-section">
+        <h3>Map Display</h3>
+        <div class="overlay-toggle-list">${toggleRows}</div>
+      </section>
+      <section class="overlay-section">
+        <h3>Sound</h3>
+        <div class="sound-row">
+          <input id="settingsSoundRange" type="range" min="0" max="100" step="1" value="${clampUiSoundVolume(uiSoundVolume)}">
+          <strong id="settingsSoundValue">${clampUiSoundVolume(uiSoundVolume)}%</strong>
+        </div>
+        <div class="overlay-helper-text">Wird lokal gespeichert und auf Klicksounds, Pings und Warnhinweise angewendet.</div>
+      </section>
+      ${isAdminRole() ? `
+        <section class="overlay-section">
+          <h3>Admin</h3>
+          <div class="overlay-toggle-row">
+            <div class="overlay-toggle-copy">
+              <strong>Admin Mode</strong>
+              <span>Blendet Admin-Werkzeuge im HUD gezielt ein oder aus.</span>
+            </div>
+            <button
+              type="button"
+              class="hud-switch${adminModeEnabled ? ' active' : ''}"
+              aria-pressed="${adminModeEnabled ? 'true' : 'false'}"
+              data-settings-admin-toggle="true"
+            ></button>
+          </div>
+        </section>
+      ` : ''}
+      <section class="overlay-section">
+        <h3>Credits</h3>
+        <div class="toolbar-row">
+          <button type="button" class="mini-btn" id="openCreditsFromSettings">Credits öffnen</button>
+        </div>
+      </section>
+    </div>
+  `;
+  settingsModalContent.querySelectorAll('[data-settings-toggle]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const toggle = getSettingsToggleDefinitions().find((entry) => entry.id === button.dataset.settingsToggle);
+      if (!toggle) return;
+      const current = toggle.checked ? toggle.checked() : Boolean(layers[toggle.id]);
+      if (toggle.onToggle) toggle.onToggle(!current);
+      else setLayerPreference(toggle.id, !current);
+      renderSettingsModal();
+    });
+  });
+  settingsModalContent.querySelector('[data-settings-admin-toggle]')?.addEventListener('click', () => {
+    adminModeEnabled = !adminModeEnabled;
+    saveUiSettingsPrefs();
+    refreshRoleChrome();
+    renderSettingsModal();
+  });
+  settingsModalContent.querySelector('#settingsSoundRange')?.addEventListener('input', (event) => {
+    uiSoundVolume = clampUiSoundVolume(event.target.value);
+    saveUiSettingsPrefs();
+    applyAudioMuteState();
+    syncSettingsModalState();
+  });
+  settingsModalContent.querySelector('#openCreditsFromSettings')?.addEventListener('click', () => {
+    renderCreditsModal();
+    openOverlayModal('creditsModal');
+  });
+}
+
+function syncSettingsModalState() {
+  if (settingsModal?.classList.contains('active')) {
+    getSettingsToggleDefinitions().forEach((entry) => {
+      const button = settingsModalContent?.querySelector(`[data-settings-toggle="${entry.id}"]`);
+      if (!button) return;
+      const checked = entry.checked ? entry.checked() : Boolean(layers[entry.id]);
+      button.classList.toggle('active', checked);
+      button.setAttribute('aria-pressed', checked ? 'true' : 'false');
+    });
+    const adminToggle = settingsModalContent?.querySelector('[data-settings-admin-toggle]');
+    if (adminToggle) {
+      adminToggle.classList.toggle('active', adminModeEnabled);
+      adminToggle.setAttribute('aria-pressed', adminModeEnabled ? 'true' : 'false');
+    }
+  }
+  const volumeLabel = document.getElementById('settingsSoundValue');
+  if (volumeLabel) volumeLabel.textContent = `${clampUiSoundVolume(uiSoundVolume)}%`;
+  const volumeInput = document.getElementById('settingsSoundRange');
+  if (volumeInput && document.activeElement !== volumeInput) volumeInput.value = String(clampUiSoundVolume(uiSoundVolume));
+}
+
+function renderCreditsModal() {
+  if (!creditsModalContent) return;
+  const names = ['Burnout', 'Shoot'];
+  creditsModalContent.innerHTML = `
+    <div class="overlay-panel">
+      <div class="overlay-panel-head">
+        <div class="overlay-panel-title">
+          <h2 id="creditsModalTitle">👤 CREDITS</h2>
+          <p>Mitwirkende dieser Board-Version.</p>
+        </div>
+        <button type="button" class="secondary overlay-panel-close" data-close-modal="creditsModal" aria-label="Credits schließen">×</button>
+      </div>
+      <div class="credits-card-list">
+        ${names.map((name, index) => `
+          <article class="credits-card">
+            <div class="credits-card-index">${String(index + 1).padStart(2, '0')}</div>
+            <div class="credits-card-name">${escapeHtml(name)}</div>
+          </article>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function getTutorialSteps() {
+  const baseSteps = [
+    {
+      title: 'Willkommen auf dem Galactic Campaign Command Board',
+      body: 'Hier steuerst du Karte, Fraktionen, Wirtschaft und Kampagnenstatus aus einer Oberfläche.'
+    },
+    {
+      title: 'Karte bewegen und zoomen',
+      body: 'Mit Ziehen, Mausrad und den Zoom-Buttons bewegst du dich über die Galaxis und fokussierst wichtige Fronten.'
+    },
+    {
+      title: 'Planeten anklicken und Informationen lesen',
+      body: 'Ein Klick auf einen Planeten öffnet dir Besitzverhältnisse, Sektor, Routen, Infrastruktur und weitere Details.'
+    },
+    {
+      title: 'Layer und Map Display',
+      body: 'Über Settings steuerst du Labels, Hyperraumrouten, Raster, Flottenmarker und die schematische Kartenansicht.'
+    },
+    {
+      title: 'Flottenmanagement-Grundlagen',
+      body: 'Im Flottenmanagement ordnest du Verbände, Sprünge, Schiffe und Zuständigkeiten innerhalb deiner Fraktion.'
+    },
+    {
+      title: 'Schiffbau und Bauprojekte',
+      body: 'Bauorte, Slots, Infrastruktur und laufende Aufträge laufen über Schiffbau und Bauprojekte zusammen.'
+    },
+    {
+      title: 'Wirtschaft und Börse',
+      body: 'Im Wirtschaftsbereich beobachtest du Holdings, Sektorpreise, Portfolios und Ressourcenströme.'
+    },
+    {
+      title: 'Rollen und Rechte',
+      body: 'Deine Rolle steuert, welche Menüs, Buttons und Verwaltungsfunktionen du auf dem Board nutzen kannst.'
+    }
+  ];
+  if (!isAdminRole()) return baseSteps;
+  return [
+    ...baseSteps,
+    {
+      title: 'Admin-Werkzeuge',
+      body: 'Als Admin hast du zusätzlich Zugriff auf Export JSON, Trello-Import, Login Manager und Befehlsberechtigungen.'
+    }
+  ];
+}
+
+function renderTutorialModal() {
+  if (!tutorialModalContent) return;
+  const steps = tutorialFlowState.steps;
+  if (!tutorialFlowState.started) {
+    tutorialModalContent.innerHTML = `
+      <div class="overlay-panel">
+        <div class="overlay-panel-head">
+          <div class="overlay-panel-title">
+            <h2 id="tutorialModalTitle">🛰 Tutorial</h2>
+            <p>Einmaliger Einstieg für neue Besuche auf dieser Verbindung.</p>
+          </div>
+          <button type="button" class="secondary overlay-panel-close" data-close-modal="tutorialModal" aria-label="Tutorial schließen">×</button>
+        </div>
+        <section class="overlay-section tutorial-step-card">
+          <h3>Kurzer Rundgang?</h3>
+          <p>Wir zeigen dir in wenigen Schritten Karte, Menüs, Bauprojekte und Wirtschaft, damit du direkt sauber reinkommst.</p>
+          <div class="tutorial-actions">
+            <button type="button" class="secondary" id="tutorialSkipBtn">Überspringen</button>
+            <button type="button" class="primary" id="tutorialStartBtn">Tutorial starten</button>
+          </div>
+        </section>
+      </div>
+    `;
+    tutorialModalContent.querySelector('#tutorialSkipBtn')?.addEventListener('click', () => finishTutorialFlow('skipped'));
+    tutorialModalContent.querySelector('#tutorialStartBtn')?.addEventListener('click', () => {
+      tutorialFlowState.started = true;
+      tutorialFlowState.stepIndex = 0;
+      renderTutorialModal();
+    });
+    return;
+  }
+  const step = steps[tutorialFlowState.stepIndex] || steps[0];
+  const isLast = tutorialFlowState.stepIndex >= steps.length - 1;
+  tutorialModalContent.innerHTML = `
+    <div class="overlay-panel">
+      <div class="overlay-panel-head">
+        <div class="overlay-panel-title">
+          <h2 id="tutorialModalTitle">🛰 Tutorial</h2>
+          <p>Schritt ${tutorialFlowState.stepIndex + 1} von ${steps.length}</p>
+        </div>
+        <button type="button" class="secondary overlay-panel-close" data-close-modal="tutorialModal" aria-label="Tutorial schließen">×</button>
+      </div>
+      <div class="tutorial-stepper">
+        ${steps.map((_, index) => `<span class="tutorial-step-dot${index === tutorialFlowState.stepIndex ? ' active' : ''}"></span>`).join('')}
+      </div>
+      <section class="overlay-section tutorial-step-card">
+        <h3>${escapeHtml(step.title)}</h3>
+        <p>${escapeHtml(step.body)}</p>
+      </section>
+      <div class="tutorial-actions">
+        <button type="button" class="secondary" id="tutorialBackBtn" ${tutorialFlowState.stepIndex <= 0 ? 'disabled' : ''}>Zurück</button>
+        <div class="toolbar-row">
+          <button type="button" class="secondary" id="tutorialSkipBtn">Überspringen</button>
+          <button type="button" class="primary" id="tutorialNextBtn">${isLast ? 'Abschließen' : 'Weiter'}</button>
+        </div>
+      </div>
+    </div>
+  `;
+  tutorialModalContent.querySelector('#tutorialBackBtn')?.addEventListener('click', () => {
+    tutorialFlowState.stepIndex = Math.max(0, tutorialFlowState.stepIndex - 1);
+    renderTutorialModal();
+  });
+  tutorialModalContent.querySelector('#tutorialSkipBtn')?.addEventListener('click', () => finishTutorialFlow('skipped'));
+  tutorialModalContent.querySelector('#tutorialNextBtn')?.addEventListener('click', () => {
+    if (isLast) {
+      finishTutorialFlow('completed');
+      return;
+    }
+    tutorialFlowState.stepIndex += 1;
+    renderTutorialModal();
+  });
+}
+
+async function finishTutorialFlow(action) {
+  if (serverSync.enabled && currentAuthenticatedUsername) {
+    try {
+      await fetch('/api/tutorial/complete', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action })
+      });
+    } catch (error) {
+      console.warn('Tutorial completion could not be saved', error);
+    }
+  }
+  tutorialFlowState.shouldPrompt = false;
+  closeOverlayModal('tutorialModal');
+}
+
+async function checkTutorialStatus() {
+  if (!serverSync.enabled || !currentAuthenticatedUsername || currentRole() === 'Viewer') return false;
+  if (tutorialCheckPromise) return tutorialCheckPromise;
+  tutorialCheckPromise = (async () => {
+    try {
+      const response = await fetch('/api/tutorial/status', { credentials: 'include' });
+      const payload = await response.json();
+      tutorialFlowState.shouldPrompt = Boolean(payload.shouldShowTutorial);
+      tutorialFlowState.started = false;
+      tutorialFlowState.stepIndex = -1;
+      tutorialFlowState.steps = getTutorialSteps();
+      if (tutorialFlowState.shouldPrompt) {
+        renderTutorialModal();
+        openOverlayModal('tutorialModal');
+      }
+      return tutorialFlowState.shouldPrompt;
+    } catch (error) {
+      console.warn('Tutorial status could not be loaded', error);
+      return false;
+    } finally {
+      tutorialCheckPromise = null;
+    }
+  })();
+  return tutorialCheckPromise;
 }
 
 function sanitizeCampaignMeta(meta) {
@@ -3535,6 +4387,79 @@ function emitLiveSocketEvent(eventName, payload) {
   serverSync.socket.emit(eventName, payload);
 }
 
+function getBootStatusText() {
+  if (!bootLoadState.tasks.domReady) return 'INITIALISIERE SYSTEME';
+  if (!bootLoadState.tasks.mapImageReady) return 'LADE GALAXIEKARTE';
+  if (!bootLoadState.tasks.campaignReady) return 'SYNCHRONISIERE KAMPAGNENDATEN';
+  if (!bootLoadState.tasks.authReady) return 'PRÜFE ZUGANGSDATEN';
+  return 'SYSTEME ONLINE';
+}
+
+function setBootProgress(progress, statusText = getBootStatusText()) {
+  bootLoadState.progress = Math.max(0, Math.min(100, Number(progress) || 0));
+  if (bootProgressFill) bootProgressFill.style.width = `${bootLoadState.progress}%`;
+  if (bootProgressText) bootProgressText.textContent = `${Math.round(bootLoadState.progress)}%`;
+  if (bootStatusLabel) bootStatusLabel.textContent = statusText;
+}
+
+function maybeFinishBootScreen(force = false) {
+  if (bootLoadState.hidden) return;
+  const allReady = Object.values(bootLoadState.tasks).every(Boolean);
+  if (!force && !allReady) return;
+  const elapsed = Date.now() - bootLoadState.startedAt;
+  const finalize = () => {
+    if (bootLoadState.hidden) return;
+    bootLoadState.hidden = true;
+    setBootProgress(100, force && !allReady ? 'SYSTEME ONLINE (FALLBACK)' : 'SYSTEME ONLINE');
+    if (bootLoadState.timer) {
+      window.clearInterval(bootLoadState.timer);
+      bootLoadState.timer = null;
+    }
+    if (bootLoadState.forceTimer) {
+      window.clearTimeout(bootLoadState.forceTimer);
+      bootLoadState.forceTimer = null;
+    }
+    bootScreen?.classList.add('fade-out');
+    window.setTimeout(() => {
+      bootScreen?.classList.remove('active');
+      bootScreen?.setAttribute('aria-hidden', 'true');
+    }, 420);
+  };
+  if (elapsed >= BOOT_MIN_DURATION_MS) {
+    finalize();
+  } else {
+    window.setTimeout(finalize, BOOT_MIN_DURATION_MS - elapsed);
+  }
+}
+
+function markBootTask(taskKey, ready = true) {
+  if (!(taskKey in bootLoadState.tasks)) return;
+  bootLoadState.tasks[taskKey] = Boolean(ready);
+  setBootProgress(bootLoadState.progress, getBootStatusText());
+  maybeFinishBootScreen();
+}
+
+function startBootSequence() {
+  bootLoadState.startedAt = Date.now();
+  setBootProgress(4, 'INITIALISIERE SYSTEME');
+  bootScreen?.classList.add('active');
+  bootScreen?.setAttribute('aria-hidden', 'false');
+  bootLoadState.timer = window.setInterval(() => {
+    if (bootLoadState.hidden) return;
+    const target = Object.values(bootLoadState.tasks).every(Boolean) ? 100 : 90;
+    if (bootLoadState.progress < target) {
+      const delta = Math.max(1, Math.round((target - bootLoadState.progress) * 0.08));
+      setBootProgress(Math.min(target, bootLoadState.progress + delta));
+    }
+    maybeFinishBootScreen();
+  }, 120);
+  bootLoadState.forceTimer = window.setTimeout(() => {
+    if (bootLoadState.hidden) return;
+    console.warn('Bootscreen fallback reached after 6 seconds; continuing.');
+    maybeFinishBootScreen(true);
+  }, BOOT_MAX_DURATION_MS);
+}
+
 async function bootstrapFromServer() {
   if (!serverSync.enabled) return;
   try {
@@ -3550,17 +4475,22 @@ async function bootstrapFromServer() {
     } else {
       syncAuthUsersFromCampaign(payload.campaign);
     }
+    markBootTask('campaignReady', true);
+    markBootTask('authReady', true);
     serverSyncReady = true;
     serverRevision = nextRevision;
     serverSync.revision = serverRevision;
     refreshRoleChrome();
     window.setTimeout(() => connectServerSocket(), 250);
+    void checkTutorialStatus();
   } catch (error) {
     console.warn('Server bootstrap unavailable, falling back to local state', error);
     applyDefaultAnonymousRole();
     refreshRoleChrome();
     showLoginModal();
     disableLiveSync('Server-Bootstrap fehlgeschlagen. Lokaler Offline-Modus aktiv.');
+    markBootTask('campaignReady', true);
+    markBootTask('authReady', true);
   }
 }
 
@@ -3838,6 +4768,65 @@ function syncWarehouseStoreForPlanet(planetId) {
   });
 }
 
+function addPlanetHyperlaneLink(linkMap, leftId, rightId) {
+  const a = String(leftId || '').trim();
+  const b = String(rightId || '').trim();
+  if (!a || !b || a === b) return;
+  if (!linkMap.has(a)) linkMap.set(a, new Set());
+  if (!linkMap.has(b)) linkMap.set(b, new Set());
+  linkMap.get(a).add(b);
+  linkMap.get(b).add(a);
+}
+
+function buildPlanetHyperlaneDegreeMap() {
+  const linkMap = new Map(state.planets.map((planet) => [planet.id, new Set()]));
+  const radiusSq = 120 * 120;
+  for (let index = 0; index < state.planets.length; index += 1) {
+    const base = state.planets[index];
+    const candidates = [];
+    for (let otherIndex = 0; otherIndex < state.planets.length; otherIndex += 1) {
+      if (index === otherIndex) continue;
+      const other = state.planets[otherIndex];
+      const dx = Number(base?.x || 0) - Number(other?.x || 0);
+      const dy = Number(base?.y || 0) - Number(other?.y || 0);
+      const distanceSq = dx * dx + dy * dy;
+      if (distanceSq <= radiusSq) candidates.push([distanceSq, other.id]);
+    }
+    candidates
+      .sort((left, right) => left[0] - right[0])
+      .slice(0, 3)
+      .forEach(([, otherId]) => addPlanetHyperlaneLink(linkMap, base.id, otherId));
+  }
+  routeCache.forEach((route) => addPlanetHyperlaneLink(linkMap, route?.a?.id, route?.b?.id));
+  tacticalRouteCache.forEach((route) => {
+    getRouteConnections(route).forEach((connection) => addPlanetHyperlaneLink(linkMap, connection.startPlanetId, connection.endPlanetId));
+  });
+  ensureCustomRouteStore().forEach((route) => {
+    (Array.isArray(route?.connections) ? route.connections : [])
+      .map(normalizeRouteConnection)
+      .filter(Boolean)
+      .forEach((connection) => addPlanetHyperlaneLink(linkMap, connection.startPlanetId, connection.endPlanetId));
+  });
+  return new Map([...linkMap.entries()].map(([planetId, neighbors]) => [planetId, neighbors.size]));
+}
+
+function getPlanetHyperlaneDegree(planetId) {
+  return Number(buildPlanetHyperlaneDegreeMap().get(planetId) || 0);
+}
+
+function isWarehousePlanetEligible(planetId) {
+  return getPlanetHyperlaneDegree(planetId) >= 1;
+}
+
+function getPlanetHyperlaneStatus(planetId) {
+  const degree = getPlanetHyperlaneDegree(planetId);
+  return {
+    degree,
+    isRoutePlanet: degree >= 1,
+    isLogisticsHub: degree >= 3
+  };
+}
+
 function getPlanetSlotUsage(planetId) {
   const slots = getPlanetResourceSlots(planetId);
   const used = slots.filter(Boolean).length;
@@ -4021,9 +5010,20 @@ function getMineProjectMeta(buildingKey) {
   return MINE_PROJECT_DEFS[buildingKey] || null;
 }
 
-function getMineProjectPlanetChoices() {
+function getMineProjectPlanetChoices(category = '') {
   return state.planets
     .filter((planet) => planet.owner === 'GAR')
+    .map((planet) => {
+      const hyperlaneStatus = getPlanetHyperlaneStatus(planet.id);
+      const storageEligible = category !== 'storage' || hyperlaneStatus.isRoutePlanet;
+      return {
+        ...planet,
+        hyperlaneDegree: hyperlaneStatus.degree,
+        isRoutePlanet: hyperlaneStatus.isRoutePlanet,
+        isLogisticsHub: hyperlaneStatus.isLogisticsHub,
+        storageEligible
+      };
+    })
     .sort((a, b) => a.name.localeCompare(b.name, 'de'));
 }
 
@@ -4672,6 +5672,11 @@ function startMineBuildProject() {
     setStatus('Bitte einen gültigen Gebäudetyp wählen.');
     return;
   }
+  if (project.category === 'storage' && !isWarehousePlanetEligible(planetId)) {
+    setStatus('Ressourcenlager nur auf Hyperraum-Routen-Planeten möglich.');
+    renderBuildProjectsView();
+    return;
+  }
   const slots = getPlanetResourceSlots(planetId);
   if (!Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex >= slots.length) {
     setStatus('Bitte einen freien Infrastruktur-Slot wählen.');
@@ -4794,14 +5799,21 @@ function renderMineBuildPlanetResults() {
   if (!resultsEl) return;
   resultsEl.innerHTML = '';
   const frag = document.createDocumentFragment();
+  const category = document.getElementById('infrastructureCategory')?.value || 'military';
   mineBuildPlanetSearchState.results.forEach((planet, index) => {
     const row = document.createElement('div');
     row.className = 'search-result' + (index === mineBuildPlanetSearchState.activeIndex ? ' active' : '');
-    row.innerHTML = `<strong>${planet.name}</strong><small>${planet.grid || '—'} • ${planet.sector || '—'} • ${planet.region || 'Unknown Region'}</small>`;
+    const storageBlocked = category === 'storage' && !planet.storageEligible;
+    row.innerHTML = `<strong>${planet.name}</strong><small>${planet.grid || '—'} • ${planet.sector || '—'} • ${planet.region || 'Unknown Region'}${storageBlocked ? ' • Keine Hyperraum-Anbindung' : ''}</small>`;
     row.addEventListener('mousedown', (event) => {
       event.preventDefault();
+      if (storageBlocked) {
+        setStatus('Ressourcenlager nur auf Hyperraum-Routen-Planeten möglich.');
+        return;
+      }
       chooseMineBuildPlanet(planet.id);
     });
+    row.classList.toggle('disabled', storageBlocked);
     frag.appendChild(row);
   });
   resultsEl.appendChild(frag);
@@ -4814,7 +5826,8 @@ function updateMineBuildPlanetSearch(query) {
     closeMineBuildPlanetResults();
     return;
   }
-  mineBuildPlanetSearchState.results = getMineProjectPlanetChoices()
+  const category = document.getElementById('infrastructureCategory')?.value || 'military';
+  mineBuildPlanetSearchState.results = getMineProjectPlanetChoices(category)
     .map((planet) => ({ planet, haystack: getPlanetSearchHaystack(planet) }))
     .filter((entry) => entry.haystack.includes(normalizedQuery))
     .sort((a, b) => a.planet.name.localeCompare(b.planet.name, 'de'))
@@ -4825,10 +5838,15 @@ function updateMineBuildPlanetSearch(query) {
 }
 
 function chooseMineBuildPlanet(planetId) {
-  const planet = getMineProjectPlanetChoices().find((entry) => entry.id === planetId);
+  const category = document.getElementById('infrastructureCategory')?.value || 'military';
+  const planet = getMineProjectPlanetChoices(category).find((entry) => entry.id === planetId);
   const input = document.getElementById('mineBuildPlanetSearch');
   const hidden = document.getElementById('mineBuildPlanet');
   if (!planet || !input || !hidden) return;
+  if (category === 'storage' && !planet.storageEligible) {
+    setStatus('Ressourcenlager nur auf Hyperraum-Routen-Planeten möglich.');
+    return;
+  }
   input.value = planet.name;
   hidden.value = planet.id;
   closeMineBuildPlanetResults();
@@ -5803,7 +6821,7 @@ function refreshSectorOverlayNow() {
 
 function updateSectorDrawButton() {
   if (!sectorDrawBtn) return;
-  sectorDrawBtn.classList.toggle('hidden', !isAdminRole());
+  sectorDrawBtn.classList.toggle('hidden', !isAdminRole() || !adminModeEnabled);
   sectorDrawBtn.textContent = activeSectorDraft ? 'Sektor abbrechen' : 'Sektor zeichnen';
 }
 
@@ -6288,7 +7306,10 @@ function continueAsGuest() {
   serverSync.session = { id: null, username: '', role: 'Viewer' };
   if (roleSelect) roleSelect.value = 'Viewer';
   hideLoginModal();
+  tutorialFlowState.shouldPrompt = false;
+  closeOverlayModal('tutorialModal', { restoreFocus: false });
   safeRefreshRoleChrome();
+  markBootTask('authReady', true);
   setStatus('Gastmodus aktiv.');
 }
 
@@ -6311,6 +7332,8 @@ async function logoutCurrentUser() {
   serverSync.session = { id: null, username: '', role: 'Viewer' };
   if (roleSelect) roleSelect.value = 'Viewer';
   safeRefreshRoleChrome();
+  tutorialFlowState.shouldPrompt = false;
+  closeOverlayModal('tutorialModal', { restoreFocus: false });
   showLoginModal();
   setStatus('Du wurdest ausgeloggt.');
 }
@@ -6341,6 +7364,7 @@ async function attemptLogin() {
     destroyServerSocketConnection();
     clearServerReconnectTimer();
     await bootstrapFromServer();
+    await checkTutorialStatus();
     if (selected?.type === 'planet') openPlanet(selected.id);
     if (selected?.type === 'fleet') openFleet(selected.id);
     if (selected?.type === 'route') openRoute(selected.id);
@@ -6380,15 +7404,18 @@ function getRoleFaction(role = currentRole()) {
 }
 
 function refreshRoleChrome() {
-  saveBtn.classList.toggle('hidden', !isAdminRole());
-  loginManagerTabBtn.classList.toggle('hidden', !canManageLogins());
-  radioCommandTabBtn.classList.toggle('hidden', !canManageRadioCommands());
+  const showAdminTools = isAdminRole() ? adminModeEnabled : true;
+  saveBtn.classList.toggle('hidden', !showAdminTools);
+  loginManagerTabBtn.classList.toggle('hidden', !canManageLogins() || (isAdminRole() && !adminModeEnabled));
+  radioCommandTabBtn.classList.toggle('hidden', !canManageRadioCommands() || (isAdminRole() && !adminModeEnabled));
   buildProjectsTabBtn.classList.remove('hidden');
   updateSectorDrawButton();
   document.querySelector('[data-main-tab="fleetManagement"]')?.classList.toggle('hidden', currentRole() === 'Senat');
   document.querySelector('[data-main-tab="shipyard"]')?.classList.toggle('hidden', currentRole() === 'Senat');
   roleSelect.disabled = true;
   updateSessionDisplay();
+  if (settingsModal?.classList.contains('active')) renderSettingsModal();
+  syncSettingsModalState();
   if (!canManageLogins() && activeMainTab === 'loginManager') setMainTab('map');
   if (!canManageRadioCommands() && activeMainTab === 'radioCommandCenter') setMainTab('map');
   if (currentRole() === 'Senat' && (activeMainTab === 'fleetManagement' || activeMainTab === 'shipyard')) setMainTab('buildProjects');
@@ -8870,6 +9897,10 @@ function openPlanet(id) {
   const canEditDescription = canEditPlanetDescription(p);
   const resourceSlots = getPlanetResourceSlots(p.id);
   const routeNames = getPlanetRouteNames(p.id);
+  const hyperlaneStatus = getPlanetHyperlaneStatus(p.id);
+  const hyperlaneBadge = hyperlaneStatus.isLogisticsHub
+    ? 'Hyperraum-Hub'
+    : (hyperlaneStatus.isRoutePlanet ? 'Routen-Planet' : 'Isolierter Planet');
   const militaryInfrastructureOptions = Object.entries(MINE_PROJECT_DEFS)
     .filter(([, entry]) => entry.category === 'military')
     .map(([key, entry]) => `<option value="${key}">${entry.label}</option>`)
@@ -8969,6 +10000,10 @@ function openPlanet(id) {
       <div class="planet-card-top">
         <p class="planet-card-kicker">${sanitizePlanetInfoText(p.sector || 'Unbekannter Sektor')}</p>
         <p class="planet-card-control"><span class="planet-card-control-dot ${ownerDotClass}"></span>${getOwnerLabel(p.owner)}-Kontrolle</p>
+        <div class="planet-card-chip-group" style="margin-top:8px">
+          <span class="planet-card-chip">${hyperlaneBadge}</span>
+          <span class="planet-card-chip">${hyperlaneStatus.degree} Hyperraum-Verbindung${hyperlaneStatus.degree === 1 ? '' : 'en'}</span>
+        </div>
       </div>
       <div class="planet-card-hero">
         ${cardInfo.image
@@ -11248,6 +12283,9 @@ function renderSectorEconomySection() {
         <div class="stat-card"><strong>Embargo</strong><span>${selected.economy?.isEmbargoed ? 'Aktiv' : 'Nein'}</span></div>
         <div class="stat-card"><strong>Wirtschaft</strong><span>${escapeLoginManagerText(selected.economy?.economyState || 'Normal')}</span></div>
         <div class="stat-card"><strong>Marktstimmung</strong><span>${escapeLoginManagerText(selected.economy?.marketSentiment || 'Neutral')}</span></div>
+        <div class="stat-card"><strong>Routen-Planeten</strong><span>${Number(selected.routePlanetCount || 0)}</span></div>
+        <div class="stat-card"><strong>Hyperraum-Hubs</strong><span>${Number(selected.logisticsHubCount || 0)}</span></div>
+        <div class="stat-card"><strong>Hub-Bonus</strong><span>+${Math.round(Number(selected.logisticsHubBonus || selected.economy?.logisticsHubBonus || 0) * 100)}%</span></div>
         ${renderEconomyMetricCard('Verbraucher', selected.economy?.consumerStrength)}
         ${renderEconomyMetricCard('Industrie', selected.economy?.industryStrength)}
         ${renderEconomyMetricCard('Logistik', selected.economy?.logisticsStrength)}
@@ -11258,6 +12296,7 @@ function renderSectorEconomySection() {
       </div>
       ${warning}
       ${excluded}
+      ${!selected.isEconomyExcluded ? `<div class="overlay-helper-text">Logistik-Hubs geben Logistik-Unternehmen im Sektor +15% Logistikwert pro Hub, maximal +50%.</div>` : ''}
       ${selected.isEconomyExcluded ? '' : `
         <div class="workspace-section workspace-columns">
           <div class="workspace-card">
@@ -11772,13 +12811,13 @@ function renderBuildProjectsView() {
   const buildJobs = state.buildJobs
     .filter((job) => (role === 'Admin' ? true : job.faction === faction))
     .sort((a, b) => Number(a.finishesAt || 0) - Number(b.finishesAt || 0));
-  const minePlanetChoices = getMineProjectPlanetChoices();
-  const selectedPlanetId = document.getElementById('mineBuildPlanet')?.value || minePlanetChoices[0]?.id || '';
-  const selectedPlanet = minePlanetChoices.find((planet) => planet.id === selectedPlanetId) || minePlanetChoices[0] || null;
   const requestedCategory = document.getElementById('infrastructureCategory')?.value || 'military';
   const selectedCategory = ['military', 'civilian', 'development', 'storage'].includes(requestedCategory)
     ? requestedCategory
     : 'military';
+  const minePlanetChoices = getMineProjectPlanetChoices(selectedCategory);
+  const selectedPlanetId = document.getElementById('mineBuildPlanet')?.value || minePlanetChoices[0]?.id || '';
+  const selectedPlanet = minePlanetChoices.find((planet) => planet.id === selectedPlanetId) || minePlanetChoices[0] || null;
   const categoryProjects = Object.entries(MINE_PROJECT_DEFS).filter(([, project]) => project.category === selectedCategory);
   const requestedBuildingKey = document.getElementById('mineBuildResource')?.value || '';
   const selectedBuildingKey = categoryProjects.some(([key]) => key === requestedBuildingKey)
@@ -11796,6 +12835,7 @@ function renderBuildProjectsView() {
   const transportJobs = buildJobs.filter((job) => job.jobType === 'transport');
   const canStartMineProject = canBuildMineProjects();
   const canManageLogistics = canManageWarehouseLogistics();
+  const storageBuildBlocked = selectedCategory === 'storage' && selectedPlanet && !selectedPlanet.storageEligible;
   workspacePanel.innerHTML = `
     <div class="workspace-head">
       <div>
@@ -11820,6 +12860,7 @@ function renderBuildProjectsView() {
             <input id="mineBuildPlanet" type="hidden" value="${selectedPlanet?.id || ''}">
             <div id="mineBuildPlanetResults" class="inline-search-results hidden"></div>
           </div>
+          ${selectedCategory === 'storage' ? `<small>${selectedPlanet && !selectedPlanet.storageEligible ? 'Ressourcenlager nur auf Hyperraum-Routen-Planeten möglich.' : 'Ressourcenlager sind nur auf Planeten mit mindestens einer Hyperraum-Verbindung erlaubt.'}</small>` : ''}
         </div>
         <div class="form-row">
           <label>Gebäudekategorie</label>
@@ -11857,7 +12898,7 @@ function renderBuildProjectsView() {
           <p>${RESOURCE_KEYS.map((key) => `${RESOURCE_LABELS[key]}: ${selectedMineMeta?.cost?.[key] || 0}`).join(' • ')}</p>
           <p><strong>Bauzeit:</strong> ${MINE_BUILD_DURATION_HOURS}h</p>
         </div>
-        <button class="primary" onclick="startMineBuildProject()" ${(canStartMineProject && availableSlots.length && canAffordGarInfrastructureCost(selectedMineMeta?.cost || {})) ? '' : 'disabled'}>Infrastrukturprojekt starten</button>
+        <button class="primary" onclick="startMineBuildProject()" ${(canStartMineProject && availableSlots.length && !storageBuildBlocked && canAffordGarInfrastructureCost(selectedMineMeta?.cost || {})) ? '' : 'disabled'}>Infrastrukturprojekt starten</button>
       </div>
       <div class="workspace-card">
         <h3>Produktion auf ${selectedPlanet?.name || 'Planet'}</h3>
@@ -12323,35 +13364,16 @@ if (sectorDrawBtn) {
   };
 }
 document.getElementById('viewModeBtn').onclick = () => {
-  viewMode = viewMode === 'image' ? 'schematic' : 'image';
-  tacticalSectionCanvasCache.clear();
-  tacticalHoverAreas = { regions: [], sectors: [] };
-  tacticalBaseReady = false;
-  tacticalBuildQueued = false;
-  tacticalBuildVersion += 1;
-  saveClientUiPrefs();
-  applyViewMode();
-  render({ layers: true, frontline: true });
+  setViewModePreference(viewMode === 'image' ? 'schematic' : 'image');
   setStatus(viewMode === 'schematic' ? 'Schematische Operationskarte aktiviert.' : 'Bildkarte aktiviert.');
 };
 document.getElementById('layersBtn').onclick = () => {
-  const panel = document.getElementById('layersPanel');
-  panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
+  renderSettingsModal();
+  openOverlayModal('settingsModal');
 };
 document.querySelectorAll('[data-layer]').forEach((cb) => {
   cb.onchange = () => {
-    layers[cb.dataset.layer] = cb.checked;
-    saveClientUiPrefs();
-    const affectsTacticalCanvas = ['grid', 'hyperlanes', 'sectorLabels'].includes(cb.dataset.layer);
-    const affectsInfluence = cb.dataset.layer === 'sectorLabels';
-    const affectsRouteNetwork = cb.dataset.layer === 'hyperlanes';
-    markDirty({
-      layers: true,
-      tacticalBase: affectsTacticalCanvas,
-      influence: affectsInfluence,
-      frontline: affectsRouteNetwork,
-      routeOverlay: affectsRouteNetwork
-    });
+    setLayerPreference(cb.dataset.layer, cb.checked);
   };
 });
 syncLayerCheckboxes();
@@ -12409,6 +13431,18 @@ document.addEventListener('keydown', (event) => {
     planetSearchInput.focus();
     planetSearchInput.select();
   }
+  if (activeOverlayModalId) {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      if (activeOverlayModalId === 'tutorialModal' && tutorialFlowState.shouldPrompt) {
+        finishTutorialFlow('skipped');
+        return;
+      }
+      closeOverlayModal(activeOverlayModalId);
+      return;
+    }
+    trapFocusInModal(event);
+  }
   if (event.key === 'Escape') {
     closeContextMenu();
     if (activeSectorDraft) cancelSectorDraft();
@@ -12421,12 +13455,24 @@ document.addEventListener('keydown', (event) => {
 
 document.addEventListener('pointerdown', (event) => {
   if (event.target.closest('#loginModal')) return;
+  if (event.target.closest('.overlay-modal-card')) return;
   if (event.target.closest('.search-wrap')) return;
   closePlanetSearchResults(false);
   if (event.target.closest('.inline-search-wrap')) return;
   closeFleetJumpResults();
   closeFleetManagementSearchResults(false);
   if (!event.target.closest('#contextMenu')) closeContextMenu();
+});
+document.addEventListener('click', (event) => {
+  const closeTrigger = event.target.closest('[data-close-modal]');
+  if (!closeTrigger) return;
+  const modalId = closeTrigger.getAttribute('data-close-modal');
+  if (!modalId) return;
+  if (modalId === 'tutorialModal' && tutorialFlowState.shouldPrompt) {
+    finishTutorialFlow('skipped');
+    return;
+  }
+  closeOverlayModal(modalId);
 });
 mainNavToggle.onclick = () => {
   setNavCollapsed(!navCollapsed);
@@ -12469,6 +13515,17 @@ loginModalUser?.addEventListener('keydown', (event) => {
   }
 });
 try {
+  startBootSequence();
+  markBootTask('domReady', true);
+  if (mapEl?.complete) {
+    markBootTask('mapImageReady', true);
+  } else {
+    mapEl?.addEventListener('load', () => markBootTask('mapImageReady', true), { once: true });
+    mapEl?.addEventListener('error', () => {
+      console.warn('Galaxy map image failed to load; continuing.');
+      markBootTask('mapImageReady', true);
+    }, { once: true });
+  }
   applyDefaultAnonymousRole();
   loadClientUiPrefs();
   syncLayerCheckboxes();
@@ -12477,9 +13534,15 @@ try {
   safeRefreshRoleChrome();
   bootstrapFromServer();
   syncMobileOrientationUi();
+  if (!serverSync.enabled) {
+    markBootTask('campaignReady', true);
+    markBootTask('authReady', true);
+  }
 } catch (error) {
   console.error('Initial app startup failed', error);
   continueAsGuest();
+  markBootTask('campaignReady', true);
+  markBootTask('authReady', true);
   setStatus('Initialisierung teilweise fehlgeschlagen; Gastmodus aktiv.');
 }
 window.addEventListener('resize', syncMobileOrientationUi);

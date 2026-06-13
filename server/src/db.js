@@ -199,6 +199,60 @@ function distanceBetween(left, right) {
   return Math.hypot(Number(left?.x || 0) - Number(right?.x || 0), Number(left?.y || 0) - Number(right?.y || 0));
 }
 
+function addPlanetRouteLink(linkMap, leftId, rightId) {
+  const a = String(leftId || '').trim();
+  const b = String(rightId || '').trim();
+  if (!a || !b || a === b) return;
+  if (!linkMap.has(a)) linkMap.set(a, new Set());
+  if (!linkMap.has(b)) linkMap.set(b, new Set());
+  linkMap.get(a).add(b);
+  linkMap.get(b).add(a);
+}
+
+function normalizeCustomRouteConnection(connection) {
+  const startPlanetId = String(connection?.startPlanetId || '').trim();
+  const endPlanetId = String(connection?.endPlanetId || '').trim();
+  if (!startPlanetId || !endPlanetId || startPlanetId === endPlanetId) return null;
+  return { startPlanetId, endPlanetId };
+}
+
+function buildPlanetHyperlaneDegreeMap(state) {
+  const planets = Array.isArray(state?.planets) ? state.planets : [];
+  const linkMap = new Map(planets.map((planet) => [String(planet.id || '').trim(), new Set()]));
+  const radiusSq = 120 * 120;
+
+  for (let index = 0; index < planets.length; index += 1) {
+    const base = planets[index];
+    const baseId = String(base?.id || '').trim();
+    if (!baseId) continue;
+    const candidates = [];
+    for (let otherIndex = 0; otherIndex < planets.length; otherIndex += 1) {
+      if (index === otherIndex) continue;
+      const other = planets[otherIndex];
+      const otherId = String(other?.id || '').trim();
+      if (!otherId) continue;
+      const dx = Number(base?.x || 0) - Number(other?.x || 0);
+      const dy = Number(base?.y || 0) - Number(other?.y || 0);
+      const distanceSq = dx * dx + dy * dy;
+      if (distanceSq <= radiusSq) candidates.push([distanceSq, otherId]);
+    }
+    candidates
+      .sort((left, right) => left[0] - right[0])
+      .slice(0, 3)
+      .forEach(([, otherId]) => addPlanetRouteLink(linkMap, baseId, otherId));
+  }
+
+  const customRoutes = Array.isArray(state?.meta?.customRoutes) ? state.meta.customRoutes : [];
+  customRoutes.forEach((route) => {
+    (Array.isArray(route?.connections) ? route.connections : [])
+      .map(normalizeCustomRouteConnection)
+      .filter(Boolean)
+      .forEach((connection) => addPlanetRouteLink(linkMap, connection.startPlanetId, connection.endPlanetId));
+  });
+
+  return new Map([...linkMap.entries()].map(([planetId, neighbors]) => [planetId, neighbors.size]));
+}
+
 function getMarketResourceConfig(resourceKey) {
   return RESOURCE_MARKET_CONFIG[resourceKey] || null;
 }
@@ -311,9 +365,20 @@ function summarizeSectorSlots(state, planetIds) {
 
 function buildSectorMembership(state, manualSectors) {
   const planets = Array.isArray(state?.planets) ? state.planets : [];
+  const degreeMap = buildPlanetHyperlaneDegreeMap(state);
   return manualSectors.map((sector) => {
     const points = Array.isArray(sector?.points) ? sector.points : [];
-    const sectorPlanets = planets.filter((planet) => pointInPolygon({ x: Number(planet?.x), y: Number(planet?.y) }, points));
+    const sectorPlanets = planets
+      .filter((planet) => pointInPolygon({ x: Number(planet?.x), y: Number(planet?.y) }, points))
+      .map((planet) => {
+        const routeDegree = Number(degreeMap.get(String(planet.id || '').trim()) || 0);
+        return {
+          ...planet,
+          routeDegree,
+          isRoutePlanet: routeDegree >= 1,
+          isLogisticsHub: routeDegree >= 3
+        };
+      });
     const planetIds = new Set(sectorPlanets.map((planet) => planet.id));
     const ownerCounts = new Map();
     sectorPlanets.forEach((planet) => {
@@ -328,6 +393,8 @@ function buildSectorMembership(state, manualSectors) {
       centroid: centroidOfPoints(points),
       planets: sectorPlanets,
       planetIds,
+      routePlanetCount: sectorPlanets.filter((planet) => planet.isRoutePlanet).length,
+      logisticsHubCount: sectorPlanets.filter((planet) => planet.isLogisticsHub).length,
       ownerCounts,
       dominantOwner,
       slotSummary: summarizeSectorSlots(state, planetIds)
@@ -480,6 +547,14 @@ export function createDb(projectRoot) {
       original_message TEXT NOT NULL,
       payload_json TEXT,
       created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS tutorial_seen_ips (
+      id TEXT PRIMARY KEY,
+      ip_hash TEXT UNIQUE NOT NULL,
+      first_seen_at TEXT NOT NULL,
+      completed_at TEXT,
+      skipped_at TEXT
     );
 
     CREATE TABLE IF NOT EXISTS market_companies (
@@ -2445,7 +2520,9 @@ export function calculateResourceDemand(sectorId, resourceType, state, options =
   const warPressure = clamp((military * 0.03) + (shipProjects * 0.12) + (fleets * 0.025) + Math.max(0, ownerCount - 1) * 0.14, 0, 2.4);
   const populationIndex = clamp(0.45 + (planets * 0.055) + (civilians * 0.035) + (development * 0.03), 0.4, 3.2);
   const industrialIndex = clamp(0.4 + (military * 0.05) + (development * 0.045) + (shipProjects * 0.1), 0.3, 3.2);
-  const logisticsIndex = clamp(0.45 + (civilians * 0.03) + (fleets * 0.04) + (planets * 0.02), 0.3, 2.8);
+  const hubBonus = clamp(Number(sector.logisticsHubCount || 0) * 0.15, 0, 0.5);
+  const logisticsIndexBase = 0.45 + (civilians * 0.03) + (fleets * 0.04) + (planets * 0.02);
+  const logisticsIndex = clamp(logisticsIndexBase * (1 + hubBonus), 0.3, 3.9);
   const consumerConfidence = clamp(1.08 - options.inflationRate * 0.85 - (warPressure * 0.12) + (options.policy?.subsidy === 'civilian' ? 0.08 : 0), 0.55, 1.35);
   const infrastructureDemand = clamp(0.55 + (mineProjects * 0.16) + (development * 0.035) + (shipProjects * 0.06), 0.4, 2.6);
   const blackMarketPressure = clamp((warPressure * 0.18) + (options.inflationRate * 0.6) + (sector.dominantOwner === 'HUTT' ? 0.22 : 0), 0, 1.8);
@@ -2555,6 +2632,10 @@ export function calculateResourceDemand(sectorId, resourceType, state, options =
       consumerConfidence: round2(consumerConfidence),
       infrastructureDemand: round2(infrastructureDemand),
       blackMarketPressure: round2(blackMarketPressure)
+      ,
+      logisticsHubBonus: round2(hubBonus),
+      logisticsHubCount: Number(sector.logisticsHubCount || 0),
+      routePlanetCount: Number(sector.routePlanetCount || 0)
     }
   };
 }
@@ -3351,6 +3432,9 @@ function normalizeSectorEconomyRow(db, sector) {
       baradium: round2(Number(row?.stockpileChemicals || 0))
     },
     blackMarketPressure: toMetric(row?.blackMarketPressure || (isEmbargoed ? 1.2 : 0.15)),
+    logisticsHubCount: Number(sector.logisticsHubCount || 0),
+    routePlanetCount: Number(sector.routePlanetCount || 0),
+    logisticsHubBonus: round2(clamp(Number(sector.logisticsHubCount || 0) * 0.15, 0, 0.5)),
     lastUpdated: row?.lastUpdated || row?.lastDemandTick || null
   };
 }
@@ -3582,7 +3666,10 @@ export function listEconomySectors(db, state) {
       isEmbargoed: economy.isEmbargoed,
       economyState: economy.economyState,
       isEconomyExcluded: isEconomyExcludedSector(sector.name),
-      planetCount: sector.planets.length
+      planetCount: sector.planets.length,
+      routePlanetCount: Number(sector.routePlanetCount || 0),
+      logisticsHubCount: Number(sector.logisticsHubCount || 0),
+      logisticsHubBonus: economy.logisticsHubBonus
     };
   }).sort((left, right) => left.name.localeCompare(right.name, 'de', { numeric: true }));
 }
@@ -3604,6 +3691,9 @@ export function readEconomySector(db, state, sectorId) {
       isEconomyExcluded: true,
       exclusionReason: 'Dieser Sektor hat keine Wirtschaft und keine Holdings.',
       economy,
+      routePlanetCount: Number(sector.routePlanetCount || 0),
+      logisticsHubCount: Number(sector.logisticsHubCount || 0),
+      logisticsHubBonus: economy.logisticsHubBonus,
       mines: { civilian: [], military: [], infrastructure: [] },
       holdings: [],
       resourcePrices: [],
@@ -3616,6 +3706,9 @@ export function readEconomySector(db, state, sectorId) {
     name: sector.name,
     isEconomyExcluded: false,
     economy,
+    routePlanetCount: Number(sector.routePlanetCount || 0),
+    logisticsHubCount: Number(sector.logisticsHubCount || 0),
+    logisticsHubBonus: economy.logisticsHubBonus,
     mines: {
       civilian: infrastructure.civilian,
       military: infrastructure.military

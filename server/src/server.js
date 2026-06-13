@@ -53,7 +53,8 @@ const PLANET_OWNERSHIP_REFERENCE_PATH = path.join(projectRoot, 'server', 'data',
 const HIDDEN_PLANET_OWNER_FALLBACK_PATH = path.join(projectRoot, 'server', 'data', 'hiddenPlanetOwnerFallback.json');
 
 const app = express();
-app.set('trust proxy', 1);
+app.set('trust proxy', true);
+const TUTORIAL_IP_SALT = String(process.env.TUTORIAL_IP_SALT || 'gcb-dev-tutorial-salt').trim() || 'gcb-dev-tutorial-salt';
 const sslOptions = {
   key: fs.readFileSync('C:/Users/Administrator/galactic-campaign/privkey.pem'),
   cert: fs.readFileSync('C:/Users/Administrator/galactic-campaign/fullchain.pem')
@@ -396,6 +397,55 @@ function refreshUserSessions(userId, user) {
 function getSession(req) {
   const token = req.cookies?.[COOKIE_NAME];
   return token ? sessions.get(token) || null : null;
+}
+
+function getTutorialIpHash(req) {
+  const ip = String(req.ip || req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown').trim();
+  return crypto.createHash('sha256').update(`${ip}${TUTORIAL_IP_SALT}`).digest('hex');
+}
+
+function readTutorialSeenIp(ipHash) {
+  return db.prepare(`
+    SELECT id, ip_hash AS ipHash, first_seen_at AS firstSeenAt,
+      completed_at AS completedAt, skipped_at AS skippedAt
+    FROM tutorial_seen_ips
+    WHERE ip_hash = ?
+  `).get(ipHash);
+}
+
+function shouldShowTutorialForRequest(req) {
+  const session = getSession(req);
+  if (!session?.id || session.role === 'Viewer') return false;
+  const ipHash = getTutorialIpHash(req);
+  const existing = readTutorialSeenIp(ipHash);
+  if (!existing) {
+    db.prepare(`
+      INSERT INTO tutorial_seen_ips (id, ip_hash, first_seen_at, completed_at, skipped_at)
+      VALUES (?, ?, ?, NULL, NULL)
+    `).run(crypto.randomUUID(), ipHash, new Date().toISOString());
+    return true;
+  }
+  return !existing.completedAt && !existing.skippedAt;
+}
+
+function completeTutorialForRequest(req, action = 'completed') {
+  const ipHash = getTutorialIpHash(req);
+  const nowIso = new Date().toISOString();
+  db.prepare(`
+    INSERT INTO tutorial_seen_ips (id, ip_hash, first_seen_at, completed_at, skipped_at)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(ip_hash) DO UPDATE SET
+      completed_at = CASE WHEN ? = 'completed' THEN excluded.completed_at ELSE tutorial_seen_ips.completed_at END,
+      skipped_at = CASE WHEN ? = 'skipped' THEN excluded.skipped_at ELSE tutorial_seen_ips.skipped_at END
+  `).run(
+    crypto.randomUUID(),
+    ipHash,
+    nowIso,
+    action === 'completed' ? nowIso : null,
+    action === 'skipped' ? nowIso : null,
+    action,
+    action
+  );
 }
 
 function canManageLogins(role) {
@@ -979,6 +1029,26 @@ app.get('/api/auth/me', (req, res) => {
   res.json({
     user: session || { id: null, username: '', role: 'Viewer', canCoordinate4thFleet: false, senatePosition: '' }
   });
+});
+
+app.get('/api/tutorial/status', (req, res) => {
+  try {
+    res.json({ shouldShowTutorial: shouldShowTutorialForRequest(req) });
+  } catch (error) {
+    console.error('Tutorial status failed', error);
+    res.status(500).json({ error: 'tutorial_status_failed', shouldShowTutorial: false });
+  }
+});
+
+app.post('/api/tutorial/complete', requireAuth, (req, res) => {
+  const action = req.body?.action === 'skipped' ? 'skipped' : 'completed';
+  try {
+    completeTutorialForRequest(req, action);
+    res.json({ ok: true, action });
+  } catch (error) {
+    console.error('Tutorial completion failed', error);
+    res.status(500).json({ error: 'tutorial_complete_failed' });
+  }
 });
 
 app.get('/api/planet-card/:planetId', async (req, res) => {
