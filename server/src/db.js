@@ -707,6 +707,7 @@ export function createDb(projectRoot) {
     CREATE TABLE IF NOT EXISTS tutorial_seen_ips (
       id TEXT PRIMARY KEY,
       ip_hash TEXT UNIQUE NOT NULL,
+      user_id TEXT,
       first_seen_at TEXT NOT NULL,
       completed_at TEXT,
       skipped_at TEXT
@@ -1250,6 +1251,11 @@ export function createDb(projectRoot) {
     SET portfolio_enabled = 0
     WHERE user_id IS NULL OR trim(user_id) = ''
   `).run();
+  const tutorialSeenColumns = new Set(db.prepare('PRAGMA table_info(tutorial_seen_ips)').all().map((column) => column.name));
+  if (!tutorialSeenColumns.has('user_id')) {
+    db.exec('ALTER TABLE tutorial_seen_ips ADD COLUMN user_id TEXT');
+  }
+  db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_tutorial_seen_ips_user_id ON tutorial_seen_ips(user_id) WHERE user_id IS NOT NULL');
   db.prepare(`
     UPDATE market_companies
     SET corporate_strategy = CASE
@@ -4030,7 +4036,6 @@ export function runInstitutionalInvestorTick(state, options = {}) {
 }
 
 export function readMarketSnapshot(db, investorId = '', userId = '') {
-  const campaignState = readCampaignState(db).state;
   const portfolio = investorId ? ensureRecentPortfolioSnapshot(db, investorId) : null;
   const companies = db.prepare(`
     SELECT id, symbol, name, faction, base_price AS basePrice,
@@ -4065,36 +4070,30 @@ export function readMarketSnapshot(db, investorId = '', userId = '') {
     marketStatusLabel: displayMarketStatus(company.marketStatus),
     isEmbargoed: Boolean(company.isEmbargoed)
   }));
-  const corporateAssetsByCompany = new Map();
-  db.prepare(`
-    SELECT id, company_id AS companyId, sector_id AS sectorId, planet_id AS planetId,
-      building_type AS buildingType, resource_type AS resourceType,
-      production_per_hour AS productionPerHour, revenue_per_hour AS revenuePerHour,
-      maintenance_cost_per_hour AS maintenanceCostPerHour, condition_index AS conditionIndex,
-      risk_index AS riskIndex, damage_index AS damageIndex, blockade_index AS blockadeIndex,
-      strategic_value AS strategicValue, created_at AS createdAt, updated_at AS updatedAt
-    FROM corporate_assets
-    ORDER BY created_at DESC
-  `).all().forEach((asset) => {
-    if (!corporateAssetsByCompany.has(asset.companyId)) corporateAssetsByCompany.set(asset.companyId, []);
-    corporateAssetsByCompany.get(asset.companyId).push(asset);
-  });
-  const corporateProjectsByCompany = new Map();
-  db.prepare(`
-    SELECT id, company_id AS companyId, sector_id AS sectorId, planet_id AS planetId,
-      building_type AS buildingType, resource_type AS resourceType, status,
-      started_at AS startedAt, completes_at AS completesAt, cost_resources_json AS costResourcesJson,
-      cost_credits AS costCredits, expected_roi AS expectedRoi, reason, created_at AS createdAt, updated_at AS updatedAt
-    FROM corporate_build_projects
-    ORDER BY created_at DESC
-  `).all().forEach((project) => {
-    if (!corporateProjectsByCompany.has(project.companyId)) corporateProjectsByCompany.set(project.companyId, []);
-    corporateProjectsByCompany.get(project.companyId).push({ ...project, costResources: sanitizeResourceBag(project.costResourcesJson) });
-  });
+  const corporateAssetStatsByCompany = new Map(
+    db.prepare(`
+      SELECT company_id AS companyId, COUNT(*) AS assetCount
+      FROM corporate_assets
+      GROUP BY company_id
+    `).all().map((row) => [row.companyId, Number(row.assetCount || 0)])
+  );
+  const corporateProjectStatsByCompany = new Map(
+    db.prepare(`
+      SELECT company_id AS companyId,
+        COUNT(*) AS projectCount,
+        SUM(CASE WHEN status IN ('planned', 'building') THEN 1 ELSE 0 END) AS activeProjectCount
+      FROM corporate_build_projects
+      GROUP BY company_id
+    `).all().map((row) => [row.companyId, {
+      projectCount: Number(row.projectCount || 0),
+      activeProjectCount: Number(row.activeProjectCount || 0)
+    }])
+  );
   companies.forEach((company) => {
-    company.corporateAssets = readCompanyCorporateAssets(db, campaignState, company.id);
-    company.corporateProjects = readCompanyCorporateProjects(db, company.id, campaignState);
-    company.solvencyDiagnosis = diagnoseHoldingSolvency(db, company.id);
+    const projectStats = corporateProjectStatsByCompany.get(company.id) || {};
+    company.corporateAssetCount = Number(corporateAssetStatsByCompany.get(company.id) || 0);
+    company.corporateProjectCount = Number(projectStats.projectCount || 0);
+    company.activeCorporateProjectCount = Number(projectStats.activeProjectCount || 0);
   });
   const historyCutoff = new Date(Date.now() - ACP_HISTORY_WINDOW_MS).toISOString();
   const historyRows = db.prepare(`
@@ -4223,6 +4222,74 @@ export function readMarketSnapshot(db, investorId = '', userId = '') {
     institutionalInvestors,
     institutionalTrades,
     acp
+  };
+}
+
+export function readMarketCompanyDetail(db, companyId) {
+  const normalizedCompanyId = String(companyId || '').trim();
+  if (!normalizedCompanyId) {
+    const error = new Error('Holding nicht gefunden.');
+    error.status = 404;
+    throw error;
+  }
+  const state = readCampaignState(db).state;
+  const row = db.prepare(`
+    SELECT id, symbol, name, faction, base_price AS basePrice,
+      sector, sector_id AS sectorId, resource_key AS resourceKey, resource_refs_json AS resourceRefsJson,
+      market_status AS marketStatus, bankruptcy_risk AS bankruptcyRisk,
+      debt_index AS debtIndex, confidence_index AS confidenceIndex,
+      risk_since AS riskSince, suspended_since AS suspendedSince, insolvent_since AS insolventSince,
+      is_embargoed AS isEmbargoed, acquired_by_company_id AS acquiredByCompanyId,
+      corporate_cash AS corporateCash, corporate_resources_json AS corporateResourcesJson,
+      corporate_strategy AS corporateStrategy, expansion_score AS expansionScore,
+      monopoly_score AS monopolyScore, corporate_build_cooldown_until AS corporateBuildCooldownUntil,
+      last_corporate_build_at AS lastCorporateBuildAt, corporate_builds_48h AS corporateBuilds48h,
+      private_asset_value AS privateAssetValue, private_production_json AS privateProductionJson,
+      state_contract_revenue_per_hour AS stateContractRevenuePerHour,
+      state_contract_output_json AS stateContractOutputJson,
+      state_contract_score AS stateContractScore,
+      state_backed_slot_count AS stateBackedSlotCount,
+      merged_name AS mergedName, current_price AS currentPrice,
+      previous_price AS previousPrice, total_shares AS totalShares,
+      free_float_shares AS freeFloatShares, locked_institutional_shares AS lockedInstitutionalShares,
+      market_cap AS marketCap, major_shareholders_json AS majorShareholdersJson,
+      controlling_shareholder AS controllingShareholder, ownership_updated_at AS ownershipUpdatedAt,
+      updated_at AS updatedAt
+    FROM market_companies
+    WHERE id = ?
+    LIMIT 1
+  `).get(normalizedCompanyId);
+  if (!row) {
+    const error = new Error('Holding nicht gefunden.');
+    error.status = 404;
+    throw error;
+  }
+  const economy = row.sectorId ? normalizeSectorEconomyRow(db, { id: row.sectorId, name: row.sector }) : null;
+  const rawStatus = normalizeMarketStatus(row.marketStatus);
+  const marketStatus = economy?.isEmbargoed || Number(row.isEmbargoed || 0) ? 'embargo' : rawStatus;
+  const projectStats = db.prepare(`
+    SELECT COUNT(*) AS projectCount,
+      SUM(CASE WHEN status IN ('planned', 'building') THEN 1 ELSE 0 END) AS activeProjectCount
+    FROM corporate_build_projects
+    WHERE company_id = ?
+  `).get(normalizedCompanyId) || {};
+  return {
+    ...row,
+    name: row.mergedName || row.name,
+    resourceRefs: parseResourceRefs(row),
+    majorShareholders: safeJsonParse(row.majorShareholdersJson, []),
+    corporateResources: sanitizeResourceBag(row.corporateResourcesJson),
+    privateProduction: sanitizeResourceBag(row.privateProductionJson),
+    stateContractOutput: sanitizeResourceBag(row.stateContractOutputJson),
+    marketStatus,
+    marketStatusLabel: displayMarketStatus(marketStatus),
+    isEmbargoed: marketStatus === 'embargo',
+    corporateAssetCount: Number(db.prepare('SELECT COUNT(*) AS count FROM corporate_assets WHERE company_id = ?').get(normalizedCompanyId)?.count || 0),
+    corporateProjectCount: Number(projectStats.projectCount || 0),
+    activeCorporateProjectCount: Number(projectStats.activeProjectCount || 0),
+    corporateAssets: readCompanyCorporateAssets(db, state, normalizedCompanyId),
+    corporateProjects: readCompanyCorporateProjects(db, normalizedCompanyId, state),
+    solvencyDiagnosis: diagnoseHoldingSolvency(db, normalizedCompanyId)
   };
 }
 

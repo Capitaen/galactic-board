@@ -23,6 +23,7 @@ import {
   purchaseMarketDemand,
   readCompanyOwnership,
   readCampaignState,
+  readMarketCompanyDetail,
   readEconomySector,
   readEconomySectorHoldings,
   readMarketSnapshot,
@@ -402,52 +403,86 @@ function getSession(req) {
   return token ? sessions.get(token) || null : null;
 }
 
-function getTutorialIpHash(req) {
-  const ip = String(req.ip || req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown').trim();
-  return crypto.createHash('sha256').update(`${ip}${TUTORIAL_IP_SALT}`).digest('hex');
+function getTutorialSeenKeyHash(req, userId = '') {
+  const normalizedUserId = String(userId || '').trim();
+  const rawKey = normalizedUserId
+    ? `user:${normalizedUserId}`
+    : String(req.ip || req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown').trim();
+  return crypto.createHash('sha256').update(`${rawKey}${TUTORIAL_IP_SALT}`).digest('hex');
 }
 
-function readTutorialSeenIp(ipHash) {
-  return db.prepare(`
-    SELECT id, ip_hash AS ipHash, first_seen_at AS firstSeenAt,
+function getTutorialSeenRecord(req) {
+  const session = getSession(req);
+  const userId = String(session?.id || '').trim();
+  const ipHash = getTutorialSeenKeyHash(req, userId);
+  if (userId) {
+    const byUser = db.prepare(`
+      SELECT id, ip_hash AS ipHash, user_id AS userId, first_seen_at AS firstSeenAt,
+        completed_at AS completedAt, skipped_at AS skippedAt
+      FROM tutorial_seen_ips
+      WHERE user_id = ?
+    `).get(userId);
+    if (byUser) return { record: byUser, userId, ipHash };
+  }
+  const byIp = db.prepare(`
+    SELECT id, ip_hash AS ipHash, user_id AS userId, first_seen_at AS firstSeenAt,
       completed_at AS completedAt, skipped_at AS skippedAt
     FROM tutorial_seen_ips
     WHERE ip_hash = ?
   `).get(ipHash);
+  return { record: byIp || null, userId, ipHash };
 }
 
 function shouldShowTutorialForRequest(req) {
   const session = getSession(req);
   if (!session?.id || session.role === 'Viewer') return false;
-  const ipHash = getTutorialIpHash(req);
-  const existing = readTutorialSeenIp(ipHash);
+  const { record: existing, userId, ipHash } = getTutorialSeenRecord(req);
   if (!existing) {
     db.prepare(`
-      INSERT INTO tutorial_seen_ips (id, ip_hash, first_seen_at, completed_at, skipped_at)
-      VALUES (?, ?, ?, NULL, NULL)
-    `).run(crypto.randomUUID(), ipHash, new Date().toISOString());
+      INSERT INTO tutorial_seen_ips (id, ip_hash, user_id, first_seen_at, completed_at, skipped_at)
+      VALUES (?, ?, ?, ?, NULL, NULL)
+    `).run(crypto.randomUUID(), ipHash, userId || null, new Date().toISOString());
     return true;
+  }
+  if (userId && String(existing.userId || '').trim() !== userId) {
+    db.prepare('UPDATE tutorial_seen_ips SET user_id = ? WHERE id = ?').run(userId, existing.id);
   }
   return !existing.completedAt && !existing.skippedAt;
 }
 
 function completeTutorialForRequest(req, action = 'completed') {
-  const ipHash = getTutorialIpHash(req);
+  const session = getSession(req);
+  const userId = String(session?.id || '').trim();
+  const ipHash = getTutorialSeenKeyHash(req, userId);
   const nowIso = new Date().toISOString();
+  const { record } = getTutorialSeenRecord(req);
+  if (record?.id) {
+    db.prepare(`
+      UPDATE tutorial_seen_ips
+      SET user_id = COALESCE(?, user_id),
+        completed_at = CASE WHEN ? = 'completed' THEN ? ELSE completed_at END,
+        skipped_at = CASE WHEN ? = 'skipped' THEN ? ELSE skipped_at END
+      WHERE id = ?
+    `).run(
+      userId || null,
+      action,
+      action === 'completed' ? nowIso : null,
+      action,
+      action === 'skipped' ? nowIso : null,
+      record.id
+    );
+    return;
+  }
   db.prepare(`
-    INSERT INTO tutorial_seen_ips (id, ip_hash, first_seen_at, completed_at, skipped_at)
-    VALUES (?, ?, ?, ?, ?)
-    ON CONFLICT(ip_hash) DO UPDATE SET
-      completed_at = CASE WHEN ? = 'completed' THEN excluded.completed_at ELSE tutorial_seen_ips.completed_at END,
-      skipped_at = CASE WHEN ? = 'skipped' THEN excluded.skipped_at ELSE tutorial_seen_ips.skipped_at END
+    INSERT INTO tutorial_seen_ips (id, ip_hash, user_id, first_seen_at, completed_at, skipped_at)
+    VALUES (?, ?, ?, ?, ?, ?)
   `).run(
     crypto.randomUUID(),
     ipHash,
+    userId || null,
     nowIso,
     action === 'completed' ? nowIso : null,
-    action === 'skipped' ? nowIso : null,
-    action,
-    action
+    action === 'skipped' ? nowIso : null
   );
 }
 
@@ -1273,6 +1308,22 @@ app.get('/api/economy/companies/:companyId/ownership', (req, res) => {
     res.json({ ownership: readCompanyOwnership(db, String(req.params.companyId || '')) });
   } catch (error) {
     res.status(error.status || 500).json({ error: error.message || 'Anteilseigner konnten nicht geladen werden.' });
+  }
+});
+
+app.get('/api/economy/companies/:companyId', (req, res) => {
+  try {
+    const { state } = readCampaignState(db);
+    const inflationRate = Math.min(0.25, Number(state.resources?.GAR?.credits || 0) / 2000000);
+    try {
+      runMarketTick(db, inflationRate, Date.now(), state);
+    } catch (tickError) {
+      console.error('Company economy detail tick failed', tickError);
+    }
+    res.json({ company: readMarketCompanyDetail(db, String(req.params.companyId || '')) });
+  } catch (error) {
+    console.error('Economy company detail endpoint failed', error);
+    res.status(error.status || 500).json({ error: error.message || 'Holding-Details konnten nicht geladen werden.' });
   }
 });
 

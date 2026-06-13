@@ -2109,6 +2109,10 @@ const economyViewState = {
   canPurchase: true,
   activeSection: 'overview',
   selectedCompanyId: '',
+  companyDetailById: {},
+  companyDetailLoadingId: '',
+  companyDetailError: '',
+  lastLoadedAt: 0,
   marketRange: 'today',
   sectorQuery: '',
   resourceFilter: 'all',
@@ -2213,6 +2217,7 @@ let adminModeEnabled = true;
 let activeOverlayModalId = '';
 let lastFocusedElementBeforeModal = null;
 let tutorialCheckPromise = null;
+let planetHyperlaneDegreeCache = { signature: '', map: new Map() };
 let tutorialFlowState = {
   shouldPrompt: false,
   started: false,
@@ -2233,7 +2238,8 @@ const bootLoadState = {
     domReady: false,
     mapImageReady: false,
     campaignReady: false,
-    authReady: false
+    authReady: false,
+    economyReady: false
   }
 };
 let mapImageLoaded = false;
@@ -4431,6 +4437,7 @@ function getBootStatusText() {
   if (!bootLoadState.tasks.mapImageReady) return 'LADE GALAXIEKARTE';
   if (!bootLoadState.tasks.campaignReady) return 'SYNCHRONISIERE KAMPAGNENDATEN';
   if (!bootLoadState.tasks.authReady) return 'PRÜFE ZUGANGSDATEN';
+  if (!bootLoadState.tasks.economyReady) return 'LADE WIRTSCHAFT UND BÖRSE';
   return 'SYSTEME ONLINE';
 }
 
@@ -4441,15 +4448,15 @@ function setBootProgress(progress, statusText = getBootStatusText()) {
   if (bootStatusLabel) bootStatusLabel.textContent = statusText;
 }
 
-function maybeFinishBootScreen(force = false) {
+function maybeFinishBootScreen() {
   if (bootLoadState.hidden) return;
   const allReady = Object.values(bootLoadState.tasks).every(Boolean);
-  if (!force && !allReady) return;
+  if (!allReady) return;
   const elapsed = Date.now() - bootLoadState.startedAt;
   const finalize = () => {
     if (bootLoadState.hidden) return;
     bootLoadState.hidden = true;
-    setBootProgress(100, force && !allReady ? 'SYSTEME ONLINE (FALLBACK)' : 'SYSTEME ONLINE');
+    setBootProgress(100, 'SYSTEME ONLINE');
     if (bootLoadState.timer) {
       window.clearInterval(bootLoadState.timer);
       bootLoadState.timer = null;
@@ -4494,7 +4501,8 @@ function resetBootSequenceState() {
     domReady: true,
     mapImageReady: mapImageLoaded || Boolean(mapEl?.complete),
     campaignReady: false,
-    authReady: false
+    authReady: false,
+    economyReady: false
   };
   bootScreen?.classList.remove('fade-out');
   bootScreen?.classList.add('active');
@@ -4515,8 +4523,8 @@ function startBootSequence() {
   }, 120);
   bootLoadState.forceTimer = window.setTimeout(() => {
     if (bootLoadState.hidden) return;
-    console.warn('Bootscreen fallback reached after 6 seconds; continuing.');
-    maybeFinishBootScreen(true);
+    console.warn('Bootscreen still waiting for remaining tasks.');
+    setBootProgress(Math.max(bootLoadState.progress, 94), getBootStatusText());
   }, BOOT_MAX_DURATION_MS);
 }
 
@@ -4551,6 +4559,7 @@ async function bootstrapFromServer() {
     disableLiveSync('Server-Bootstrap fehlgeschlagen. Lokaler Offline-Modus aktiv.');
     markBootTask('campaignReady', true);
     markBootTask('authReady', true);
+    markBootTask('economyReady', true);
   }
 }
 
@@ -4838,15 +4847,32 @@ function addPlanetHyperlaneLink(linkMap, leftId, rightId) {
   linkMap.get(b).add(a);
 }
 
+function getPlanetHyperlaneCacheSignature() {
+  const planetParts = (Array.isArray(state?.planets) ? state.planets : [])
+    .map((planet) => `${String(planet?.id || '').trim()}:${Number(planet?.x || 0).toFixed(2)}:${Number(planet?.y || 0).toFixed(2)}`)
+    .join('|');
+  const routeParts = (Array.isArray(state?.meta?.customRoutes) ? state.meta.customRoutes : [])
+    .flatMap((route) => (Array.isArray(route?.connections) ? route.connections : []))
+    .map(normalizeRouteConnection)
+    .filter(Boolean)
+    .map((connection) => [connection.startPlanetId, connection.endPlanetId].sort().join(':'))
+    .sort()
+    .join('|');
+  return `${planetParts}__${routeParts}`;
+}
+
 function buildPlanetHyperlaneDegreeMap() {
-  const linkMap = new Map(state.planets.map((planet) => [planet.id, new Set()]));
+  const signature = getPlanetHyperlaneCacheSignature();
+  if (planetHyperlaneDegreeCache.signature === signature) return planetHyperlaneDegreeCache.map;
+  const planets = Array.isArray(state?.planets) ? state.planets : [];
+  const linkMap = new Map(planets.map((planet) => [planet.id, new Set()]));
   const radiusSq = 120 * 120;
-  for (let index = 0; index < state.planets.length; index += 1) {
-    const base = state.planets[index];
+  for (let index = 0; index < planets.length; index += 1) {
+    const base = planets[index];
     const candidates = [];
-    for (let otherIndex = 0; otherIndex < state.planets.length; otherIndex += 1) {
+    for (let otherIndex = 0; otherIndex < planets.length; otherIndex += 1) {
       if (index === otherIndex) continue;
-      const other = state.planets[otherIndex];
+      const other = planets[otherIndex];
       const dx = Number(base?.x || 0) - Number(other?.x || 0);
       const dy = Number(base?.y || 0) - Number(other?.y || 0);
       const distanceSq = dx * dx + dy * dy;
@@ -4857,17 +4883,17 @@ function buildPlanetHyperlaneDegreeMap() {
       .slice(0, 3)
       .forEach(([, otherId]) => addPlanetHyperlaneLink(linkMap, base.id, otherId));
   }
-  routeCache.forEach((route) => addPlanetHyperlaneLink(linkMap, route?.a?.id, route?.b?.id));
-  tacticalRouteCache.forEach((route) => {
-    getRouteConnections(route).forEach((connection) => addPlanetHyperlaneLink(linkMap, connection.startPlanetId, connection.endPlanetId));
-  });
-  ensureCustomRouteStore().forEach((route) => {
+  (Array.isArray(state?.meta?.customRoutes) ? state.meta.customRoutes : []).forEach((route) => {
     (Array.isArray(route?.connections) ? route.connections : [])
       .map(normalizeRouteConnection)
       .filter(Boolean)
       .forEach((connection) => addPlanetHyperlaneLink(linkMap, connection.startPlanetId, connection.endPlanetId));
   });
-  return new Map([...linkMap.entries()].map(([planetId, neighbors]) => [planetId, neighbors.size]));
+  planetHyperlaneDegreeCache = {
+    signature,
+    map: new Map([...linkMap.entries()].map(([planetId, neighbors]) => [planetId, neighbors.size]))
+  };
+  return planetHyperlaneDegreeCache.map;
 }
 
 function getPlanetHyperlaneDegree(planetId) {
@@ -5071,10 +5097,16 @@ function getMineProjectMeta(buildingKey) {
 }
 
 function getMineProjectPlanetChoices(category = '') {
+  const hyperlaneDegreeMap = buildPlanetHyperlaneDegreeMap();
   return state.planets
     .filter((planet) => planet.owner === 'GAR')
     .map((planet) => {
-      const hyperlaneStatus = getPlanetHyperlaneStatus(planet.id);
+      const degree = Number(hyperlaneDegreeMap.get(planet.id) || 0);
+      const hyperlaneStatus = {
+        degree,
+        isRoutePlanet: degree >= 1,
+        isLogisticsHub: degree >= 3
+      };
       const storageEligible = category !== 'storage' || hyperlaneStatus.isRoutePlanet;
       return {
         ...planet,
@@ -6285,7 +6317,8 @@ function setMainTab(tabId) {
     renderBuildProjectsView();
   } else if (tabId === 'economy') {
     renderEconomyView();
-    void fetchEconomyView();
+    if (!economyViewState.loaded) void fetchEconomyView();
+    else if ((Date.now() - Number(economyViewState.lastLoadedAt || 0)) > 30000) void fetchEconomyView({ renderLoading: false });
   } else if (tabId === 'loginManager') {
     renderLoginManagerView();
   } else if (tabId === 'radioCommandCenter') {
@@ -7531,11 +7564,13 @@ async function beginAppLoadSequence() {
   startBootSequence();
   if (serverSync.enabled) {
     await bootstrapFromServer();
+    await fetchEconomyView({ renderLoading: false, markBootReady: true });
   } else {
     applyDefaultAnonymousRole();
     safeRefreshRoleChrome();
     markBootTask('campaignReady', true);
     markBootTask('authReady', true);
+    markBootTask('economyReady', true);
   }
 }
 
@@ -12194,6 +12229,7 @@ async function readJsonResponse(response, fallbackMessage = 'Anfrage fehlgeschla
 async function fetchEconomyView(options = {}) {
   if (economyViewState.loading) return;
   const renderLoading = options.renderLoading !== false;
+  let loadedSuccessfully = false;
   economyViewState.loading = true;
   economyViewState.error = '';
   if (renderLoading && activeMainTab === 'economy') renderEconomyView();
@@ -12201,12 +12237,46 @@ async function fetchEconomyView(options = {}) {
     const response = await fetch('/api/economy/market', { credentials: 'include' });
     const payload = await readJsonResponse(response, 'Wirtschaftsdaten konnten nicht geladen werden.');
     if (!response.ok) throw new Error(payload.error || 'Wirtschaftsdaten konnten nicht geladen werden.');
-    Object.assign(economyViewState, payload, { loaded: true });
+    Object.assign(economyViewState, payload, { loaded: true, lastLoadedAt: Date.now() });
+    loadedSuccessfully = true;
+    if (options.markBootReady) markBootTask('economyReady', true);
   } catch (error) {
     economyViewState.error = error.message;
+    if (options.markBootReady) markBootTask('economyReady', false);
   } finally {
     economyViewState.loading = false;
     if (activeMainTab === 'economy') renderEconomyView();
+  }
+  return loadedSuccessfully;
+}
+
+async function fetchMarketCompanyDetail(companyId, options = {}) {
+  const normalizedCompanyId = String(companyId || '').trim();
+  if (!normalizedCompanyId) return;
+  if (economyViewState.companyDetailLoadingId === normalizedCompanyId && !options.force) return;
+  const renderLoading = options.renderLoading !== false;
+  economyViewState.companyDetailLoadingId = normalizedCompanyId;
+  economyViewState.companyDetailError = '';
+  if (renderLoading && activeMainTab === 'economy' && economyViewState.activeSection === 'detail' && economyViewState.selectedCompanyId === normalizedCompanyId) {
+    renderEconomyView();
+  }
+  try {
+    const response = await fetch(`/api/economy/companies/${encodeURIComponent(normalizedCompanyId)}`, { credentials: 'include' });
+    const payload = await readJsonResponse(response, 'Holding-Details konnten nicht geladen werden.');
+    if (!response.ok) throw new Error(payload.error || 'Holding-Details konnten nicht geladen werden.');
+    economyViewState.companyDetailById = {
+      ...(economyViewState.companyDetailById || {}),
+      [normalizedCompanyId]: payload.company || null
+    };
+  } catch (error) {
+    economyViewState.companyDetailError = error.message;
+  } finally {
+    if (economyViewState.companyDetailLoadingId === normalizedCompanyId) {
+      economyViewState.companyDetailLoadingId = '';
+    }
+    if (activeMainTab === 'economy' && economyViewState.activeSection === 'detail' && economyViewState.selectedCompanyId === normalizedCompanyId) {
+      renderEconomyView();
+    }
   }
 }
 
@@ -12266,7 +12336,16 @@ function setEconomySection(section) {
 function openMarketCompanyOverview(companyId) {
   economyViewState.selectedCompanyId = companyId;
   economyViewState.activeSection = 'detail';
+  economyViewState.companyDetailError = '';
   renderEconomyView();
+  void fetchMarketCompanyDetail(companyId, { renderLoading: false });
+}
+
+async function refreshSelectedMarketCompany() {
+  const companyId = String(economyViewState.selectedCompanyId || '').trim();
+  await fetchEconomyView({ renderLoading: false });
+  if (companyId) await fetchMarketCompanyDetail(companyId, { renderLoading: false, force: true });
+  if (activeMainTab === 'economy') renderEconomyView();
 }
 
 async function fetchSectorEconomyList(options = {}) {
@@ -12662,12 +12741,15 @@ function renderEconomyView() {
     return;
   }
   if (economyViewState.activeSection === 'detail') {
-    const company = economyViewState.companies.find((entry) => entry.id === economyViewState.selectedCompanyId);
-    if (!company) {
+    const companySummary = economyViewState.companies.find((entry) => entry.id === economyViewState.selectedCompanyId);
+    if (!companySummary) {
       economyViewState.activeSection = 'trade';
       renderEconomyView();
       return;
     }
+    const company = economyViewState.companyDetailById?.[companySummary.id] || companySummary;
+    const companyDetailLoaded = Boolean(economyViewState.companyDetailById?.[companySummary.id]);
+    const companyDetailLoading = economyViewState.companyDetailLoadingId === companySummary.id;
     const shares = holdings.get(company.id) || 0;
     const rangeCutoff = getMarketRangeCutoff();
     const prices = (economyViewState.history?.[company.id] || [])
@@ -12682,8 +12764,10 @@ function renderEconomyView() {
       <div class="workspace-head">
         <div><h2>${escapeLoginManagerText(company.name)} <span class="badge">${escapeLoginManagerText(company.symbol)}</span></h2>
         <p>${escapeLoginManagerText(company.sector || company.faction)} • ${escapeLoginManagerText((company.resourceRefs || [company.resourceKey]).map((key) => RESOURCE_LABELS[key] || key).join(', ') || company.faction)} • ${escapeLoginManagerText(company.marketStatusLabel || 'Handelbar')}</p></div>
-        <div class="toolbar-row end"><button class="mini-btn" onclick="setEconomySection('trade')">Zurück zum Handel</button><button class="mini-btn" onclick="setEconomySection('portfolio')">Portfolio</button><button class="mini-btn" onclick="setEconomySection('sectorEconomy')">Sektor-Wirtschaft</button><button class="mini-btn" onclick="setEconomySection('acp')">ACP</button><button class="mini-btn" onclick="fetchEconomyView()">Aktualisieren</button></div>
+        <div class="toolbar-row end"><button class="mini-btn" onclick="setEconomySection('trade')">Zurück zum Handel</button><button class="mini-btn" onclick="setEconomySection('portfolio')">Portfolio</button><button class="mini-btn" onclick="setEconomySection('sectorEconomy')">Sektor-Wirtschaft</button><button class="mini-btn" onclick="setEconomySection('acp')">ACP</button><button class="mini-btn" onclick="refreshSelectedMarketCompany()">Aktualisieren</button></div>
       </div>
+      ${companyDetailLoading && !companyDetailLoaded ? '<div class="muted-box">Holding-Details werden geladen...</div>' : ''}
+      ${economyViewState.companyDetailError ? `<div class="muted-box">${escapeLoginManagerText(economyViewState.companyDetailError)}</div>` : ''}
       <div class="workspace-grid">
         <div class="stat-card"><strong>Aktueller Kurs</strong><span>${formatCredits(company.currentPrice)}</span></div>
         <div class="stat-card"><strong>Letzte Änderung</strong><span style="color:${change >= 0 ? '#55d68b' : '#ff6b6b'}">${change >= 0 ? '+' : ''}${formatCredits(change)}</span></div>
@@ -12701,6 +12785,8 @@ function renderEconomyView() {
         <div class="stat-card"><strong>Private Asset Value</strong><span>${formatCredits(company.privateAssetValue || 0)}</span></div>
         <div class="stat-card"><strong>Strategie</strong><span>${escapeLoginManagerText(company.corporateStrategy || 'conservative')}</span></div>
         <div class="stat-card"><strong>Insolvenzrisiko</strong><span>${Math.round(Number(company.bankruptcyRisk || 0) * 100)} %</span></div>
+        <div class="stat-card"><strong>Private Standorte</strong><span>${Number(company.corporateAssetCount || company.corporateAssets?.length || 0)}</span></div>
+        <div class="stat-card"><strong>Aktive Projekte</strong><span>${Number(company.activeCorporateProjectCount || 0)}</span></div>
       </div>
       <div class="workspace-section"><h3>Kursverlauf</h3>${renderMarketRangeControls()}${renderMarketDetailChart(company.id)}</div>
       <div class="workspace-section"><h3>Anteilseigner</h3><div class="workspace-card">${renderOwnershipPie(company)}</div></div>
@@ -13943,10 +14029,12 @@ window.deleteRadioPermission = deleteRadioPermission;
 window.pollDiscordRadioCommands = pollDiscordRadioCommands;
 window.setMainTab = setMainTab;
 window.fetchEconomyView = fetchEconomyView;
+window.fetchMarketCompanyDetail = fetchMarketCompanyDetail;
 window.buyMarketShare = buyMarketShare;
 window.sellMarketShare = sellMarketShare;
 window.setEconomySection = setEconomySection;
 window.openMarketCompanyOverview = openMarketCompanyOverview;
+window.refreshSelectedMarketCompany = refreshSelectedMarketCompany;
 window.fetchSectorEconomyList = fetchSectorEconomyList;
 window.fetchSectorEconomyDetail = fetchSectorEconomyDetail;
 window.selectEconomySector = selectEconomySector;
