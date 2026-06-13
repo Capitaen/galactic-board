@@ -5,14 +5,72 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Galactic Campaign Command Board - MVP</title>
 <style>
+@font-face {
+  font-family: 'Aurebesh';
+  src: url('/fonts/Aurebesh.otf') format('opentype');
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Aurebesh';
+  src: url('/fonts/Aurebesh Italic.otf') format('opentype');
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Aurebesh';
+  src: url('/fonts/Aurebesh Bold.otf') format('opentype');
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Aurebesh';
+  src: url('/fonts/Aurebesh Bold Italic.otf') format('opentype');
+  font-style: italic;
+  font-weight: 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Aurebesh Condensed';
+  src: url('/fonts/Aurebesh Condensed.otf') format('opentype');
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Aurebesh Condensed';
+  src: url('/fonts/Aurebesh Condensed Italic.otf') format('opentype');
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Aurebesh Condensed';
+  src: url('/fonts/Aurebesh Condensed Bold.otf') format('opentype');
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Aurebesh Condensed';
+  src: url('/fonts/Aurebesh Condensed Bold Italic.otf') format('opentype');
+  font-style: italic;
+  font-weight: 700;
+  font-display: swap;
+}
 :root {
   --bg:#02050d; --panel:#111821; --panel2:#172231; --text:#e9f8ff; --muted:#89a7bb;
   --gar:#3c8dff; --kus:#ff5b57; --hutt:#1f6b48; --neutral:#8e98aa; --line:#ffffff;
   --hud:#6be7ff; --hud-soft:rgba(107,231,255,.18); --hud-glow:rgba(74,216,255,.35); --hud-edge:rgba(114,241,255,.48);
   --hud-purple:rgba(121,105,255,.22);
   --steel:#0b1119; --steel-2:#131c28; --steel-3:#1a2533; --shadow:rgba(0,0,0,.58);
+  --font-aurebesh:"Aurebesh", "Aurebesh Condensed", Inter, "Segoe UI", Arial, sans-serif;
 }
 * { box-sizing:border-box; }
+.font-aurebesh { font-family: var(--font-aurebesh); letter-spacing:.08em; }
 body {
   margin:0;
   background:
@@ -2263,12 +2321,14 @@ const SETTINGS_SOUND_VOLUME_KEY = 'gcb_ui_v1.settings.soundVolume';
 const SETTINGS_ADMIN_MODE_KEY = 'gcb_ui_v1.settings.adminMode';
 const BOOT_MIN_DURATION_MS = 800;
 const BOOT_MAX_DURATION_MS = 6000;
+const ECONOMY_BOOT_MAX_DURATION_MS = 12000;
 const bootLoadState = {
   startedAt: Date.now(),
   progress: 0,
   hidden: true,
   timer: null,
   forceTimer: null,
+  mode: 'app',
   tasks: {
     domReady: false,
     mapImageReady: false,
@@ -2303,6 +2363,7 @@ let radioCommandAdminState = {
 };
 let currentAuthenticatedUsername = '';
 let viewerModeActive = true;
+let pendingLoginAttempt = null;
 let navCollapsed = false;
 let mobileOrientationDismissed = false;
 let audioMuted = false;
@@ -4397,7 +4458,7 @@ function updateServerSession(me) {
   roleSelect.value = me.role || 'Viewer';
   refreshRoleChrome();
   if (currentAuthenticatedUsername) hideLoginModal();
-  else if (!viewerModeActive) showLoginModal();
+  else if (!viewerModeActive && !pendingLoginAttempt) showLoginModal();
 }
 
 function destroyServerSocketConnection() {
@@ -4469,11 +4530,14 @@ function emitLiveSocketEvent(eventName, payload) {
 }
 
 function getBootStatusText() {
+  if (bootLoadState.mode === 'economy') {
+    if (!bootLoadState.tasks.economyReady) return 'LADE WIRTSCHAFT UND BÖRSE';
+    return 'WIRTSCHAFT ONLINE';
+  }
   if (!bootLoadState.tasks.domReady) return 'INITIALISIERE SYSTEME';
   if (!bootLoadState.tasks.mapImageReady) return 'LADE GALAXIEKARTE';
   if (!bootLoadState.tasks.campaignReady) return 'SYNCHRONISIERE KAMPAGNENDATEN';
   if (!bootLoadState.tasks.authReady) return 'PRÜFE ZUGANGSDATEN';
-  if (!bootLoadState.tasks.economyReady) return 'LADE WIRTSCHAFT UND BÖRSE';
   return 'SYSTEME ONLINE';
 }
 
@@ -4521,7 +4585,7 @@ function markBootTask(taskKey, ready = true) {
   maybeFinishBootScreen();
 }
 
-function resetBootSequenceState() {
+function resetBootSequenceState(mode = 'app') {
   if (bootLoadState.timer) {
     window.clearInterval(bootLoadState.timer);
     bootLoadState.timer = null;
@@ -4533,21 +4597,22 @@ function resetBootSequenceState() {
   bootLoadState.startedAt = Date.now();
   bootLoadState.progress = 0;
   bootLoadState.hidden = false;
+  bootLoadState.mode = mode === 'economy' ? 'economy' : 'app';
   bootLoadState.tasks = {
     domReady: true,
     mapImageReady: mapImageLoaded || Boolean(mapEl?.complete),
-    campaignReady: false,
-    authReady: false,
-    economyReady: false
+    campaignReady: bootLoadState.mode === 'economy',
+    authReady: bootLoadState.mode === 'economy',
+    economyReady: bootLoadState.mode !== 'economy'
   };
   bootScreen?.classList.remove('fade-out');
   bootScreen?.classList.add('active');
   bootScreen?.setAttribute('aria-hidden', 'false');
 }
 
-function startBootSequence() {
-  resetBootSequenceState();
-  setBootProgress(4, 'INITIALISIERE SYSTEME');
+function startBootSequence(mode = 'app') {
+  resetBootSequenceState(mode);
+  setBootProgress(4, getBootStatusText());
   bootLoadState.timer = window.setInterval(() => {
     if (bootLoadState.hidden) return;
     const target = Object.values(bootLoadState.tasks).every(Boolean) ? 100 : 90;
@@ -4557,11 +4622,12 @@ function startBootSequence() {
     }
     maybeFinishBootScreen();
   }, 120);
+  const maxDuration = bootLoadState.mode === 'economy' ? ECONOMY_BOOT_MAX_DURATION_MS : BOOT_MAX_DURATION_MS;
   bootLoadState.forceTimer = window.setTimeout(() => {
     if (bootLoadState.hidden) return;
     console.warn('Bootscreen still waiting for remaining tasks.');
     setBootProgress(Math.max(bootLoadState.progress, 94), getBootStatusText());
-  }, BOOT_MAX_DURATION_MS);
+  }, maxDuration);
 }
 
 async function bootstrapFromServer() {
@@ -4603,7 +4669,7 @@ function connectServerSocket() {
   if (!serverSync.enabled || serverSync.offlineMode || typeof io === 'undefined' || serverSync.socket) return;
   serverSync.socket = io({
     withCredentials: true,
-    transports: ['websocket'],
+    transports: ['polling', 'websocket'],
     reconnection: false,
     timeout: 2500
   });
@@ -4614,6 +4680,9 @@ function connectServerSocket() {
     setStatus('Live-Sync mit Server verbunden.');
   });
   serverSync.socket.on('socket:ready', (payload) => {
+    serverSync.offlineMode = false;
+    serverSync.reconnectAttempt = 0;
+    clearServerReconnectTimer();
     updateServerSession(payload?.me || { id: null, username: '', role: 'Viewer' });
     if (payload?.updatedAt) {
       const updatedAtMs = new Date(payload.updatedAt).getTime();
@@ -6393,7 +6462,7 @@ function setMainTab(tabId) {
     renderBuildProjectsView();
   } else if (tabId === 'economy') {
     renderEconomyView();
-    if (!economyViewState.loaded) void fetchEconomyView();
+    if (!economyViewState.loaded) void ensureEconomyViewLoaded({ showLoader: true });
     else if ((Date.now() - Number(economyViewState.lastLoadedAt || 0)) > 30000) void fetchEconomyView({ renderLoading: false });
   } else if (tabId === 'loginManager') {
     renderLoginManagerView();
@@ -7637,10 +7706,10 @@ function safeRefreshRoleChrome() {
 }
 
 async function beginAppLoadSequence() {
-  startBootSequence();
+  startBootSequence('app');
   if (serverSync.enabled) {
     await bootstrapFromServer();
-    await fetchEconomyView({ renderLoading: false, markBootReady: true });
+    markBootTask('economyReady', true);
   } else {
     applyDefaultAnonymousRole();
     safeRefreshRoleChrome();
@@ -7650,8 +7719,114 @@ async function beginAppLoadSequence() {
   }
 }
 
+async function ensureEconomyViewLoaded(options = {}) {
+  if (economyViewState.loaded) {
+    if ((Date.now() - Number(economyViewState.lastLoadedAt || 0)) > 30000) {
+      await fetchEconomyView({ renderLoading: false });
+    }
+    return true;
+  }
+  const showLoader = options.showLoader !== false;
+  if (showLoader) startBootSequence('economy');
+  const loaded = await fetchEconomyView({ renderLoading: false, markBootReady: showLoader });
+  if (!loaded && showLoader) markBootTask('economyReady', false);
+  return loaded;
+}
+
+async function finalizeSuccessfulLogin(payload) {
+  viewerModeActive = false;
+  pendingLoginAttempt = null;
+  serverSync.session = payload.user || { id: null, username: '', role: 'Viewer' };
+  currentAuthenticatedUsername = payload.user?.username || '';
+  if (roleSelect) roleSelect.value = payload.user?.role || 'Viewer';
+  if (loginModalPassword) loginModalPassword.value = '';
+  destroyServerSocketConnection();
+  clearServerReconnectTimer();
+  clearServerRefreshTimer();
+  serverSync.offlineMode = false;
+  safeRefreshRoleChrome();
+  hideLoginModal();
+  if (serverSync.enabled) {
+    try {
+      const response = await fetch('/api/bootstrap', { credentials: 'include' });
+      if (response.ok) {
+        const bootstrapPayload = await response.json();
+        updateServerSession(bootstrapPayload.me || payload.user || { id: null, username: '', role: 'Viewer' });
+        const nextRevision = Number(bootstrapPayload.revision || 0);
+        if (nextRevision > serverRevision) {
+          applyServerCampaign(bootstrapPayload.campaign || DEFAULT_DATA, nextRevision, { playOwnerEffects: true, updatedAt: bootstrapPayload.updatedAt });
+        } else {
+          syncAuthUsersFromCampaign(bootstrapPayload.campaign);
+        }
+        serverSyncReady = true;
+        serverRevision = nextRevision;
+        serverSync.revision = nextRevision;
+      }
+    } catch (error) {
+      console.warn('Post-login bootstrap refresh failed', error);
+    }
+    connectServerSocket();
+  }
+  await checkTutorialStatus();
+  if (selected?.type === 'planet') openPlanet(selected.id);
+  if (selected?.type === 'fleet') openFleet(selected.id);
+  if (selected?.type === 'route') openRoute(selected.id);
+  if (selected?.type === 'sector') openSector(selected.id);
+  if (activeMainTab === 'fleetManagement') renderFleetManagementView();
+  if (activeMainTab === 'shipyard') renderShipyardView();
+  if (activeMainTab === 'buildProjects') renderBuildProjectsView();
+  if (activeMainTab === 'economy') {
+    renderEconomyView();
+    void ensureEconomyViewLoaded({ showLoader: true });
+  }
+  if (activeMainTab === 'loginManager') renderLoginManagerView();
+  if (activeMainTab === 'radioCommandCenter') renderRadioCommandCenterView();
+  setStatus(`Login erfolgreich: ${payload.user.username} (${payload.user.role})`);
+}
+
+function restoreLoginAfterFailure(message) {
+  pendingLoginAttempt = null;
+  viewerModeActive = false;
+  currentAuthenticatedUsername = '';
+  serverSync.session = { id: null, username: '', role: 'Viewer' };
+  if (roleSelect) roleSelect.value = 'Viewer';
+  safeRefreshRoleChrome();
+  showLoginModal();
+  setStatus(message);
+}
+
+async function verifyDeferredLogin(loginAttempt) {
+  if (!loginAttempt?.username) return;
+  try {
+    const response = await fetch('/api/auth/login', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: loginAttempt.username,
+        password: loginAttempt.password
+      })
+    });
+    const payload = await response.json();
+    if (pendingLoginAttempt?.id !== loginAttempt.id) return;
+    if (!response.ok) {
+      restoreLoginAfterFailure(`Login fehlgeschlagen: ${payload.error || 'Ungültige Zugangsdaten.'}`);
+      return;
+    }
+    await finalizeSuccessfulLogin(payload);
+  } catch (error) {
+    if (pendingLoginAttempt?.id !== loginAttempt.id) return;
+    if (String(error.message || '').includes('Failed to fetch')) {
+      disableLiveSync('Login fehlgeschlagen: Server nicht erreichbar. Lokaler Offline-Modus aktiv.');
+      return;
+    }
+    restoreLoginAfterFailure(`Login fehlgeschlagen: ${error.message}`);
+  }
+}
+
 function continueAsGuest() {
   viewerModeActive = true;
+  pendingLoginAttempt = null;
   currentAuthenticatedUsername = '';
   serverSync.session = { id: null, username: '', role: 'Viewer' };
   if (roleSelect) roleSelect.value = 'Viewer';
@@ -7666,6 +7841,7 @@ function continueAsGuest() {
 async function logoutCurrentUser() {
   if (!currentAuthenticatedUsername) {
     viewerModeActive = false;
+    pendingLoginAttempt = null;
     safeRefreshRoleChrome();
     showLoginModal();
     return;
@@ -7678,6 +7854,7 @@ async function logoutCurrentUser() {
     }
   }
   viewerModeActive = false;
+  pendingLoginAttempt = null;
   currentAuthenticatedUsername = '';
   serverSync.session = { id: null, username: '', role: 'Viewer' };
   if (roleSelect) roleSelect.value = 'Viewer';
@@ -7695,54 +7872,18 @@ async function attemptLogin() {
     setStatus('Login benötigt den Server-Modus über http://localhost.');
     return;
   }
-  try {
-    const response = await fetch('/api/auth/login', {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password })
-    });
-    const payload = await response.json();
-    if (!response.ok) throw new Error(payload.error || 'Login fehlgeschlagen');
-    viewerModeActive = false;
-    serverSync.session = payload.user || { id: null, username: '', role: 'Viewer' };
-    currentAuthenticatedUsername = payload.user?.username || '';
-    if (roleSelect) roleSelect.value = payload.user?.role || 'Viewer';
-    hideLoginModal();
-    safeRefreshRoleChrome();
-    if (loginModalPassword) loginModalPassword.value = '';
-    destroyServerSocketConnection();
-    clearServerReconnectTimer();
-    await beginAppLoadSequence();
-    await checkTutorialStatus();
-    if (selected?.type === 'planet') openPlanet(selected.id);
-    if (selected?.type === 'fleet') openFleet(selected.id);
-    if (selected?.type === 'route') openRoute(selected.id);
-    if (selected?.type === 'sector') openSector(selected.id);
-    if (activeMainTab === 'fleetManagement') renderFleetManagementView();
-    if (activeMainTab === 'shipyard') renderShipyardView();
-    if (activeMainTab === 'buildProjects') renderBuildProjectsView();
-    if (activeMainTab === 'economy') renderEconomyView();
-    if (activeMainTab === 'loginManager') renderLoginManagerView();
-    if (activeMainTab === 'radioCommandCenter') renderRadioCommandCenterView();
-    setStatus(`Login erfolgreich: ${payload.user.username} (${payload.user.role})`);
-  } catch (error) {
-    viewerModeActive = false;
-    currentAuthenticatedUsername = '';
-    serverSync.session = { id: null, username: '', role: 'Viewer' };
-    if (roleSelect) roleSelect.value = 'Viewer';
-    safeRefreshRoleChrome();
-    if (String(error.message || '').includes('Failed to fetch')) {
-      disableLiveSync('Login fehlgeschlagen: Server nicht erreichbar. Lokaler Offline-Modus aktiv.');
-      return;
-    }
-    setStatus(`Login fehlgeschlagen: ${error.message}`);
-  }
+  pendingLoginAttempt = { id: crypto.randomUUID(), username, password };
+  viewerModeActive = false;
+  hideLoginModal();
+  setStatus('Zugangsdaten werden geprüft. Grundsysteme werden bereits geladen.');
+  void beginAppLoadSequence();
+  void verifyDeferredLogin(pendingLoginAttempt);
 }
 
 function applyDefaultAnonymousRole() {
   if (currentAuthenticatedUsername) return;
   viewerModeActive = false;
+  pendingLoginAttempt = null;
   serverSync.session = { id: null, username: '', role: 'Viewer' };
   if (roleSelect) roleSelect.value = 'Viewer';
 }
@@ -12344,15 +12485,18 @@ async function fetchEconomyView(options = {}) {
     const response = await fetch('/api/economy/market/summary', { credentials: 'include' });
     const payload = await readJsonResponse(response, 'Wirtschaftsdaten konnten nicht geladen werden.');
     if (!response.ok) throw new Error(payload.error || 'Wirtschaftsdaten konnten nicht geladen werden.');
+    const summaryCompanies = Array.isArray(payload.companies) ? payload.companies : [];
+    const summaryHistory = payload.history && typeof payload.history === 'object' ? payload.history : {};
     Object.assign(economyViewState, payload, {
       loaded: true,
       lastLoadedAt: Date.now(),
-      companies: payload.companies || [],
-      featuredCompanies: payload.companies || [],
+      companies: summaryCompanies,
+      featuredCompanies: summaryCompanies,
+      history: summaryHistory,
       searchResults: String(economyViewState.sectorQuery || '').trim() ? economyViewState.searchResults : []
     });
-    loadedSuccessfully = true;
-    if (options.markBootReady) markBootTask('economyReady', true);
+    loadedSuccessfully = summaryCompanies.length > 0;
+    if (options.markBootReady) markBootTask('economyReady', loadedSuccessfully);
   } catch (error) {
     economyViewState.error = error.message;
     if (options.markBootReady) markBootTask('economyReady', false);
