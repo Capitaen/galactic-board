@@ -2304,6 +2304,8 @@ let hoveredRouteId = null;
 let hoveredZoneInfo = null;
 let pendingRouteHoverId = null;
 let routeHoverFrame = 0;
+let pendingHoverUpdate = null;
+let hoverUpdateFrame = 0;
 let uiSoundVolume = 75;
 let adminModeEnabled = true;
 let activeOverlayModalId = '';
@@ -3929,6 +3931,32 @@ function syncLayerCheckboxes() {
   syncSettingsModalState();
 }
 
+function queueHoverStateUpdate(event) {
+  pendingHoverUpdate = {
+    clientX: event.clientX,
+    clientY: event.clientY
+  };
+  if (hoverUpdateFrame) return;
+  hoverUpdateFrame = window.requestAnimationFrame(() => {
+    hoverUpdateFrame = 0;
+    const pointer = pendingHoverUpdate;
+    pendingHoverUpdate = null;
+    if (!pointer || activeInteraction) return;
+    const worldPos = eventToWorld(pointer);
+    const hoveredPlanet = nearestDisplayedPlanet(worldPos.x, worldPos.y, 18);
+    const hoveredRoute = hoveredPlanet ? null : nearestDisplayedRoute(worldPos.x, worldPos.y, 8);
+    queueHoveredRoute(hoveredRoute?.id || null);
+    const nextHoveredZone = nearestDisplayedZone(worldPos.x, worldPos.y);
+    const keepCurrentSector = !nextHoveredZone
+      && hoveredPlanet
+      && isPlanetInsideHoveredSector(hoveredPlanet);
+    setHoveredZone(keepCurrentSector ? hoveredZoneInfo : nextHoveredZone);
+    const hoveredMarker = (hoveredPlanet || hoveredRoute) ? null : nearestDisplayedMarker(worldPos.x, worldPos.y, 20);
+    hoveredMarkerId = hoveredMarker?.id || null;
+    setHoveredPlanet(hoveredPlanet?.id || null);
+  });
+}
+
 function getOverlayModalById(modalId) {
   if (modalId === 'settingsModal') return settingsModal;
   if (modalId === 'creditsModal') return creditsModal;
@@ -4131,6 +4159,8 @@ function renderSettingsModal() {
 
 function syncSettingsModalState() {
   if (settingsModal?.classList.contains('active')) {
+    const sessionLabel = settingsModalContent?.querySelector('.overlay-panel-title p');
+    if (sessionLabel) sessionLabel.textContent = `Angemeldet als: ${getCurrentSessionLabel()}`;
     getSettingsToggleDefinitions().forEach((entry) => {
       const button = settingsModalContent?.querySelector(`[data-settings-toggle="${entry.id}"]`);
       if (!button) return;
@@ -7905,7 +7935,6 @@ function refreshRoleChrome() {
   document.querySelector('[data-main-tab="shipyard"]')?.classList.toggle('hidden', currentRole() === 'Senat');
   roleSelect.disabled = true;
   updateSessionDisplay();
-  if (settingsModal?.classList.contains('active')) renderSettingsModal();
   syncSettingsModalState();
   if (!canManageLogins() && activeMainTab === 'loginManager') setMainTab('map');
   if (!canManageRadioCommands() && activeMainTab === 'radioCommandCenter') setMainTab('map');
@@ -13846,18 +13875,7 @@ function finishInteraction(event) {
 
 window.addEventListener('pointermove', (event) => {
   if (!activeInteraction) {
-    const worldPos = eventToWorld(event);
-    const hoveredPlanet = nearestDisplayedPlanet(worldPos.x, worldPos.y, 18);
-    const hoveredRoute = hoveredPlanet ? null : nearestDisplayedRoute(worldPos.x, worldPos.y, 8);
-    queueHoveredRoute(hoveredRoute?.id || null);
-    const nextHoveredZone = nearestDisplayedZone(worldPos.x, worldPos.y);
-    const keepCurrentSector = !nextHoveredZone
-      && hoveredPlanet
-      && isPlanetInsideHoveredSector(hoveredPlanet);
-    setHoveredZone(keepCurrentSector ? hoveredZoneInfo : nextHoveredZone);
-    const hoveredMarker = (hoveredPlanet || hoveredRoute) ? null : nearestDisplayedMarker(worldPos.x, worldPos.y, 20);
-    hoveredMarkerId = hoveredMarker?.id || null;
-    setHoveredPlanet(hoveredPlanet?.id || null);
+    queueHoverStateUpdate(event);
   }
   if (!activeInteraction) return;
   if (activeInteraction.mode === 'planet-drag') {
@@ -13924,6 +13942,11 @@ window.addEventListener('mousemove', (event) => {
 window.addEventListener('pointerup', finishInteraction);
 window.addEventListener('pointercancel', finishInteraction);
 viewport.addEventListener('pointerleave', () => {
+  pendingHoverUpdate = null;
+  if (hoverUpdateFrame) {
+    window.cancelAnimationFrame(hoverUpdateFrame);
+    hoverUpdateFrame = 0;
+  }
   setHoveredPlanet(null);
   queueHoveredRoute(null);
   setHoveredZone(null);
