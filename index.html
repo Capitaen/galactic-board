@@ -12271,15 +12271,18 @@ async function fetchEconomyView(options = {}) {
     const response = await fetch('/api/economy/market/summary', { credentials: 'include' });
     const payload = await readJsonResponse(response, 'Wirtschaftsdaten konnten nicht geladen werden.');
     if (!response.ok) throw new Error(payload.error || 'Wirtschaftsdaten konnten nicht geladen werden.');
+    const summaryCompanies = Array.isArray(payload.companies) ? payload.companies : [];
+    const summaryHistory = payload.history && typeof payload.history === 'object' ? payload.history : {};
     Object.assign(economyViewState, payload, {
       loaded: true,
       lastLoadedAt: Date.now(),
-      companies: payload.companies || [],
-      featuredCompanies: payload.companies || [],
+      companies: summaryCompanies,
+      featuredCompanies: summaryCompanies,
+      history: summaryHistory,
       searchResults: String(economyViewState.sectorQuery || '').trim() ? economyViewState.searchResults : []
     });
-    loadedSuccessfully = true;
-    if (options.markBootReady) markBootTask('economyReady', true);
+    loadedSuccessfully = summaryCompanies.length > 0;
+    if (options.markBootReady) markBootTask('economyReady', loadedSuccessfully);
   } catch (error) {
     economyViewState.error = error.message;
     if (options.markBootReady) markBootTask('economyReady', false);
