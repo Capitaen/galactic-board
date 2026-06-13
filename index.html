@@ -394,52 +394,62 @@ textarea { min-height:82px; resize:vertical; }
 .danger { background:#67201e; }
 #topbar {
   position:absolute;
-  left:76px;
+  left:84px;
   top:18px;
   z-index:90;
   display:flex;
-  align-items:center;
-  gap:8px;
-  flex-wrap:wrap;
+  align-items:flex-start;
+  gap:10px;
+  flex-wrap:nowrap;
   overflow:visible;
   background:
     linear-gradient(135deg, rgba(16,25,38,.94), rgba(8,13,22,.92));
   border:1px solid rgba(110,236,255,.18);
-  padding:10px 12px;
-  border-radius:18px;
+  padding:8px 10px;
+  border-radius:16px;
   box-shadow:
     inset 0 0 0 1px rgba(255,255,255,.03),
     inset 0 0 28px rgba(88,214,255,.04),
     0 16px 34px rgba(0,0,0,.42);
   backdrop-filter:blur(12px);
 }
-#topbar strong {
-  position:relative;
-  display:inline-flex;
+.topbar-title {
+  flex:0 0 auto;
+  min-width:168px;
+  min-height:38px;
+  display:flex;
   align-items:center;
-  min-height:40px;
-  padding:0 16px;
+  justify-content:center;
+  padding:0 12px;
   border-radius:12px;
   border:1px solid rgba(109,234,255,.15);
   background:linear-gradient(180deg, rgba(14,26,39,.95), rgba(8,13,22,.95));
   box-shadow:inset 0 0 18px rgba(72,206,255,.04);
-  font-size:13px;
-  letter-spacing:.18em;
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:.16em;
   text-transform:uppercase;
   color:#bff6ff;
+}
+.topbar-main {
+  display:flex;
+  align-items:center;
+  gap:10px;
+  min-height:38px;
 }
 #roleSelect { display:none; width:190px; padding:6px; }
 .topbar-session {
   display:inline-flex;
   align-items:center;
   gap:8px;
-  min-height:40px;
-  padding:8px 12px;
-  border-radius:14px;
-  border:1px solid rgba(110,236,255,.16);
-  background:rgba(77,204,255,.05);
+  min-height:38px;
+  padding:7px 12px;
+  border-radius:12px;
+  border:1px solid rgba(110,236,255,.14);
+  background:rgba(77,204,255,.04);
   color:#d8f6ff;
   font-size:12px;
+  white-space:nowrap;
 }
 .topbar-session strong {
   min-height:auto !important;
@@ -448,26 +458,34 @@ textarea { min-height:82px; resize:vertical; }
   background:none !important;
   box-shadow:none !important;
   font-size:12px !important;
-  letter-spacing:.08em !important;
+  letter-spacing:.04em !important;
+  text-transform:none !important;
 }
 .topbar-session-name {
-  max-width:180px;
+  max-width:220px;
   overflow:hidden;
   text-overflow:ellipsis;
   white-space:nowrap;
 }
+.topbar-actions {
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-wrap:wrap;
+  justify-content:flex-end;
+}
 .topbar-logout {
-  min-width:92px;
+  min-width:82px;
 }
 .role-faction-badge {
   display:inline-flex;
   align-items:center;
   gap:8px;
-  min-height:42px;
-  padding:8px 12px;
-  border:1px solid rgba(110,236,255,.16);
-  border-radius:14px;
-  background:rgba(77,204,255,.06);
+  min-height:38px;
+  padding:7px 10px;
+  border:1px solid rgba(110,236,255,.14);
+  border-radius:12px;
+  background:rgba(77,204,255,.05);
   box-shadow:inset 0 0 18px rgba(88,214,255,.05);
 }
 .role-faction-badge img { width:26px; height:26px; object-fit:contain; }
@@ -650,7 +668,12 @@ textarea { min-height:82px; resize:vertical; }
 .planet-card-admin-toggle {
   margin-top:2px;
 }
-.search-wrap { position:relative; width:260px; z-index:120; }
+.search-wrap { position:relative; width:320px; z-index:120; }
+.search-wrap input {
+  height:38px;
+  padding:8px 12px;
+  border-radius:12px;
+}
 #planetSearch { width:100%; padding:8px 10px; }
 #planetSearchResults { position:absolute; top:calc(100% + 6px); left:0; right:0; z-index:140; max-height:320px; overflow:auto; background:rgba(18,21,27,.98); border:1px solid #3c4350; border-radius:10px; box-shadow:0 18px 45px rgba(0,0,0,.45); }
 .search-result { padding:10px 12px; border-bottom:1px solid rgba(255,255,255,.06); cursor:pointer; }
@@ -1349,14 +1372,23 @@ a { color:#8bc7ff; }
     top:max(12px, env(safe-area-inset-top));
     gap:8px;
     padding:10px;
+    flex-wrap:wrap;
   }
-  #topbar strong {
+  .topbar-title {
     width:100%;
-    font-size:15px;
+    min-width:0;
+    font-size:10px;
+  }
+  .topbar-main {
+    width:100%;
+    flex-wrap:wrap;
   }
   .topbar-session {
     width:100%;
     justify-content:space-between;
+  }
+  .topbar-actions {
+    width:100%;
   }
   .search-wrap {
     flex:1 1 100%;
@@ -1493,7 +1525,7 @@ a { color:#8bc7ff; }
 </style>
 </head>
 <body>
-<div id="bootScreen" class="boot-screen active" aria-hidden="false">
+<div id="bootScreen" class="boot-screen" aria-hidden="true">
   <div class="boot-screen-card">
     <div class="boot-screen-grid"></div>
     <div class="boot-screen-content">
@@ -1535,13 +1567,13 @@ a { color:#8bc7ff; }
   <div class="toolstack">
     <button class="toolbtn" id="zoomIn">+</button>
     <button class="toolbtn" id="zoomOut">−</button>
-    <button class="toolbtn" id="layersBtn">≪</button>
+    <button class="toolbtn" id="layersBtn" title="Einstellungen">⚙</button>
   </div>
   <button class="toolbtn" id="homeBtn">⌂</button>
   <button class="toolbtn" id="muteBtn" title="OGG-Sounds stummschalten">🔊</button>
 
   <div id="topbar">
-    <strong>Galactic Campaign Board</strong>
+    <div class="topbar-title">Galactic Campaign Board</div>
     <select id="roleSelect">
       <option>Admin</option>
       <option>Republic Navy Admin</option>
@@ -1558,19 +1590,23 @@ a { color:#8bc7ff; }
       <option>Huttenkartell</option>
       <option selected>Viewer</option>
     </select>
-    <div class="topbar-session">
-      <span class="muted">Angemeldet als</span>
-      <strong id="sessionUserDisplay" class="topbar-session-name">Gast / Viewer</strong>
+    <div class="topbar-main">
+      <div class="search-wrap">
+        <input id="planetSearch" type="search" placeholder="Planeten / Flotten suchen..." autocomplete="off">
+        <div id="planetSearchResults" class="hidden"></div>
+      </div>
+      <div class="topbar-session">
+        <span class="muted">Angemeldet als:</span>
+        <strong id="sessionUserDisplay" class="topbar-session-name">Gast / Viewer</strong>
+      </div>
     </div>
     <div id="roleFactionBadge" class="role-faction-badge hidden"></div>
-    <div class="search-wrap">
-      <input id="planetSearch" type="search" placeholder="Planeten / Flotten suchen..." autocomplete="off">
-      <div id="planetSearchResults" class="hidden"></div>
+    <div class="topbar-actions">
+      <button class="secondary topbar-logout" id="logoutBtn">Logout</button>
+      <button class="secondary" id="viewModeBtn">Schematic Map</button>
+      <button class="secondary hidden" id="sectorDrawBtn">Sektor zeichnen</button>
+      <button class="secondary" id="saveBtn">Export JSON</button>
     </div>
-    <button class="secondary topbar-logout" id="logoutBtn">Logout</button>
-    <button class="secondary" id="viewModeBtn">Schematic Map</button>
-    <button class="secondary hidden" id="sectorDrawBtn">Sektor zeichnen</button>
-    <button class="secondary" id="saveBtn">Export JSON</button>
   </div>
 
   <div id="layersPanel" class="panel">
@@ -2190,7 +2226,7 @@ const BOOT_MAX_DURATION_MS = 6000;
 const bootLoadState = {
   startedAt: Date.now(),
   progress: 0,
-  hidden: false,
+  hidden: true,
   timer: null,
   forceTimer: null,
   tasks: {
@@ -2200,6 +2236,7 @@ const bootLoadState = {
     authReady: false
   }
 };
+let mapImageLoaded = false;
 let activeMainTab = 'map';
 let activeShipyardFactionOverride = 'GAR';
 let fleetManagementSearchQuery = '';
@@ -3847,18 +3884,18 @@ function openOverlayModal(modalId) {
 
 function getSettingsToggleDefinitions() {
   return [
-    { id: 'planetLabels', label: 'Planet Labels', description: 'Blendet Planetennamen direkt auf der Karte ein.' },
-    { id: 'hyperlanes', label: 'Hyperspace Lanes', description: 'Zeigt Hyperraumrouten und manuelle Verbindungen.' },
-    { id: 'majorTradeRoutes', label: 'Major Trade Routes', description: 'Nutzen derzeit dieselbe Hyperraumdarstellung wie die Hauptkartenrouten.', checked: () => Boolean(layers.hyperlanes), onToggle: (next) => setLayerPreference('hyperlanes', next) },
-    { id: 'conflictPulse', label: 'Conflict Pulse', description: 'Verwendet die vorhandene Sektor- und Kontrollansicht als Konfliktlage.', checked: () => Boolean(layers.sectorLabels), onToggle: (next) => setLayerPreference('sectorLabels', next) },
-    { id: 'republicSectors', label: 'Republic Sectors', description: 'Zeigt die sektorale Kontrollfärbung und Beschriftung an.', checked: () => Boolean(layers.sectorLabels), onToggle: (next) => setLayerPreference('sectorLabels', next) },
-    { id: 'neutralSectors', label: 'Neutral Sectors', description: 'Nutzen dieselbe Sektorebene wie die Republik/KUS-Kontrollfärbung.', checked: () => Boolean(layers.sectorLabels), onToggle: (next) => setLayerPreference('sectorLabels', next) },
-    { id: 'grid', label: 'Grid Overlay', description: 'Galaktisches Raster und Ringsegmente ein- oder ausblenden.' },
-    { id: 'fleetMarkers', label: 'Fleet Markers', description: 'Zeigt GAR- und KUS-Flottenmarker gesammelt an.', checked: () => Boolean(layers.garFleets && layers.kusFleets), onToggle: (next) => {
+    { id: 'planetLabels', label: 'Planetennamen', description: 'Blendet Planetennamen direkt auf der Karte ein.' },
+    { id: 'hyperlanes', label: 'Hyperraumrouten', description: 'Zeigt Hyperraumrouten und manuelle Verbindungen.' },
+    { id: 'majorTradeRoutes', label: 'Große Handelsrouten', description: 'Nutzen aktuell dieselbe Darstellung wie die Haupt-Hyperraumrouten.', checked: () => Boolean(layers.hyperlanes), onToggle: (next) => setLayerPreference('hyperlanes', next) },
+    { id: 'conflictPulse', label: 'Konfliktanzeige', description: 'Verwendet die vorhandene Sektor- und Kontrollansicht als Konfliktlage.', checked: () => Boolean(layers.sectorLabels), onToggle: (next) => setLayerPreference('sectorLabels', next) },
+    { id: 'republicSectors', label: 'Republik-Sektoren', description: 'Zeigt die sektorale Kontrollfärbung und Beschriftung an.', checked: () => Boolean(layers.sectorLabels), onToggle: (next) => setLayerPreference('sectorLabels', next) },
+    { id: 'neutralSectors', label: 'Neutrale Sektoren', description: 'Nutzen dieselbe Sektorebene wie die übrige Kontrollfärbung.', checked: () => Boolean(layers.sectorLabels), onToggle: (next) => setLayerPreference('sectorLabels', next) },
+    { id: 'grid', label: 'Raster', description: 'Galaktisches Raster und Ringsegmente ein- oder ausblenden.' },
+    { id: 'fleetMarkers', label: 'Flottenmarker', description: 'Zeigt GAR- und KUS-Flottenmarker gesammelt an.', checked: () => Boolean(layers.garFleets && layers.kusFleets), onToggle: (next) => {
       setLayerPreference('garFleets', next, false);
       setLayerPreference('kusFleets', next, true);
     }},
-    { id: 'tacticalOverlay', label: 'Tactical Overlay / Schematic Map', description: 'Wechselt zwischen Bildkarte und schematischer Einsatzdarstellung.', checked: () => viewMode === 'schematic', onToggle: (next) => setViewModePreference(next ? 'schematic' : 'image') }
+    { id: 'tacticalOverlay', label: 'Taktische / schematische Karte', description: 'Wechselt zwischen Bildkarte und schematischer Einsatzdarstellung.', checked: () => viewMode === 'schematic', onToggle: (next) => setViewModePreference(next ? 'schematic' : 'image') }
   ];
 }
 
@@ -3919,13 +3956,13 @@ function renderSettingsModal() {
     <div class="overlay-panel">
       <div class="overlay-panel-head">
         <div class="overlay-panel-title">
-          <h2 id="settingsModalTitle">⚙ SETTINGS</h2>
+          <h2 id="settingsModalTitle">⚙ Einstellungen</h2>
           <p>Angemeldet als: ${escapeHtml(getCurrentSessionLabel())}</p>
         </div>
-        <button type="button" class="secondary overlay-panel-close" data-close-modal="settingsModal" aria-label="Settings schließen">×</button>
+        <button type="button" class="secondary overlay-panel-close" data-close-modal="settingsModal" aria-label="Einstellungen schließen">×</button>
       </div>
       <section class="overlay-section">
-        <h3>Map Display</h3>
+        <h3>Kartenanzeige</h3>
         <div class="overlay-toggle-list">${toggleRows}</div>
       </section>
       <section class="overlay-section">
@@ -3941,7 +3978,7 @@ function renderSettingsModal() {
           <h3>Admin</h3>
           <div class="overlay-toggle-row">
             <div class="overlay-toggle-copy">
-              <strong>Admin Mode</strong>
+              <strong>Admin-Modus</strong>
               <span>Blendet Admin-Werkzeuge im HUD gezielt ein oder aus.</span>
             </div>
             <button
@@ -4441,11 +4478,32 @@ function markBootTask(taskKey, ready = true) {
   maybeFinishBootScreen();
 }
 
-function startBootSequence() {
+function resetBootSequenceState() {
+  if (bootLoadState.timer) {
+    window.clearInterval(bootLoadState.timer);
+    bootLoadState.timer = null;
+  }
+  if (bootLoadState.forceTimer) {
+    window.clearTimeout(bootLoadState.forceTimer);
+    bootLoadState.forceTimer = null;
+  }
   bootLoadState.startedAt = Date.now();
-  setBootProgress(4, 'INITIALISIERE SYSTEME');
+  bootLoadState.progress = 0;
+  bootLoadState.hidden = false;
+  bootLoadState.tasks = {
+    domReady: true,
+    mapImageReady: mapImageLoaded || Boolean(mapEl?.complete),
+    campaignReady: false,
+    authReady: false
+  };
+  bootScreen?.classList.remove('fade-out');
   bootScreen?.classList.add('active');
   bootScreen?.setAttribute('aria-hidden', 'false');
+}
+
+function startBootSequence() {
+  resetBootSequenceState();
+  setBootProgress(4, 'INITIALISIERE SYSTEME');
   bootLoadState.timer = window.setInterval(() => {
     if (bootLoadState.hidden) return;
     const target = Object.values(bootLoadState.tasks).every(Boolean) ? 100 : 90;
@@ -7469,6 +7527,18 @@ function safeRefreshRoleChrome() {
   }
 }
 
+async function beginAppLoadSequence() {
+  startBootSequence();
+  if (serverSync.enabled) {
+    await bootstrapFromServer();
+  } else {
+    applyDefaultAnonymousRole();
+    safeRefreshRoleChrome();
+    markBootTask('campaignReady', true);
+    markBootTask('authReady', true);
+  }
+}
+
 function continueAsGuest() {
   viewerModeActive = true;
   currentAuthenticatedUsername = '';
@@ -7478,8 +7548,8 @@ function continueAsGuest() {
   tutorialFlowState.shouldPrompt = false;
   closeOverlayModal('tutorialModal', { restoreFocus: false });
   safeRefreshRoleChrome();
-  markBootTask('authReady', true);
-  setStatus('Gastmodus aktiv.');
+  void beginAppLoadSequence();
+  setStatus('Gastmodus aktiv. Kampagnendaten werden geladen.');
 }
 
 async function logoutCurrentUser() {
@@ -7532,7 +7602,7 @@ async function attemptLogin() {
     if (loginModalPassword) loginModalPassword.value = '';
     destroyServerSocketConnection();
     clearServerReconnectTimer();
-    await bootstrapFromServer();
+    await beginAppLoadSequence();
     await checkTutorialStatus();
     if (selected?.type === 'planet') openPlanet(selected.id);
     if (selected?.type === 'fleet') openFleet(selected.id);
@@ -13760,14 +13830,15 @@ loginModalUser?.addEventListener('keydown', (event) => {
   }
 });
 try {
-  startBootSequence();
-  markBootTask('domReady', true);
-  if (mapEl?.complete) {
-    markBootTask('mapImageReady', true);
-  } else {
-    mapEl?.addEventListener('load', () => markBootTask('mapImageReady', true), { once: true });
+  mapImageLoaded = Boolean(mapEl?.complete);
+  if (!mapImageLoaded) {
+    mapEl?.addEventListener('load', () => {
+      mapImageLoaded = true;
+      markBootTask('mapImageReady', true);
+    }, { once: true });
     mapEl?.addEventListener('error', () => {
       console.warn('Galaxy map image failed to load; continuing.');
+      mapImageLoaded = true;
       markBootTask('mapImageReady', true);
     }, { once: true });
   }
@@ -13777,18 +13848,13 @@ try {
   applyAudioMuteState();
   setNavCollapsed(false);
   safeRefreshRoleChrome();
-  bootstrapFromServer();
   syncMobileOrientationUi();
-  if (!serverSync.enabled) {
-    markBootTask('campaignReady', true);
-    markBootTask('authReady', true);
-  }
+  showLoginModal();
+  setStatus('Bitte einloggen oder als Gast fortfahren.');
 } catch (error) {
   console.error('Initial app startup failed', error);
-  continueAsGuest();
-  markBootTask('campaignReady', true);
-  markBootTask('authReady', true);
-  setStatus('Initialisierung teilweise fehlgeschlagen; Gastmodus aktiv.');
+  showLoginModal();
+  setStatus('Initialisierung teilweise fehlgeschlagen. Bitte erneut anmelden.');
 }
 window.addEventListener('resize', syncMobileOrientationUi);
 window.addEventListener('orientationchange', syncMobileOrientationUi);
