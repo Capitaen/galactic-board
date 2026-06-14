@@ -82,7 +82,7 @@ function getFleetDisplayPosition(fleet) {
 
 function saveLocal() {
   saveClientUiPrefs();
-  localStorage.setItem('gcb_state_v1', JSON.stringify(makeLocalCampaignSnapshot(state)));
+  localStorage.setItem(LOCAL_STATE_STORAGE_KEY, JSON.stringify(makeLocalCampaignSnapshot(state)));
   if (!serverSync.enabled) {
     return;
   }

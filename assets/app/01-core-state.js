@@ -310,25 +310,36 @@ const SHIP_CLASS_IMPORT_PATTERNS = [
   { classId: 'ipv_2c_tarnkorvette', patterns: ['ipv-2c-tarnkorvette', 'ipv 2c tarnkorvette'] }
 ];
 const LOCAL_STATE_MAX_BYTES = 2.5 * 1024 * 1024;
+const LOCAL_STATE_STORAGE_KEY = 'gcb_state_v2';
+const LOCAL_STATE_SCHEMA_VERSION = 2;
 let deferredFullRenderTimer = null;
 function makeLocalCampaignSnapshot(nextState) {
   const payload = makeServerCampaignPayload(nextState);
   payload.authUsers = Array.isArray(nextState?.authUsers) ? nextState.authUsers : [];
   payload.lastResourceTickAt = Number(nextState?.lastResourceTickAt) || Date.now();
+  payload.meta = payload.meta && typeof payload.meta === 'object' ? payload.meta : {};
+  payload.meta.clientSnapshotVersion = LOCAL_STATE_SCHEMA_VERSION;
   return JSON.parse(JSON.stringify(payload));
 }
 function loadInitialCampaignState() {
   try {
-    const raw = localStorage.getItem('gcb_state_v1');
+    const raw = localStorage.getItem(LOCAL_STATE_STORAGE_KEY);
     if (!raw) return JSON.parse(JSON.stringify(DEFAULT_DATA));
     if (raw.length > LOCAL_STATE_MAX_BYTES) {
       console.warn('Stored campaign state too large, ignoring local fallback', { kb: Math.round(raw.length / 1024) });
-      localStorage.removeItem('gcb_state_v1');
+      localStorage.removeItem(LOCAL_STATE_STORAGE_KEY);
+      return JSON.parse(JSON.stringify(DEFAULT_DATA));
+    }
+    const parsed = JSON.parse(raw);
+    const snapshotVersion = Number(parsed?.meta?.clientSnapshotVersion || 0);
+    if (snapshotVersion !== LOCAL_STATE_SCHEMA_VERSION) {
+      console.warn('Stored campaign state snapshot version is outdated, ignoring local fallback', { snapshotVersion, expected: LOCAL_STATE_SCHEMA_VERSION });
+      localStorage.removeItem(LOCAL_STATE_STORAGE_KEY);
       return JSON.parse(JSON.stringify(DEFAULT_DATA));
     }
     return {
       ...JSON.parse(JSON.stringify(DEFAULT_DATA)),
-      ...makeLocalCampaignSnapshot(JSON.parse(raw))
+      ...makeLocalCampaignSnapshot(parsed)
     };
   } catch (error) {
     console.warn('Campaign state could not be restored; falling back to defaults', error);
