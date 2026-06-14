@@ -542,11 +542,55 @@ function buildRadioCommandAdminPayload(actor) {
   };
 }
 
-function sanitizeStateForRole(state, actor) {
+function sanitizeCampaignMeta(meta) {
+  const source = meta && typeof meta === 'object' ? meta : {};
+  const blockedKeys = new Set([
+    'arcgisCompact',
+    'arcgisRaw',
+    'hyperlanes',
+    'grid',
+    'regions',
+    'sectors',
+    'mapAnalysis',
+    'routeCache',
+    'tacticalRouteCache',
+    'searchState',
+    'layerState',
+    'viewState',
+    'zoom',
+    'panX',
+    'panY',
+    'viewMode',
+    'ui',
+    'animationState',
+    'renderCache',
+    'indexCache',
+    'domCache'
+  ]);
+  return Object.fromEntries(
+    Object.entries(source).filter(([key]) => !blockedKeys.has(key))
+  );
+}
+
+function buildBootstrapCampaignPayload(state, actor) {
+  const source = state && typeof state === 'object' ? state : {};
   return {
-    ...state,
+    planets: Array.isArray(source.planets) ? source.planets : [],
+    fleets: Array.isArray(source.fleets) ? source.fleets : [],
+    ships: Array.isArray(source.ships) ? source.ships : [],
+    buildJobs: Array.isArray(source.buildJobs) ? source.buildJobs : [],
+    fleetMotions: Array.isArray(source.fleetMotions) ? source.fleetMotions : [],
+    resources: source.resources && typeof source.resources === 'object' ? source.resources : {},
+    planetResources: source.planetResources && typeof source.planetResources === 'object' ? source.planetResources : {},
+    lastResourceTickAt: Number(source.lastResourceTickAt) || Date.now(),
+    importWarnings: Array.isArray(source.importWarnings) ? source.importWarnings : [],
+    meta: sanitizeCampaignMeta(source.meta),
     authUsers: listUsersForActor(actor)
   };
+}
+
+function sanitizeStateForRole(state, actor) {
+  return buildBootstrapCampaignPayload(state, actor);
 }
 
 function createEmptyFactionResources() {
