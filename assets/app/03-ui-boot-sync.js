@@ -627,6 +627,7 @@ function triggerOwnerChangeEffects(previousOwners) {
 }
 
 function schedulePostBootstrapMapWork() {
+  warmDeferredCampaignAssets();
   syncWorldSizeToMap();
   window.setTimeout(() => {
     if ((state.meta?.positionCalibrationVersion ?? 0) < POSITION_CALIBRATION_VERSION) {

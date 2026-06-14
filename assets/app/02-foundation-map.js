@@ -984,7 +984,7 @@ function prepareArcgisData() {
       return { arcX: match.x, arcY: match.y, worldX: anchor.next.x, worldY: anchor.next.y };
     })
     .filter(Boolean);
-  const fallbackImagePairs = DEFAULT_DATA.planets
+  const fallbackImagePairs = (state?.planets || [])
     .map((planet) => {
       const match = planetMap.get(normalizePlanetKey(planet.name));
       if (!match) return null;

@@ -1,6 +1,7 @@
 ﻿// Generated from app-shell.js: core constants, DOM refs, runtime state
 
 const WORLD_SIZE = 2048;
+const ASSET_VERSION_TAG = '20260614b';
 const MIN_ZOOM = 0.3;
 const MAX_ZOOM = 3.3;
 const CLUSTER_MAX_ZOOM = 10.5;
@@ -312,7 +313,79 @@ const SHIP_CLASS_IMPORT_PATTERNS = [
 const LOCAL_STATE_MAX_BYTES = 2.5 * 1024 * 1024;
 const LOCAL_STATE_STORAGE_KEY = 'gcb_state_v2';
 const LOCAL_STATE_SCHEMA_VERSION = 2;
+const DEFAULT_DATA = {
+  planets: [],
+  fleets: [],
+  ships: [],
+  buildJobs: [],
+  fleetMotions: [],
+  resources: {},
+  planetResources: {},
+  lastResourceTickAt: Date.now(),
+  importWarnings: [],
+  authUsers: [],
+  meta: {}
+};
+const deferredScriptPromises = new Map();
 let deferredFullRenderTimer = null;
+function loadDeferredScriptOnce(key, src) {
+  if (deferredScriptPromises.has(key)) return deferredScriptPromises.get(key);
+  const promise = new Promise((resolve, reject) => {
+    const existing = document.querySelector(`script[data-deferred-script="${key}"]`);
+    if (existing) {
+      existing.addEventListener('load', () => resolve(true), { once: true });
+      existing.addEventListener('error', () => reject(new Error(`Failed to load ${src}`)), { once: true });
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = src;
+    script.defer = true;
+    script.dataset.deferredScript = key;
+    script.addEventListener('load', () => resolve(true), { once: true });
+    script.addEventListener('error', () => reject(new Error(`Failed to load ${src}`)), { once: true });
+    document.head.appendChild(script);
+  });
+  deferredScriptPromises.set(key, promise);
+  return promise;
+}
+function ensureArcgisCompactLoaded() {
+  if (window.ARCGIS_COMPACT) return Promise.resolve(true);
+  return loadDeferredScriptOnce('arcgis-compact', `assets/arcgis-compact.js?v=${ASSET_VERSION_TAG}`)
+    .then(() => {
+      arcgisData = null;
+      if (typeof renderBaseThenDeferHeavy === 'function' && Array.isArray(state?.planets) && state.planets.length) {
+        renderBaseThenDeferHeavy();
+      }
+      return Boolean(window.ARCGIS_COMPACT);
+    })
+    .catch((error) => {
+      console.warn('ArcGIS compact data could not be loaded lazily.', error);
+      return false;
+    });
+}
+function ensurePlanetDemographicsLoaded() {
+  if (window.PLANET_DEMOGRAPHICS) {
+    PLANET_DEMOGRAPHIC_CATALOG = window.PLANET_DEMOGRAPHICS;
+    return Promise.resolve(true);
+  }
+  return loadDeferredScriptOnce('planet-demographics', `assets/planet-demographics.js?v=${ASSET_VERSION_TAG}`)
+    .then(() => {
+      PLANET_DEMOGRAPHIC_CATALOG = window.PLANET_DEMOGRAPHICS || {};
+      return Object.keys(PLANET_DEMOGRAPHIC_CATALOG).length > 0;
+    })
+    .catch((error) => {
+      console.warn('Planet demographics could not be loaded lazily.', error);
+      return false;
+    });
+}
+function warmDeferredCampaignAssets() {
+  window.setTimeout(() => {
+    void ensureArcgisCompactLoaded();
+  }, 1200);
+  window.setTimeout(() => {
+    void ensurePlanetDemographicsLoaded();
+  }, 2500);
+}
 function sanitizeCampaignMeta(meta) {
   const source = meta && typeof meta === 'object' && !Array.isArray(meta) ? meta : {};
   const blockedKeys = new Set([
@@ -518,7 +591,7 @@ const PLANET_INFO_LOCAL_OVERRIDES = {
     description: 'Anaxes zählt zu den wichtigsten republikanischen Militärwelten und dient als Flotten- und Ausbildungsstandort.'
   }
 };
-const PLANET_DEMOGRAPHIC_CATALOG = window.PLANET_DEMOGRAPHICS || {};
+let PLANET_DEMOGRAPHIC_CATALOG = window.PLANET_DEMOGRAPHICS || {};
 const planetInfoCardCache = new Map();
 let activePlanetInfoRequestId = 0;
 const LOGIN_ROLE_DEFINITIONS = {

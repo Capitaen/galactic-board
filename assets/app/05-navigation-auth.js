@@ -1273,24 +1273,38 @@ function safeRefreshRoleChrome() {
   }
 }
 
+let appLoadSequencePromise = null;
+
+function hasLoadedCampaignState() {
+  return Array.isArray(state?.planets) && state.planets.length > 0 && serverRevision >= 0;
+}
+
 async function beginAppLoadSequence() {
-  startBootSequence('app');
-  if (serverSync.enabled) {
-    await bootstrapFromServer();
-    markBootTask('economyReady', true);
-  } else {
-    applyDefaultAnonymousRole();
-    ensureImportantCampaignPlanets();
-    rebuildIndexes();
-    runCampaignMaintenance();
-    rebuildIndexes();
-    syncFleetTravelStateFromCampaign();
-    renderBaseThenDeferHeavy();
-    safeRefreshRoleChrome();
-    markBootTask('campaignReady', true);
-    markBootTask('authReady', true);
-    markBootTask('economyReady', true);
-  }
+  if (appLoadSequencePromise) return appLoadSequencePromise;
+  appLoadSequencePromise = (async () => {
+    startBootSequence('app');
+    try {
+      if (serverSync.enabled) {
+        await bootstrapFromServer();
+        markBootTask('economyReady', true);
+      } else {
+        applyDefaultAnonymousRole();
+        ensureImportantCampaignPlanets();
+        rebuildIndexes();
+        runCampaignMaintenance();
+        rebuildIndexes();
+        syncFleetTravelStateFromCampaign();
+        renderBaseThenDeferHeavy();
+        safeRefreshRoleChrome();
+        markBootTask('campaignReady', true);
+        markBootTask('authReady', true);
+        markBootTask('economyReady', true);
+      }
+    } finally {
+      appLoadSequencePromise = null;
+    }
+  })();
+  return appLoadSequencePromise;
 }
 
 async function ensureEconomyViewLoaded(options = {}) {
@@ -1412,7 +1426,9 @@ function continueAsGuest() {
   tutorialFlowState.shouldPrompt = false;
   closeOverlayModal('tutorialModal', { restoreFocus: false });
   safeRefreshRoleChrome();
-  void beginAppLoadSequence();
+  if (!hasLoadedCampaignState()) {
+    void beginAppLoadSequence();
+  }
   setStatus('Gastmodus aktiv. Kampagnendaten werden geladen.');
 }
 
@@ -1454,7 +1470,9 @@ async function attemptLogin() {
   viewerModeActive = false;
   hideLoginModal();
   setStatus('Zugangsdaten werden geprüft. Grundsysteme werden bereits geladen.');
-  void beginAppLoadSequence();
+  if (!hasLoadedCampaignState()) {
+    void beginAppLoadSequence();
+  }
   void verifyDeferredLogin(pendingLoginAttempt);
 }
 
