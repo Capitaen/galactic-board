@@ -5016,6 +5016,27 @@ function loadMarketHistoryForCompanyIds(db, companyIds, cutoffIso) {
   return history;
 }
 
+function loadCompactMarketHistoryForCompanyIds(db, companyIds, cutoffIso) {
+  const normalizedIds = [...new Set((companyIds || []).map((id) => String(id || '').trim()).filter(Boolean))];
+  if (!normalizedIds.length) return {};
+  const placeholders = normalizedIds.map(() => '?').join(', ');
+  const rows = db.prepare(`
+    SELECT company_id AS companyId,
+      ROUND(AVG(price), 2) AS price,
+      MAX(recorded_at) AS recordedAt
+    FROM market_history
+    WHERE company_id IN (${placeholders}) AND recorded_at >= ?
+    GROUP BY company_id, strftime('%Y-%m-%dT%H', recorded_at)
+    ORDER BY recordedAt
+  `).all(...normalizedIds, cutoffIso);
+  const history = {};
+  rows.forEach((row) => {
+    if (!history[row.companyId]) history[row.companyId] = [];
+    history[row.companyId].push({ price: row.price, recordedAt: row.recordedAt });
+  });
+  return history;
+}
+
 function readMarketCompanySummaryRows(db, whereSql = '', params = []) {
   return db.prepare(`
     SELECT id, symbol, name, faction, base_price AS basePrice,
@@ -5064,7 +5085,7 @@ function buildMarketTopLastHour(companies, hourHistoryByCompany) {
 }
 
 function buildMarketSummarySnapshot(db, now = Date.now()) {
-  const historyCutoff = new Date(now - ACP_HISTORY_WINDOW_MS).toISOString();
+  const historyCutoff = new Date(now - (96 * 60 * 60 * 1000)).toISOString();
   const oneHourAgoIso = new Date(now - (60 * 60 * 1000)).toISOString();
   const statsMap = readMarketCompanyStatsMap(db);
   const allCompanies = readMarketCompanySummaryRows(db, 'ORDER BY symbol')
@@ -5087,7 +5108,7 @@ function buildMarketSummarySnapshot(db, now = Date.now()) {
     ...featuredCompanies.map((company) => company.id),
     ...topLastHour.map((company) => company.id)
   ])];
-  const companyHistory = loadMarketHistoryForCompanyIds(db, historyCompanyIds, historyCutoff);
+  const companyHistory = loadCompactMarketHistoryForCompanyIds(db, historyCompanyIds, historyCutoff);
   const leaderboard = db.prepare(`
     SELECT i.alias,
       ROUND(i.balance + COALESCE(SUM(h.shares * c.current_price), 0), 2) AS portfolioValue,
@@ -5177,7 +5198,7 @@ function ensureMarketSummarySnapshot(db, now = Date.now()) {
 
 export function readMarketSummary(db, investorId = '', userId = '') {
   const snapshot = ensureMarketSummarySnapshot(db, Date.now());
-  const historyCutoff = new Date(Date.now() - ACP_HISTORY_WINDOW_MS).toISOString();
+  const historyCutoff = new Date(Date.now() - (96 * 60 * 60 * 1000)).toISOString();
   const investor = investorId ? getOrCreateMarketInvestor(db, investorId, userId) : null;
   const holdings = investorId ? db.prepare(`
     SELECT company_id AS companyId, shares
@@ -5204,10 +5225,9 @@ export function readMarketSummary(db, investorId = '', userId = '') {
     .filter((companyId) => !snapshotHistory[companyId]);
   const history = {
     ...snapshotHistory,
-    ...(missingHistoryIds.length ? loadMarketHistoryForCompanyIds(db, missingHistoryIds, historyCutoff) : {})
+    ...(missingHistoryIds.length ? loadCompactMarketHistoryForCompanyIds(db, missingHistoryIds, historyCutoff) : {})
   };
   const portfolio = investorId ? readPortfolio(db, investorId, userId) : null;
-  const portfolioHistory = investorId ? readPortfolioHistory(db, investorId, 'sixMonths') : [];
   const purchaseOrders = investorId ? db.prepare(`
     SELECT id, company_id AS companyId, quantity, unit_price AS unitPrice,
       total_value AS totalValue, remaining_quantity AS remainingQuantity,
@@ -5223,7 +5243,7 @@ export function readMarketSummary(db, investorId = '', userId = '') {
     holdings,
     purchaseOrders,
     portfolio,
-    portfolioHistory,
+    portfolioHistory: [],
     investor,
     leaderboard: Array.isArray(snapshot.leaderboard) ? snapshot.leaderboard : [],
     events: Array.isArray(snapshot.events) ? snapshot.events : [],
@@ -5258,7 +5278,7 @@ export function searchMarketCompanies(db, options = {}) {
   const companies = rows.map((row) => mapMarketCompanySummaryRow(row, statsMap.get(row.id)));
   return {
     companies,
-    history: loadMarketHistoryForCompanyIds(db, companies.map((company) => company.id), historyCutoff)
+    history: loadCompactMarketHistoryForCompanyIds(db, companies.map((company) => company.id), historyCutoff)
   };
 }
 

@@ -62,6 +62,9 @@ function formatMarketAxisDate(value, rangeKey = economyViewState.marketRange) {
 
 function setMarketRange(rangeKey) {
   economyViewState.marketRange = MARKET_RANGE_OPTIONS[rangeKey] ? rangeKey : 'today';
+  if (economyViewState.activeSection === 'portfolio') {
+    void fetchPortfolioHistory(economyViewState.marketRange);
+  }
   renderEconomyView();
 }
 
@@ -540,6 +543,38 @@ async function fetchMarketCompanyDetail(companyId, options = {}) {
   }
 }
 
+async function fetchPortfolioHistory(range = economyViewState.marketRange, options = {}) {
+  if (!economyViewState.portfolioEnabled) {
+    economyViewState.portfolioHistory = [];
+    return true;
+  }
+  const normalizedRange = MARKET_RANGE_OPTIONS[range] ? range : 'today';
+  const force = Boolean(options.force);
+  if (
+    !force
+    && economyViewState.portfolioHistoryRange === normalizedRange
+    && Array.isArray(economyViewState.portfolioHistory)
+    && economyViewState.portfolioHistory.length
+  ) {
+    return true;
+  }
+  try {
+    const response = await fetch(`/api/economy/portfolio/history?range=${encodeURIComponent(normalizedRange)}`, { credentials: 'include' });
+    const payload = await readJsonResponse(response, 'Portfolio-Historie konnte nicht geladen werden.');
+    if (!response.ok) throw new Error(payload.error || 'Portfolio-Historie konnte nicht geladen werden.');
+    economyViewState.portfolioHistory = Array.isArray(payload.history) ? payload.history : [];
+    economyViewState.portfolioHistoryRange = normalizedRange;
+    return true;
+  } catch (error) {
+    economyViewState.error = error.message;
+    return false;
+  } finally {
+    if (activeMainTab === 'economy' && economyViewState.activeSection === 'portfolio') {
+      renderEconomyView();
+    }
+  }
+}
+
 async function buyMarketShare(companyId) {
   if (getMarketCooldownRemaining() > 0) return;
   const quantity = economyViewState.consumerMode
@@ -592,6 +627,7 @@ function setEconomySection(section) {
   renderEconomyView();
   if (economyViewState.activeSection === 'sectorEconomy') void fetchSectorEconomyList();
   if (economyViewState.activeSection === 'acp') void fetchAcpRanking();
+  if (economyViewState.activeSection === 'portfolio') void fetchPortfolioHistory(economyViewState.marketRange);
 }
 
 function openMarketCompanyOverview(companyId) {

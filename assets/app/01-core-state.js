@@ -404,6 +404,7 @@ const economyViewState = {
   purchaseOrders: [],
   portfolio: null,
   portfolioHistory: [],
+  portfolioHistoryRange: '',
   leaderboard: [],
   events: [],
   acp: { current: [], history: {} },

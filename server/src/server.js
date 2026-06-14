@@ -1201,11 +1201,6 @@ app.get('/api/economy/market', (req, res) => {
     const consumerKey = session ? '' : getMarketConsumerKey(req);
     const { state } = readCampaignState(db);
     const inflationRate = Math.min(0.25, Number(state.resources?.GAR?.credits || 0) / 2000000);
-    try {
-      runMarketTick(db, inflationRate, Date.now(), state);
-    } catch (tickError) {
-      console.error('Economy market tick failed', tickError);
-    }
     const snapshot = readMarketSnapshot(db, investorId, session?.id || '');
     const factionAccounts = {
       ...snapshot.factionAccounts,
@@ -1239,12 +1234,6 @@ app.get('/api/economy/market', (req, res) => {
 app.get('/api/economy/sectors', (req, res) => {
   try {
     const { state } = readCampaignState(db);
-    const inflationRate = Math.min(0.25, Number(state.resources?.GAR?.credits || 0) / 2000000);
-    try {
-      runMarketTick(db, inflationRate, Date.now(), state);
-    } catch (tickError) {
-      console.error('Sector economy tick failed', tickError);
-    }
     res.json({
       sectors: listEconomySectors(db, state),
       canBuyResources: canBuySectorCivilianResources(getSession(req)),
@@ -1259,12 +1248,6 @@ app.get('/api/economy/sectors', (req, res) => {
 app.get('/api/economy/sectors/:sectorId', (req, res) => {
   try {
     const { state } = readCampaignState(db);
-    const inflationRate = Math.min(0.25, Number(state.resources?.GAR?.credits || 0) / 2000000);
-    try {
-      runMarketTick(db, inflationRate, Date.now(), state);
-    } catch (tickError) {
-      console.error('Sector economy detail tick failed', tickError);
-    }
     res.json({
       sector: readEconomySector(db, state, req.params.sectorId),
       canBuyResources: canBuySectorCivilianResources(getSession(req)),
@@ -1322,11 +1305,6 @@ app.get('/api/economy/market/summary', (req, res) => {
     const consumerKey = session ? '' : getMarketConsumerKey(req);
     const { state } = readCampaignState(db);
     const inflationRate = Math.min(0.25, Number(state.resources?.GAR?.credits || 0) / 2000000);
-    try {
-      runMarketTick(db, inflationRate, Date.now(), state);
-    } catch (tickError) {
-      console.error('Economy market summary tick failed', tickError);
-    }
     const snapshot = readMarketSummary(db, investorId, session?.id || '');
     const factionAccounts = {
       ...snapshot.factionAccounts,
@@ -1359,13 +1337,6 @@ app.get('/api/economy/market/summary', (req, res) => {
 
 app.get('/api/economy/market/search', (req, res) => {
   try {
-    const { state } = readCampaignState(db);
-    const inflationRate = Math.min(0.25, Number(state.resources?.GAR?.credits || 0) / 2000000);
-    try {
-      runMarketTick(db, inflationRate, Date.now(), state);
-    } catch (tickError) {
-      console.error('Economy market search tick failed', tickError);
-    }
     res.json(searchMarketCompanies(db, {
       query: String(req.query?.q || ''),
       resourceFilter: String(req.query?.resource || 'all'),
@@ -1379,13 +1350,6 @@ app.get('/api/economy/market/search', (req, res) => {
 
 app.get('/api/economy/acp/ranking', (req, res) => {
   try {
-    const { state } = readCampaignState(db);
-    const inflationRate = Math.min(0.25, Number(state.resources?.GAR?.credits || 0) / 2000000);
-    try {
-      runMarketTick(db, inflationRate, Date.now(), state);
-    } catch (tickError) {
-      console.error('ACP ranking tick failed', tickError);
-    }
     res.json(readAcpSectorRanking(db, {
       resourceType: String(req.query?.resourceType || 'METALLE'),
       sort: String(req.query?.sort || 'cheap')
@@ -1398,13 +1362,6 @@ app.get('/api/economy/acp/ranking', (req, res) => {
 
 app.get('/api/economy/companies/:companyId', (req, res) => {
   try {
-    const { state } = readCampaignState(db);
-    const inflationRate = Math.min(0.25, Number(state.resources?.GAR?.credits || 0) / 2000000);
-    try {
-      runMarketTick(db, inflationRate, Date.now(), state);
-    } catch (tickError) {
-      console.error('Company economy detail tick failed', tickError);
-    }
     res.json({ company: readMarketCompanyDetail(db, String(req.params.companyId || '')) });
   } catch (error) {
     console.error('Economy company detail endpoint failed', error);
