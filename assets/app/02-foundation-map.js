@@ -35,6 +35,12 @@ function ensureSectorStore() {
   return state.meta.manualSectors;
 }
 
+function ensureWarehouseStore() {
+  state.meta = state.meta || {};
+  if (!Array.isArray(state.meta.planetWarehouses)) state.meta.planetWarehouses = [];
+  return state.meta.planetWarehouses;
+}
+
 function createManualSectorRecord(data = {}) {
   const points = Array.isArray(data.points)
     ? data.points

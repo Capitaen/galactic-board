@@ -313,6 +313,36 @@ const LOCAL_STATE_MAX_BYTES = 2.5 * 1024 * 1024;
 const LOCAL_STATE_STORAGE_KEY = 'gcb_state_v2';
 const LOCAL_STATE_SCHEMA_VERSION = 2;
 let deferredFullRenderTimer = null;
+function sanitizeCampaignMeta(meta) {
+  const source = meta && typeof meta === 'object' && !Array.isArray(meta) ? meta : {};
+  const blockedKeys = new Set([
+    'planetInfoCache',
+    'planetFetchState',
+    'ui',
+    'animationState',
+    'renderCache',
+    'indexCache',
+    'domCache'
+  ]);
+  return Object.fromEntries(
+    Object.entries(source).filter(([key]) => !blockedKeys.has(key))
+  );
+}
+function makeServerCampaignPayload(nextState) {
+  const payload = {
+    planets: Array.isArray(nextState?.planets) ? nextState.planets : [],
+    fleets: Array.isArray(nextState?.fleets) ? nextState.fleets : [],
+    ships: Array.isArray(nextState?.ships) ? nextState.ships : [],
+    buildJobs: Array.isArray(nextState?.buildJobs) ? nextState.buildJobs : [],
+    fleetMotions: Array.isArray(nextState?.fleetMotions) ? nextState.fleetMotions : [],
+    resources: nextState?.resources && typeof nextState.resources === 'object' ? nextState.resources : {},
+    planetResources: nextState?.planetResources && typeof nextState.planetResources === 'object' ? nextState.planetResources : {},
+    lastResourceTickAt: Number(nextState?.lastResourceTickAt) || Date.now(),
+    importWarnings: Array.isArray(nextState?.importWarnings) ? nextState.importWarnings : [],
+    meta: sanitizeCampaignMeta(nextState?.meta)
+  };
+  return JSON.parse(JSON.stringify(payload));
+}
 function makeLocalCampaignSnapshot(nextState) {
   const payload = makeServerCampaignPayload(nextState);
   payload.authUsers = Array.isArray(nextState?.authUsers) ? nextState.authUsers : [];
