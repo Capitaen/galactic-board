@@ -16,6 +16,9 @@ const RESOURCE_KEYS = Object.keys(RESOURCE_MARKET_CONFIG);
 const DEMAND_TICK_MS = 15 * 1000;
 const SOLVENCY_TICK_MS = 10 * 60 * 1000;
 const INSTITUTIONAL_TICK_MS = 10 * 60 * 1000;
+const PORTFOLIO_SNAPSHOT_TICK_MS = 2 * 60 * 1000;
+const MARKET_SUMMARY_SNAPSHOT_TICK_MS = 2 * 60 * 1000;
+const ACP_HISTORY_SNAPSHOT_TICK_MS = 5 * 60 * 1000;
 const CORPORATE_BUILD_TICK_MS = 30 * 60 * 1000;
 const CORPORATE_PRODUCTION_TICK_MS = 15 * 60 * 1000;
 const CORPORATE_FINANCE_TICK_MS = 15 * 60 * 1000;
@@ -6913,10 +6916,19 @@ export function runMarketTick(db, inflationRate = 0, now = Date.now(), state = n
       `).run(crypto.randomUUID(), eventType, title, description, impact, recordedAt, new Date(now + 3 * 60 * 60 * 1000).toISOString());
     }
   })();
-  db.prepare('SELECT id FROM market_investors WHERE portfolio_enabled = 1').all()
-    .forEach((investor) => writePortfolioSnapshot(db, investor.id, recordedAt));
-  writeSectorResourcePriceHistorySnapshot(db, recordedAt);
-  writeMarketSummarySnapshot(db, now);
+  if (canRunCadence(db, 'last_portfolio_snapshot_tick', PORTFOLIO_SNAPSHOT_TICK_MS, now)) {
+    db.prepare('SELECT id FROM market_investors WHERE portfolio_enabled = 1').all()
+      .forEach((investor) => writePortfolioSnapshot(db, investor.id, recordedAt));
+    setRuntimeStateNumber(db, 'last_portfolio_snapshot_tick', now, recordedAt);
+  }
+  if (canRunCadence(db, 'last_acp_history_snapshot_tick', ACP_HISTORY_SNAPSHOT_TICK_MS, now)) {
+    writeSectorResourcePriceHistorySnapshot(db, recordedAt);
+    setRuntimeStateNumber(db, 'last_acp_history_snapshot_tick', now, recordedAt);
+  }
+  if (canRunCadence(db, 'last_market_summary_snapshot_tick', MARKET_SUMMARY_SNAPSHOT_TICK_MS, now)) {
+    writeMarketSummarySnapshot(db, now);
+    setRuntimeStateNumber(db, 'last_market_summary_snapshot_tick', now, recordedAt);
+  }
   setRuntimeStateNumber(db, 'last_market_tick', now, recordedAt);
   return true;
 }
