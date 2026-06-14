@@ -1277,6 +1277,12 @@ async function beginAppLoadSequence() {
     markBootTask('economyReady', true);
   } else {
     applyDefaultAnonymousRole();
+    ensureImportantCampaignPlanets();
+    rebuildIndexes();
+    runCampaignMaintenance();
+    rebuildIndexes();
+    syncFleetTravelStateFromCampaign();
+    renderBaseThenDeferHeavy();
     safeRefreshRoleChrome();
     markBootTask('campaignReady', true);
     markBootTask('authReady', true);

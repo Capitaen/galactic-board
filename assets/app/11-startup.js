@@ -154,30 +154,8 @@ window.updateMarketQuantity = updateMarketQuantity;
 window.updateEconomySectorQuery = updateEconomySectorQuery;
 window.saveEconomyPolicy = saveEconomyPolicy;
 
-ensureImportantCampaignPlanets();
-rebuildIndexes();
-runCampaignMaintenance();
-rebuildIndexes();
-syncFleetTravelStateFromCampaign();
 syncWorldSizeToMap();
-renderBaseThenDeferHeavy();
-if (mapEl.complete) {
-  syncWorldSizeToMap();
-  initMapAnalysis();
-  scheduleDeferredFullRender(20);
-} else {
-  mapEl.addEventListener('load', () => {
-    syncWorldSizeToMap();
-    initMapAnalysis();
-    scheduleDeferredFullRender(20);
-  }, { once: true });
-}
-if ((state.meta?.positionCalibrationVersion ?? 0) < POSITION_CALIBRATION_VERSION) {
-  applyPositionCalibration(false);
-}
-if ((state.meta?.arcgisImportVersion ?? 0) < ARCGIS_IMPORT_VERSION) {
-  applyArcgisPlanetImport(false);
-}
+render({ transform: true, positions: true, layers: true });
 document.querySelectorAll('.main-tab-btn').forEach((btn) => {
   btn.addEventListener('click', () => setMainTab(btn.dataset.mainTab));
 });

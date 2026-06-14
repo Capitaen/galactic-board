@@ -626,6 +626,32 @@ function triggerOwnerChangeEffects(previousOwners) {
   });
 }
 
+function schedulePostBootstrapMapWork() {
+  syncWorldSizeToMap();
+  window.setTimeout(() => {
+    if ((state.meta?.positionCalibrationVersion ?? 0) < POSITION_CALIBRATION_VERSION) {
+      applyPositionCalibration(false);
+    }
+    if ((state.meta?.arcgisImportVersion ?? 0) < ARCGIS_IMPORT_VERSION) {
+      applyArcgisPlanetImport(false);
+    }
+  }, 0);
+  if (mapEl.complete) {
+    window.setTimeout(() => {
+      initMapAnalysis();
+      scheduleDeferredFullRender(20);
+    }, 0);
+    return;
+  }
+  mapEl.addEventListener('load', () => {
+    syncWorldSizeToMap();
+    window.setTimeout(() => {
+      initMapAnalysis();
+      scheduleDeferredFullRender(20);
+    }, 0);
+  }, { once: true });
+}
+
 function applyServerCampaign(campaign, revision = serverRevision, options = {}) {
   if (!campaign || typeof campaign !== 'object') return;
   const previousOwners = new Map((state?.planets || []).map((planet) => [planet.id, planet.owner]));
@@ -647,6 +673,7 @@ function applyServerCampaign(campaign, revision = serverRevision, options = {}) 
     rebuildIndexes();
     syncFleetTravelStateFromCampaign();
     renderBaseThenDeferHeavy();
+    schedulePostBootstrapMapWork();
     if (options.playOwnerEffects) triggerOwnerChangeEffects(previousOwners);
     serverRevision = Number(revision || 0);
     serverSync.revision = serverRevision;
