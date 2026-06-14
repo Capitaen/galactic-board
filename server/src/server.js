@@ -43,6 +43,7 @@ import {
   updateEconomyPolicy,
   updateRadioCommandPermission,
   updateUser,
+  warmHoldingInfrastructureBootstrap,
   writeCampaignState
 } from './db.js';
 import { getFleetMotionArrivalIso, getFleetMotionByFleetId, getFleetMotionStartedAtIso, getFleetPlanetId, getPlanetNameById, writeAuditLog } from './audit.js';
@@ -79,6 +80,7 @@ const COOKIE_NAME = 'gcb_session';
 const PORT = Number(process.env.PORT || 443);
 const RAW_RESOURCE_KEYS = ['quadraniumErz', 'agrinium', 'tibannaGas', 'baradium', 'kavamSalz'];
 const RESOURCE_KEYS = [...RAW_RESOURCE_KEYS, 'credits'];
+let holdingInfrastructureWarmupStarted = false;
 const INFRASTRUCTURE_PRODUCTION_RESOURCES = {
   quadraniumErz: 'quadraniumErz',
   agrinium: 'agrinium',
@@ -1971,6 +1973,25 @@ setInterval(() => {
   }
 }, 15000);
 
+function scheduleHoldingInfrastructureWarmup() {
+  if (holdingInfrastructureWarmupStarted) return;
+  holdingInfrastructureWarmupStarted = true;
+  setTimeout(() => {
+    try {
+      const result = warmHoldingInfrastructureBootstrap(db, Date.now());
+      console.log('Holding infrastructure warmup finished', {
+        corporateSeedRan: Boolean(result?.corporateSeed?.ran),
+        corporateSeededCompanies: result?.corporateSeed?.changedCompanyIds?.length || 0,
+        warehouseSeedRan: Boolean(result?.warehouseSeed?.ran),
+        warehouseSeededCompanies: result?.warehouseSeed?.companyCount || 0,
+        stateChanged: Boolean(result?.warehouseSeed?.stateChanged)
+      });
+    } catch (error) {
+      console.warn('Holding infrastructure warmup failed', error);
+    }
+  }, 2000);
+}
+
 process.on('SIGINT', () => discordRadioListener.stop());
 process.on('SIGTERM', () => discordRadioListener.stop());
 
@@ -1978,5 +1999,6 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log(`Galactic Campaign Board server listening on http://0.0.0.0:${PORT}`);
   console.log('Default admin login: admin / admin');
   discordRadioListener.start();
+  scheduleHoldingInfrastructureWarmup();
 });
 

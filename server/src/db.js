@@ -1718,19 +1718,6 @@ export function createDb(projectRoot) {
       deleteCompany.run(id);
     });
   })();
-  seedCorporateAssetsForHoldings(db, campaignState, Date.now());
-  const holdingStorageBootstrap = bootstrapHoldingWarehousesAndInventories(db, campaignState, Date.now());
-  if (holdingStorageBootstrap?.stateChanged) {
-    db.prepare(`
-      UPDATE app_state
-      SET state_json = ?, updated_at = ?
-      WHERE id = 'main'
-    `).run(
-      JSON.stringify(campaignState),
-      new Date().toISOString()
-    );
-  }
-
   const seedInstitutionalInvestor = db.prepare(`
     INSERT INTO institutional_investors (
       id, name, strategy, risk_tolerance, corruption_affinity, credit_balance, updated_at
@@ -3855,12 +3842,33 @@ function updateCompanyCorporateSummary(db, companyId, now = Date.now()) {
   };
 }
 
+function refreshCorporateSummaries(db, companyIds, now = Date.now()) {
+  const seen = new Set();
+  for (const companyId of Array.isArray(companyIds) ? companyIds : []) {
+    const normalizedCompanyId = String(companyId || '').trim();
+    if (!normalizedCompanyId || seen.has(normalizedCompanyId)) continue;
+    seen.add(normalizedCompanyId);
+    updateCompanyCorporateSummary(db, normalizedCompanyId, now);
+  }
+}
+
 function seedCorporateAssetsForHoldings(db, state, now = Date.now()) {
   const companies = db.prepare(`
     SELECT id, sector_id AS sectorId, resource_refs_json AS resourceRefsJson
     FROM market_companies
     WHERE id LIKE 'sector_holding_%' AND acquired_by_company_id IS NULL
   `).all();
+  const assetRows = db.prepare(`
+    SELECT company_id AS companyId, planet_id AS planetId, building_type AS buildingType
+    FROM corporate_assets
+    WHERE company_id LIKE 'sector_holding_%'
+  `).all();
+  const assetsByCompanyId = new Map();
+  assetRows.forEach((asset) => {
+    const companyAssets = assetsByCompanyId.get(asset.companyId) || [];
+    companyAssets.push(asset);
+    assetsByCompanyId.set(asset.companyId, companyAssets);
+  });
   const insertAsset = db.prepare(`
     INSERT INTO corporate_assets (
       id, company_id, sector_id, planet_id, building_type, resource_type,
@@ -3870,11 +3878,11 @@ function seedCorporateAssetsForHoldings(db, state, now = Date.now()) {
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const createdAt = new Date(now).toISOString();
+  const changedCompanyIds = [];
   db.transaction(() => {
     companies.forEach((company) => {
-      const currentAssets = db.prepare('SELECT id, planet_id AS planetId FROM corporate_assets WHERE company_id = ?').all(company.id);
+      const currentAssets = [...(assetsByCompanyId.get(company.id) || [])];
       if (currentAssets.length) {
-        updateCompanyCorporateSummary(db, company.id, now);
         return;
       }
       const resources = parseResourceRefs(company);
@@ -3902,13 +3910,17 @@ function seedCorporateAssetsForHoldings(db, state, now = Date.now()) {
           createdAt,
           createdAt
         );
+        currentAssets.push({
+          companyId: company.id,
+          planetId: primaryPlanet.id,
+          buildingType: primaryBuilding
+        });
       }
       if (stableNoise(`extra-asset:${company.id}`, 0.5) + 0.5 <= 0.3) {
         const alternatives = Object.entries(CORPORATE_BUILDING_CONFIG)
           .filter(([, meta]) => resources.includes(meta.resourceType) && meta.resourceType !== primaryResource);
         const [extraType, extraMeta] = alternatives[0] || [];
-        const existingAfterPrimary = db.prepare('SELECT planet_id AS planetId FROM corporate_assets WHERE company_id = ?').all(company.id);
-        const extraPlanet = pickCorporateAssetPlanet(planets, `${company.id}:extra`, existingAfterPrimary, true) || primaryPlanet;
+        const extraPlanet = pickCorporateAssetPlanet(planets, `${company.id}:extra`, currentAssets, true) || primaryPlanet;
         if (extraType && extraPlanet) {
           insertAsset.run(
             crypto.randomUUID(),
@@ -3928,11 +3940,22 @@ function seedCorporateAssetsForHoldings(db, state, now = Date.now()) {
             createdAt,
             createdAt
           );
+          currentAssets.push({
+            companyId: company.id,
+            planetId: extraPlanet.id,
+            buildingType: extraType
+          });
         }
       }
-      updateCompanyCorporateSummary(db, company.id, now);
+      assetsByCompanyId.set(company.id, currentAssets);
+      changedCompanyIds.push(company.id);
     });
   })();
+  refreshCorporateSummaries(db, changedCompanyIds, now);
+  return {
+    ran: true,
+    changedCompanyIds
+  };
 }
 
 export function calculateCorporateBuildCost(company, buildingType, sectorState = {}) {
@@ -4294,6 +4317,17 @@ function bootstrapHoldingWarehousesAndInventories(db, state, now = Date.now()) {
     return { ran: false, reason: 'no-companies' };
   }
   const createdAt = new Date(now).toISOString();
+  const assetRows = db.prepare(`
+    SELECT company_id AS companyId, planet_id AS planetId, building_type AS buildingType
+    FROM corporate_assets
+    WHERE company_id LIKE 'sector_holding_%'
+  `).all();
+  const assetsByCompanyId = new Map();
+  assetRows.forEach((asset) => {
+    const companyAssets = assetsByCompanyId.get(asset.companyId) || [];
+    companyAssets.push(asset);
+    assetsByCompanyId.set(asset.companyId, companyAssets);
+  });
   const insertAsset = db.prepare(`
     INSERT INTO corporate_assets (
       id, company_id, sector_id, planet_id, building_type, resource_type,
@@ -4324,13 +4358,10 @@ function bootstrapHoldingWarehousesAndInventories(db, state, now = Date.now()) {
     stockByCompanyId.set(company.id, amount);
   });
   const stateChanged = resetLegacyLocalWarehousesInState(state);
+  const summaryRefreshIds = [];
   db.transaction(() => {
     companies.forEach((company) => {
-      const currentAssets = db.prepare(`
-        SELECT id, planet_id AS planetId, building_type AS buildingType
-        FROM corporate_assets
-        WHERE company_id = ?
-      `).all(company.id);
+      const currentAssets = [...(assetsByCompanyId.get(company.id) || [])];
       const hasWarehouse = currentAssets.some((asset) => asset.buildingType === 'corporate_storage_hub');
       if (!hasWarehouse) {
         const warehousePlanet = pickHoldingWarehousePlanet(state, company, currentAssets);
@@ -4354,6 +4385,13 @@ function bootstrapHoldingWarehousesAndInventories(db, state, now = Date.now()) {
             createdAt,
             createdAt
           );
+          currentAssets.push({
+            companyId: company.id,
+            planetId: warehousePlanet.id,
+            buildingType: 'corporate_storage_hub'
+          });
+          assetsByCompanyId.set(company.id, currentAssets);
+          summaryRefreshIds.push(company.id);
         }
       }
       const seededBag = emptyResourceBag();
@@ -4362,9 +4400,9 @@ function bootstrapHoldingWarehousesAndInventories(db, state, now = Date.now()) {
         seededBag[resourceKey] = Number(stockByCompanyId.get(company.id) || 0);
       }
       updateResources.run(JSON.stringify(seededBag), createdAt, company.id);
-      updateCompanyCorporateSummary(db, company.id, now);
     });
   })();
+  refreshCorporateSummaries(db, summaryRefreshIds, now);
   setRuntimeStateJson(db, bootstrapVersion, {
     seededAt: createdAt,
     companyCount: companies.length,
@@ -4376,6 +4414,21 @@ function bootstrapHoldingWarehousesAndInventories(db, state, now = Date.now()) {
     companyCount: companies.length,
     stockBuckets: { stock300: count300, stock150: count150, stock70: count70, stock0: count0 },
     stateChanged
+  };
+}
+
+export function warmHoldingInfrastructureBootstrap(db, now = Date.now()) {
+  const { state, revision } = readCampaignState(db);
+  const corporateSeed = seedCorporateAssetsForHoldings(db, state, now);
+  const warehouseSeed = bootstrapHoldingWarehousesAndInventories(db, state, now);
+  let updatedAt = null;
+  if (warehouseSeed?.stateChanged) {
+    updatedAt = writeCampaignState(db, state, revision);
+  }
+  return {
+    corporateSeed,
+    warehouseSeed,
+    updatedAt
   };
 }
 
