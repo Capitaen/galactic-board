@@ -713,10 +713,18 @@ function clearServerRefreshTimer() {
 
 function updateServerSession(me) {
   if (!me) return;
+  const incomingUsername = String(me.username || '').trim();
+  const incomingRole = String(me.role || 'Viewer').trim() || 'Viewer';
+  const hadAuthenticatedSession = Boolean(currentAuthenticatedUsername);
+  const incomingIsAnonymousViewer = !incomingUsername && incomingRole === 'Viewer';
+  if (hadAuthenticatedSession && incomingIsAnonymousViewer && !viewerModeActive && !pendingLoginAttempt) {
+    console.warn('Ignoring anonymous session downgrade during live refresh.');
+    return;
+  }
   serverSync.session = me;
-  currentAuthenticatedUsername = me.username || '';
+  currentAuthenticatedUsername = incomingUsername;
   if (currentAuthenticatedUsername) viewerModeActive = false;
-  roleSelect.value = me.role || 'Viewer';
+  roleSelect.value = incomingRole;
   refreshRoleChrome();
   if (currentAuthenticatedUsername) hideLoginModal();
   else if (!viewerModeActive && !pendingLoginAttempt) showLoginModal();

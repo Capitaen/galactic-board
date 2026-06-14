@@ -1245,6 +1245,9 @@ function showLoginModal() {
 
 function hideLoginModal() {
   if (!loginModal) return;
+  if (loginModal.contains(document.activeElement)) {
+    document.activeElement?.blur?.();
+  }
   loginModal.classList.remove('active');
   loginModal.setAttribute('aria-hidden', 'true');
 }
