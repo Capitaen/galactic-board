@@ -67,6 +67,7 @@ const CORPORATE_STRATEGIES = [
 ];
 
 const CORPORATE_BUILDING_CONFIG = {
+  corporate_storage_hub: { resourceType: 'kavamSalz', label: 'Privates Lager', productionPerHour: 0, revenuePerHour: 0, maintenanceCostPerHour: 8, strategicValue: 0.44 },
   corporate_metal_mine: { resourceType: 'quadraniumErz', label: 'Private Metallmine', productionPerHour: 18, revenuePerHour: 145, maintenanceCostPerHour: 32, strategicValue: 0.58 },
   corporate_foundry: { resourceType: 'quadraniumErz', label: 'Private Gießerei', productionPerHour: 14, revenuePerHour: 138, maintenanceCostPerHour: 34, strategicValue: 0.63 },
   corporate_heavy_industry: { resourceType: 'quadraniumErz', label: 'Schwerindustrie-Komplex', productionPerHour: 11, revenuePerHour: 164, maintenanceCostPerHour: 46, strategicValue: 0.72 },
@@ -1713,6 +1714,17 @@ export function createDb(projectRoot) {
     });
   })();
   seedCorporateAssetsForHoldings(db, campaignState, Date.now());
+  const holdingStorageBootstrap = bootstrapHoldingWarehousesAndInventories(db, campaignState, Date.now());
+  if (holdingStorageBootstrap?.stateChanged) {
+    db.prepare(`
+      UPDATE app_state
+      SET state_json = ?, updated_at = ?
+      WHERE id = 'main'
+    `).run(
+      JSON.stringify(campaignState),
+      new Date().toISOString()
+    );
+  }
 
   const seedInstitutionalInvestor = db.prepare(`
     INSERT INTO institutional_investors (
@@ -4220,6 +4232,138 @@ export function executeCorporateResourceTrade(db, state, input = {}) {
       createdAt
     };
   })();
+}
+
+function resetLegacyLocalWarehousesInState(state) {
+  let changed = false;
+  const legacyWarehouseKeys = new Set(['storage_hub', ...RESOURCE_KEYS.map((resourceKey) => `storage_${resourceKey}`)]);
+  state.meta = state.meta || {};
+  if (Array.isArray(state.meta.planetWarehouses) && state.meta.planetWarehouses.length) {
+    state.meta.planetWarehouses = [];
+    changed = true;
+  }
+  const slotMap = state.planetResources && typeof state.planetResources === 'object' ? state.planetResources : {};
+  Object.keys(slotMap).forEach((planetId) => {
+    const slots = Array.isArray(slotMap[planetId]) ? [...slotMap[planetId]] : [];
+    let localChanged = false;
+    for (let index = 0; index < slots.length; index += 1) {
+      if (!legacyWarehouseKeys.has(String(slots[index] || ''))) continue;
+      slots[index] = '';
+      localChanged = true;
+    }
+    if (localChanged) {
+      state.planetResources[planetId] = slots;
+      changed = true;
+    }
+  });
+  return changed;
+}
+
+function pickHoldingWarehousePlanet(state, company, existingAssets = []) {
+  const planets = getSectorPlanetsForCompany(state, company);
+  const routePlanets = planets.filter((planet) => Number(planet.routeDegree || 0) >= 1);
+  return pickCorporateAssetPlanet(routePlanets.length ? routePlanets : planets, `${company.id}:warehouse`, existingAssets, true);
+}
+
+function bootstrapHoldingWarehousesAndInventories(db, state, now = Date.now()) {
+  const bootstrapVersion = 'holding_warehouse_inventory_seed_v1';
+  if (getRuntimeStateJson(db, bootstrapVersion, null)) {
+    return { ran: false, reason: 'already-seeded' };
+  }
+  const companies = db.prepare(`
+    SELECT id, sector_id AS sectorId, sector, resource_key AS resourceKey, corporate_resources_json AS corporateResourcesJson
+    FROM market_companies
+    WHERE id LIKE 'sector_holding_%' AND acquired_by_company_id IS NULL
+    ORDER BY id
+  `).all();
+  if (!companies.length) {
+    setRuntimeStateJson(db, bootstrapVersion, { seededAt: new Date(now).toISOString(), companyCount: 0, stateChanged: false });
+    return { ran: false, reason: 'no-companies' };
+  }
+  const createdAt = new Date(now).toISOString();
+  const insertAsset = db.prepare(`
+    INSERT INTO corporate_assets (
+      id, company_id, sector_id, planet_id, building_type, resource_type,
+      production_per_hour, revenue_per_hour, maintenance_cost_per_hour,
+      condition_index, risk_index, damage_index, blockade_index, strategic_value,
+      created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const updateResources = db.prepare(`
+    UPDATE market_companies
+    SET corporate_resources_json = ?, updated_at = ?
+    WHERE id = ?
+  `);
+  const rankedCompanies = [...companies].sort((left, right) => (
+    stableNoise(`holding-stock-seed:${left.id}`, 0.5) - stableNoise(`holding-stock-seed:${right.id}`, 0.5)
+  ));
+  const count300 = Math.floor(rankedCompanies.length * 0.2);
+  const count150 = Math.floor(rankedCompanies.length * 0.2);
+  const count70 = Math.floor(rankedCompanies.length * 0.5);
+  const count0 = Math.max(0, rankedCompanies.length - count300 - count150 - count70);
+  const stockByCompanyId = new Map();
+  rankedCompanies.forEach((company, index) => {
+    let amount = 0;
+    if (index < count300) amount = 300;
+    else if (index < count300 + count150) amount = 150;
+    else if (index < count300 + count150 + count70) amount = 70;
+    else amount = 0;
+    stockByCompanyId.set(company.id, amount);
+  });
+  const stateChanged = resetLegacyLocalWarehousesInState(state);
+  db.transaction(() => {
+    companies.forEach((company) => {
+      const currentAssets = db.prepare(`
+        SELECT id, planet_id AS planetId, building_type AS buildingType
+        FROM corporate_assets
+        WHERE company_id = ?
+      `).all(company.id);
+      const hasWarehouse = currentAssets.some((asset) => asset.buildingType === 'corporate_storage_hub');
+      if (!hasWarehouse) {
+        const warehousePlanet = pickHoldingWarehousePlanet(state, company, currentAssets);
+        if (warehousePlanet) {
+          const meta = getCorporateBuildingMeta('corporate_storage_hub');
+          insertAsset.run(
+            crypto.randomUUID(),
+            company.id,
+            company.sectorId,
+            warehousePlanet.id,
+            'corporate_storage_hub',
+            company.resourceKey || meta.resourceType,
+            0,
+            0,
+            meta.maintenanceCostPerHour,
+            1,
+            0.04,
+            0,
+            0,
+            meta.strategicValue,
+            createdAt,
+            createdAt
+          );
+        }
+      }
+      const seededBag = emptyResourceBag();
+      const resourceKey = String(company.resourceKey || '').trim();
+      if (RESOURCE_KEYS.includes(resourceKey)) {
+        seededBag[resourceKey] = Number(stockByCompanyId.get(company.id) || 0);
+      }
+      updateResources.run(JSON.stringify(seededBag), createdAt, company.id);
+      updateCompanyCorporateSummary(db, company.id, now);
+    });
+  })();
+  setRuntimeStateJson(db, bootstrapVersion, {
+    seededAt: createdAt,
+    companyCount: companies.length,
+    stockBuckets: { stock300: count300, stock150: count150, stock70: count70, stock0: count0 },
+    stateChanged
+  }, createdAt);
+  return {
+    ran: true,
+    companyCount: companies.length,
+    stockBuckets: { stock300: count300, stock150: count150, stock70: count70, stock0: count0 },
+    stateChanged
+  };
 }
 
 function procureResourcesForCorporateBuild(db, state, company, buildCost, options = {}) {

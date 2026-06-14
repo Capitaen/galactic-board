@@ -1285,16 +1285,20 @@ async function beginAppLoadSequence() {
 }
 
 async function ensureEconomyViewLoaded(options = {}) {
-  if (economyViewState.loaded) {
-    if ((Date.now() - Number(economyViewState.lastLoadedAt || 0)) > 30000) {
-      await fetchEconomyView({ renderLoading: false });
-    }
-    return true;
-  }
   const showLoader = options.showLoader !== false;
   if (showLoader) startBootSequence('economy');
-  const loaded = await fetchEconomyView({ renderLoading: false, markBootReady: showLoader });
-  if (!loaded && showLoader) markBootTask('economyReady', false);
+  let summaryLoaded = economyViewState.loaded;
+  if (!summaryLoaded || (Date.now() - Number(economyViewState.lastLoadedAt || 0)) > 30000) {
+    summaryLoaded = await fetchEconomyView({ renderLoading: false });
+  }
+  const sectorLoaded = await fetchSectorEconomyList({ force: !economyViewState.economySectors.length });
+  const acpLoaded = await fetchAcpRanking({
+    resourceType: economyViewState.acpSelectedResource,
+    sort: economyViewState.acpRankingSort,
+    force: !Array.isArray(economyViewState.acpRanking?.sectors) || !economyViewState.acpRanking.sectors.length
+  });
+  const loaded = Boolean(summaryLoaded && sectorLoaded && acpLoaded);
+  if (showLoader) markBootTask('economyReady', loaded);
   return loaded;
 }
 

@@ -616,6 +616,7 @@ async function fetchSectorEconomyList(options = {}) {
   if (economyViewState.sectorEconomyLoading && !options.force) return;
   economyViewState.sectorEconomyLoading = true;
   economyViewState.sectorEconomyError = '';
+  let loadedSuccessfully = false;
   if (activeMainTab === 'economy') renderEconomyView();
   try {
     const response = await fetch('/api/economy/sectors', { credentials: 'include' });
@@ -630,12 +631,14 @@ async function fetchSectorEconomyList(options = {}) {
     if (economyViewState.selectedEconomySectorId) {
       await fetchSectorEconomyDetail(economyViewState.selectedEconomySectorId, { renderLoading: false });
     }
+    loadedSuccessfully = Array.isArray(economyViewState.economySectors) && economyViewState.economySectors.length > 0;
   } catch (error) {
     economyViewState.sectorEconomyError = error.message;
   } finally {
     economyViewState.sectorEconomyLoading = false;
     if (activeMainTab === 'economy') renderEconomyView();
   }
+  return loadedSuccessfully;
 }
 
 async function fetchSectorEconomyDetail(sectorId, options = {}) {
@@ -757,18 +760,21 @@ async function fetchAcpRanking(options = {}) {
   economyViewState.acpRankingError = '';
   economyViewState.acpSelectedResource = resourceType;
   economyViewState.acpRankingSort = sort;
+  let loadedSuccessfully = false;
   if (activeMainTab === 'economy' && economyViewState.activeSection === 'acp') renderEconomyView();
   try {
     const response = await fetch(`/api/economy/acp/ranking?resourceType=${encodeURIComponent(resourceType)}&sort=${encodeURIComponent(sort)}`, { credentials: 'include' });
     const payload = await readJsonResponse(response, 'ACP-Ranking konnte nicht geladen werden.');
     if (!response.ok) throw new Error(payload.error || 'ACP-Ranking konnte nicht geladen werden.');
     economyViewState.acpRanking = payload || { resourceType, sectors: [] };
+    loadedSuccessfully = Array.isArray(economyViewState.acpRanking?.sectors);
   } catch (error) {
     economyViewState.acpRankingError = error.message;
   } finally {
     economyViewState.acpRankingLoading = false;
     if (activeMainTab === 'economy' && economyViewState.activeSection === 'acp') renderEconomyView();
   }
+  return loadedSuccessfully;
 }
 
 function setAcpRankingResource(resourceType) {
