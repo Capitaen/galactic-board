@@ -766,6 +766,7 @@ export function createDb(projectRoot) {
   const dbPath = path.join(process.cwd(), 'server', 'data.sqlite');
 
   const db = new Database(dbPath);
+  db.pragma('busy_timeout = 5000');
   db.pragma('journal_mode = WAL');
 
   db.exec(`
@@ -1747,7 +1748,15 @@ export function createDb(projectRoot) {
       migrationTime
     );
   });
-  initializeMarketOwnership(db, campaignState, migrationTime);
+  try {
+    initializeMarketOwnership(db, campaignState, migrationTime);
+  } catch (error) {
+    if (error?.code === 'SQLITE_BUSY') {
+      console.warn('Market ownership initialization skipped during startup because the database is busy.');
+    } else {
+      throw error;
+    }
+  }
 
   const now = new Date().toISOString();
   const defaultAdmin = db.prepare('SELECT id FROM users WHERE lower(username) = lower(?)').get('admin');
