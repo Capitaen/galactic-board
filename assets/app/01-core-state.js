@@ -746,7 +746,8 @@ const serverSync = {
   reconnectTimer: null,
   reconnectAttempt: 0,
   refreshTimer: null,
-  refreshInFlight: false
+  refreshInFlight: false,
+  transport: ['localhost', '127.0.0.1'].includes(window.location.hostname) ? 'socket' : 'polling'
 };
 let fleetManagementFactionFilter = 'all';
 let searchResultsState = [];

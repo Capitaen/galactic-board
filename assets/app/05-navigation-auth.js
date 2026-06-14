@@ -1358,7 +1358,8 @@ async function finalizeSuccessfulLogin(payload) {
       serverSyncReady = true;
       serverSync.revision = serverRevision;
     }
-    connectServerSocket();
+    if (serverSync.transport === 'socket') connectServerSocket();
+    else schedulePollingRefresh(250);
   }
   await checkTutorialStatus();
   if (selected?.type === 'planet') openPlanet(selected.id);

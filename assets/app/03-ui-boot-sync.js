@@ -793,6 +793,17 @@ function scheduleCampaignRefresh(delay = 250) {
   }, delay);
 }
 
+function schedulePollingRefresh(delay) {
+  if (!serverSync.enabled) return;
+  const normalizedDelay = Math.max(1500, Number(delay) || 8000);
+  clearServerRefreshTimer();
+  serverSync.refreshTimer = window.setTimeout(async () => {
+    serverSync.refreshTimer = null;
+    await refreshCampaignFromServer();
+    schedulePollingRefresh(document.hidden ? 15000 : 8000);
+  }, normalizedDelay);
+}
+
 function emitLiveSocketEvent(eventName, payload) {
   if (!serverSync.socket?.connected) return;
   if (!serverSync.session?.role || serverSync.session.role === 'Viewer') return;
@@ -926,7 +937,11 @@ async function bootstrapFromServer() {
     serverRevision = nextRevision;
     serverSync.revision = serverRevision;
     refreshRoleChrome();
-    window.setTimeout(() => connectServerSocket(), 250);
+    if (serverSync.transport === 'socket') {
+      window.setTimeout(() => connectServerSocket(), 250);
+    } else {
+      schedulePollingRefresh(4000);
+    }
     void checkTutorialStatus();
   } catch (error) {
     console.warn('Server bootstrap unavailable, falling back to local state', error);
@@ -941,7 +956,13 @@ async function bootstrapFromServer() {
 }
 
 function connectServerSocket() {
-  if (!serverSync.enabled || serverSync.offlineMode || typeof io === 'undefined' || serverSync.socket) return;
+  if (
+    !serverSync.enabled
+    || serverSync.offlineMode
+    || serverSync.transport !== 'socket'
+    || typeof io === 'undefined'
+    || serverSync.socket
+  ) return;
   serverSync.socket = io({
     withCredentials: true,
     transports: ['polling', 'websocket'],
@@ -973,7 +994,9 @@ function connectServerSocket() {
   serverSync.socket.on('connect_error', (error) => {
     console.warn('socket connect error', error);
     destroyServerSocketConnection();
-    scheduleSocketReconnect('Live-Sync Server nicht erreichbar.');
+    serverSync.transport = 'polling';
+    setStatus('Live-Sync wechselt in stabilen Abrufmodus.');
+    schedulePollingRefresh(2500);
   });
   serverSync.socket.on('campaign:state-changed', (payload) => {
     if (payload?.serverNowMs) {
