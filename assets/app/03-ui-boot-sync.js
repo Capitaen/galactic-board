@@ -765,20 +765,43 @@ async function refreshCampaignFromServer() {
   }
   serverSync.refreshInFlight = true;
   try {
-    const response = await fetch('/api/bootstrap', { credentials: 'include' });
-    if (!response.ok) throw new Error(`bootstrap failed (${response.status})`);
+    const endpoint = serverSync.transport === 'polling' ? '/api/sync/status' : '/api/bootstrap';
+    const response = await fetch(endpoint, { credentials: 'include' });
+    if (!response.ok) throw new Error(`sync failed (${response.status})`);
     const payload = await response.json();
     serverSync.offlineMode = false;
     updateServerSession(payload.me || { id: null, username: '', role: 'Viewer' });
+    if (payload?.serverNowMs) {
+      const serverNowMs = Number(payload.serverNowMs);
+      if (Number.isFinite(serverNowMs) && serverNowMs > 0) {
+        serverSync.clockOffsetMs = Date.now() - serverNowMs;
+      }
+    }
     const nextRevision = Number(payload.revision || 0);
+    if (serverSync.transport === 'polling' && !(nextRevision > serverRevision)) {
+      return;
+    }
     if (nextRevision > serverRevision) {
-      applyServerCampaign(payload.campaign || DEFAULT_DATA, nextRevision, { playOwnerEffects: true, updatedAt: payload.updatedAt });
-    } else {
+      const bootstrapPayload = serverSync.transport === 'polling'
+        ? await (async () => {
+          const bootstrapResponse = await fetch('/api/bootstrap', { credentials: 'include' });
+          if (!bootstrapResponse.ok) throw new Error(`bootstrap failed (${bootstrapResponse.status})`);
+          return bootstrapResponse.json();
+        })()
+        : payload;
+      applyServerCampaign(
+        bootstrapPayload.campaign || DEFAULT_DATA,
+        nextRevision,
+        { playOwnerEffects: true, updatedAt: bootstrapPayload.updatedAt }
+      );
+      updateServerSession(bootstrapPayload.me || payload.me || { id: null, username: '', role: 'Viewer' });
+    } else if (payload.campaign) {
       syncAuthUsersFromCampaign(payload.campaign);
     }
   } catch (error) {
     console.warn('Server refresh failed', error);
-    scheduleSocketReconnect('Live-Sync Aktualisierung fehlgeschlagen.');
+    if (serverSync.transport === 'socket') scheduleSocketReconnect('Live-Sync Aktualisierung fehlgeschlagen.');
+    else schedulePollingRefresh(12000);
   } finally {
     serverSync.refreshInFlight = false;
   }
@@ -795,12 +818,12 @@ function scheduleCampaignRefresh(delay = 250) {
 
 function schedulePollingRefresh(delay) {
   if (!serverSync.enabled) return;
-  const normalizedDelay = Math.max(1500, Number(delay) || 8000);
+  const normalizedDelay = Math.max(4000, Number(delay) || 12000);
   clearServerRefreshTimer();
   serverSync.refreshTimer = window.setTimeout(async () => {
     serverSync.refreshTimer = null;
     await refreshCampaignFromServer();
-    schedulePollingRefresh(document.hidden ? 15000 : 8000);
+    schedulePollingRefresh(document.hidden ? 20000 : 12000);
   }, normalizedDelay);
 }
 
@@ -940,7 +963,7 @@ async function bootstrapFromServer() {
     if (serverSync.transport === 'socket') {
       window.setTimeout(() => connectServerSocket(), 250);
     } else {
-      schedulePollingRefresh(4000);
+      schedulePollingRefresh(12000);
     }
     void checkTutorialStatus();
   } catch (error) {

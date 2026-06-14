@@ -1169,6 +1169,18 @@ app.get('/api/bootstrap', (req, res) => {
   });
 });
 
+app.get('/api/sync/status', (req, res) => {
+  const session = getSession(req);
+  const me = session || { id: null, username: '', role: 'Viewer' };
+  const { revision, updatedAt } = readCampaignState(db);
+  res.json({
+    me,
+    revision,
+    updatedAt,
+    serverNowMs: Date.now()
+  });
+});
+
 app.get('/api/auth/me', (req, res) => {
   const session = getSession(req);
   res.json({
