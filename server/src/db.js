@@ -24,6 +24,7 @@ const CORPORATE_MAX_ACTIVE_PROJECTS = 5;
 const CORPORATE_MAX_COMPLETED_48H = 5;
 const CORPORATE_COMPLETION_WINDOW_MS = 48 * 60 * 60 * 1000;
 const ACP_HISTORY_WINDOW_MS = 183 * 24 * 60 * 60 * 1000;
+const MARKET_SUMMARY_SNAPSHOT_VERSION = 2;
 const MAX_INTELLIGENCE_REPORTS = 80;
 const MAX_TRADE_HISTORY_ROWS = 6000;
 const MIN_MARKET_PRICE = 25;
@@ -5210,6 +5211,7 @@ function buildMarketSummarySnapshot(db, now = Date.now()) {
   `).all().map((account) => [account.faction, account]));
   const acp = buildAcpSnapshot(getAcpPriceRows(db), buildAcpHistoryRows(db, historyCutoff), getAcpCompanyCounts(db));
   return {
+    snapshotVersion: MARKET_SUMMARY_SNAPSHOT_VERSION,
     generatedAt: new Date(now).toISOString(),
     companies: featuredCompanies,
     history: companyHistory,
@@ -5228,6 +5230,7 @@ function buildMarketSummarySnapshot(db, now = Date.now()) {
 function readStoredMarketSummarySnapshot(db) {
   const snapshot = getRuntimeStateJson(db, 'market_summary_snapshot', null);
   if (!snapshot || typeof snapshot !== 'object') return null;
+  if (Number(snapshot.snapshotVersion || 0) !== MARKET_SUMMARY_SNAPSHOT_VERSION) return null;
   return snapshot;
 }
 
