@@ -586,34 +586,43 @@ function buildNeighborMap(sectors, limit = 4) {
   return map;
 }
 
-function buildAcpSnapshot(companies, historyRows) {
+function buildAcpSnapshot(priceRows, historyRows, companyCounts = {}) {
   const currentByResource = {};
   RESOURCE_KEYS.forEach((resourceKey) => {
-    const resourceCompanies = companies.filter((company) => company.resourceKey === resourceKey);
+    const resourceRows = priceRows.filter((row) => row.resourceKey === resourceKey);
     currentByResource[resourceKey] = {
       resourceKey,
       label: RESOURCE_MARKET_CONFIG[resourceKey].label,
-      averagePrice: round2(average(resourceCompanies.map((company) => Number(company.currentPrice || 0)))),
-      averageBasePrice: round2(average(resourceCompanies.map((company) => Number(company.basePrice || 0)))),
-      companyCount: resourceCompanies.length
+      averagePrice: round2(average(resourceRows.map((row) => Number(row.currentPrice || 0)))),
+      averageBasePrice: round2(average(resourceRows.map((row) => Number(row.basePrice || 0)))),
+      companyCount: Number(companyCounts[resourceKey] || 0),
+      sectorCount: resourceRows.length
     };
-  });
-  const groupedHistory = {};
-  historyRows.forEach((row) => {
-    const resourceKey = row.resourceKey;
-    if (!RESOURCE_KEYS.includes(resourceKey)) return;
-    const bucketDate = new Date(row.recordedAt);
-    bucketDate.setUTCMinutes(0, 0, 0);
-    const bucketKey = bucketDate.toISOString();
-    if (!groupedHistory[resourceKey]) groupedHistory[resourceKey] = new Map();
-    if (!groupedHistory[resourceKey].has(bucketKey)) groupedHistory[resourceKey].set(bucketKey, []);
-    groupedHistory[resourceKey].get(bucketKey).push(Number(row.price || 0));
   });
   const history = {};
   RESOURCE_KEYS.forEach((resourceKey) => {
-    history[resourceKey] = [...(groupedHistory[resourceKey]?.entries() || [])]
-      .sort((left, right) => left[0].localeCompare(right[0]))
-      .map(([recordedAt, values]) => ({ recordedAt, price: round2(average(values)) }));
+    const resourceHistory = historyRows
+      .filter((row) => row.resourceKey === resourceKey)
+      .sort((left, right) => String(left.recordedAt || '').localeCompare(String(right.recordedAt || '')))
+      .map((row) => ({
+        recordedAt: row.recordedAt,
+        price: round2(Number(row.price || 0)),
+        basePrice: round2(Number(row.basePrice || 0)),
+        sectorCount: Number(row.sectorCount || 0)
+      }));
+    if (!resourceHistory.length) {
+      const currentRow = currentByResource[resourceKey];
+      history[resourceKey] = currentRow && currentRow.sectorCount > 0
+        ? [{
+          recordedAt: new Date().toISOString(),
+          price: currentRow.averagePrice,
+          basePrice: currentRow.averageBasePrice,
+          sectorCount: currentRow.sectorCount
+        }]
+        : [];
+      return;
+    }
+    history[resourceKey] = resourceHistory;
   });
   return {
     current: Object.values(currentByResource),
@@ -652,16 +661,74 @@ function getCompanyInventoryValue(db, sectorId, resourceBag = {}) {
 
 function buildAcpHistoryRows(db, cutoffIso) {
   return db.prepare(`
-    SELECT c.resource_key AS resourceKey,
-      substr(h.recorded_at, 1, 13) || ':00:00.000Z' AS recordedAt,
-      AVG(h.price) AS price
-    FROM market_history h
-    JOIN market_companies c ON c.id = h.company_id
-    WHERE h.recorded_at >= ?
-      AND c.resource_key IN (${RESOURCE_KEYS.map(() => '?').join(', ')})
-    GROUP BY c.resource_key, substr(h.recorded_at, 1, 13)
+    SELECT resource_type AS resourceKey,
+      substr(recorded_at, 1, 13) || ':00:00.000Z' AS recordedAt,
+      AVG(price) AS price,
+      AVG(base_price) AS basePrice,
+      COUNT(DISTINCT sector_id) AS sectorCount
+    FROM sector_resource_price_history
+    WHERE recorded_at >= ?
+      AND resource_type IN (${RESOURCE_KEYS.map(() => '?').join(', ')})
+    GROUP BY resource_type, substr(recorded_at, 1, 13)
     ORDER BY recordedAt ASC
   `).all(cutoffIso, ...RESOURCE_KEYS);
+}
+
+function getAcpPriceRows(db) {
+  return db.prepare(`
+    SELECT resource_type AS resourceKey,
+      sector_id AS sectorId,
+      current_price AS currentPrice,
+      base_price AS basePrice,
+      previous_price AS previousPrice,
+      demand_score AS demandScore,
+      supply_score AS supplyScore,
+      speculation_score AS speculationScore,
+      updated_at AS updatedAt
+    FROM sector_resource_prices
+    WHERE resource_type IN (${RESOURCE_KEYS.map(() => '?').join(', ')})
+  `).all(...RESOURCE_KEYS);
+}
+
+function getAcpCompanyCounts(db) {
+  return Object.fromEntries(db.prepare(`
+    SELECT resource_key AS resourceKey, COUNT(*) AS companyCount
+    FROM market_companies
+    WHERE resource_key IN (${RESOURCE_KEYS.map(() => '?').join(', ')})
+    GROUP BY resource_key
+  `).all(...RESOURCE_KEYS).map((row) => [row.resourceKey, Number(row.companyCount || 0)]));
+}
+
+function writeSectorResourcePriceHistorySnapshot(db, recordedAt) {
+  const rows = db.prepare(`
+    SELECT sector_id AS sectorId, resource_type AS resourceType, current_price AS currentPrice,
+      base_price AS basePrice, demand_score AS demandScore, supply_score AS supplyScore
+    FROM sector_resource_prices
+    WHERE resource_type IN (${RESOURCE_KEYS.map(() => '?').join(', ')})
+  `).all(...RESOURCE_KEYS);
+  if (!rows.length) return 0;
+  const insertHistory = db.prepare(`
+    INSERT INTO sector_resource_price_history (
+      id, sector_id, resource_type, price, base_price, demand_score, supply_score, recorded_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  rows.forEach((row) => {
+    insertHistory.run(
+      crypto.randomUUID(),
+      row.sectorId,
+      row.resourceType,
+      round2(Number(row.currentPrice || 0)),
+      round2(Number(row.basePrice || 0)),
+      round2(Number(row.demandScore || 1)),
+      round2(Number(row.supplyScore || 1)),
+      recordedAt
+    );
+  });
+  db.prepare(`
+    DELETE FROM sector_resource_price_history
+    WHERE recorded_at < ?
+  `).run(new Date(Date.parse(recordedAt) - ACP_HISTORY_WINDOW_MS).toISOString());
+  return rows.length;
 }
 function pointInPolygon(point, polygon) {
   if (!point || !Array.isArray(polygon) || polygon.length < 3) return false;
@@ -937,6 +1004,17 @@ export function createDb(projectRoot) {
       PRIMARY KEY (sector_id, resource_type)
     );
 
+    CREATE TABLE IF NOT EXISTS sector_resource_price_history (
+      id TEXT PRIMARY KEY,
+      sector_id TEXT NOT NULL,
+      resource_type TEXT NOT NULL,
+      price REAL NOT NULL,
+      base_price REAL NOT NULL,
+      demand_score REAL NOT NULL DEFAULT 1,
+      supply_score REAL NOT NULL DEFAULT 1,
+      recorded_at TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS civilian_resource_purchases (
       id TEXT PRIMARY KEY,
       sector_id TEXT NOT NULL,
@@ -1116,6 +1194,12 @@ export function createDb(projectRoot) {
 
     CREATE INDEX IF NOT EXISTS idx_sector_resource_prices_updated_at
       ON sector_resource_prices (updated_at DESC);
+
+    CREATE INDEX IF NOT EXISTS idx_sector_resource_price_history_resource_recorded_at
+      ON sector_resource_price_history (resource_type, recorded_at DESC);
+
+    CREATE INDEX IF NOT EXISTS idx_sector_resource_price_history_sector_recorded_at
+      ON sector_resource_price_history (sector_id, recorded_at DESC);
 
     CREATE INDEX IF NOT EXISTS idx_civilian_resource_purchases_created_at
       ON civilian_resource_purchases (created_at DESC);
@@ -4698,7 +4782,7 @@ export function readMarketSnapshot(db, investorId = '', userId = '') {
     SELECT faction, credits, updated_at AS updatedAt
     FROM faction_accounts ORDER BY faction
   `).all().map((account) => [account.faction, account]));
-  const acp = buildAcpSnapshot(companies, historyRows.filter((row) => RESOURCE_KEYS.includes(row.resourceKey)));
+  const acp = buildAcpSnapshot(getAcpPriceRows(db), buildAcpHistoryRows(db, historyCutoff), getAcpCompanyCounts(db));
   return {
     companies,
     history,
@@ -4912,7 +4996,7 @@ function buildMarketSummarySnapshot(db, now = Date.now()) {
     SELECT faction, credits, updated_at AS updatedAt
     FROM faction_accounts ORDER BY faction
   `).all().map((account) => [account.faction, account]));
-  const acp = buildAcpSnapshot(allCompanies, buildAcpHistoryRows(db, historyCutoff));
+  const acp = buildAcpSnapshot(getAcpPriceRows(db), buildAcpHistoryRows(db, historyCutoff), getAcpCompanyCounts(db));
   return {
     generatedAt: new Date(now).toISOString(),
     companies: featuredCompanies,
@@ -6619,7 +6703,121 @@ export function runMarketTick(db, inflationRate = 0, now = Date.now(), state = n
   })();
   db.prepare('SELECT id FROM market_investors WHERE portfolio_enabled = 1').all()
     .forEach((investor) => writePortfolioSnapshot(db, investor.id, recordedAt));
+  writeSectorResourcePriceHistorySnapshot(db, recordedAt);
   writeMarketSummarySnapshot(db, now);
   setRuntimeStateNumber(db, 'last_market_tick', now, recordedAt);
   return true;
+}
+
+function normalizeAcpResourceType(value) {
+  const normalized = String(value || '').trim();
+  const lookup = {
+    METALLE: 'quadraniumErz',
+    TECHNOLOGIEN: 'agrinium',
+    TREIBSTOFFE: 'tibannaGas',
+    CHEMIKALIEN: 'baradium',
+    VERSORGUNGSGUETER: 'kavamSalz',
+    quadraniumErz: 'quadraniumErz',
+    agrinium: 'agrinium',
+    tibannaGas: 'tibannaGas',
+    baradium: 'baradium',
+    kavamSalz: 'kavamSalz'
+  };
+  return lookup[normalized] || lookup[normalized.toUpperCase()] || '';
+}
+
+function getAcpRankingMarketStatus(row) {
+  if (Number(row.isEmbargoed || 0)) return 'Embargo';
+  if (String(row.controlStatus || '').trim().toUpperCase() === 'OPFOR') return 'OPFOR blockiert';
+  const priceFactor = Number(row.currentPrice || 0) / Math.max(1, Number(row.basePrice || 1));
+  const surplusRatio = Number(row.surplusRatio || 1);
+  if (surplusRatio < 0.6) return 'Krise';
+  if (surplusRatio < 0.9) return 'Knappheit';
+  if (priceFactor >= 1.45) return 'Überhitzt';
+  if (priceFactor >= 1.15) return 'Boom';
+  return 'Normal';
+}
+
+function getAcpBalanceLabel(surplusRatio) {
+  if (surplusRatio > 1.5) return 'Starker Überschuss';
+  if (surplusRatio > 1.1) return 'Überschuss';
+  if (surplusRatio >= 0.9) return 'Ausgeglichen';
+  if (surplusRatio >= 0.6) return 'Knappheit';
+  return 'Krise';
+}
+
+export function readAcpSectorRanking(db, options = {}) {
+  const resourceKey = normalizeAcpResourceType(options.resourceType || 'METALLE') || 'quadraniumErz';
+  const sort = String(options.sort || 'cheap').trim();
+  const rows = db.prepare(`
+    SELECT p.sector_id AS sectorId,
+      COALESCE(e.sector_name, p.sector_id) AS sectorName,
+      COALESCE(e.control_status, 'Neutral') AS controlStatus,
+      COALESCE(e.is_embargoed, 0) AS isEmbargoed,
+      p.resource_type AS resourceType,
+      p.current_price AS currentPrice,
+      p.base_price AS basePrice,
+      p.previous_price AS previousPrice,
+      p.demand_score AS demandScore,
+      p.supply_score AS supplyScore,
+      COALESCE(d.import_dependency, 0) AS importDependency,
+      COALESCE(d.export_strength, 0) AS exportStrength,
+      COALESCE(p.speculation_score, 0) AS speculationScore,
+      p.updated_at AS updatedAt
+    FROM sector_resource_prices p
+    LEFT JOIN sector_economy_state e ON e.sector_id = p.sector_id
+    LEFT JOIN sector_resource_demand d ON d.sector_id = p.sector_id AND d.resource_type = p.resource_type
+    WHERE p.resource_type = ?
+    ORDER BY p.current_price ASC, sectorName COLLATE NOCASE
+  `).all(resourceKey).map((row) => {
+    const currentPrice = round2(Number(row.currentPrice || 0));
+    const basePrice = round2(Math.max(1, Number(row.basePrice || RESOURCE_MARKET_CONFIG[resourceKey]?.basePrice || 1)));
+    const previousPrice = round2(Number(row.previousPrice || basePrice));
+    const demandScore = round2(Math.max(0, Number(row.demandScore || 0)));
+    const supplyScore = round2(Math.max(0, Number(row.supplyScore || 0)));
+    const change = round2(currentPrice - previousPrice);
+    const changePercent = previousPrice > 0 ? round2((change / previousPrice) * 100) : 0;
+    const surplusRatio = round2(supplyScore / Math.max(demandScore, 1));
+    const mapped = {
+      sectorId: row.sectorId,
+      sectorName: row.sectorName,
+      controlStatus: row.controlStatus,
+      isEmbargoed: Boolean(row.isEmbargoed),
+      currentPrice,
+      basePrice,
+      previousPrice,
+      change,
+      changePercent,
+      demandScore,
+      supplyScore,
+      surplusRatio,
+      importDependency: round2(Number(row.importDependency || 0)),
+      exportStrength: round2(Number(row.exportStrength || 0)),
+      speculationScore: round2(Number(row.speculationScore || 0)),
+      balanceLabel: getAcpBalanceLabel(surplusRatio),
+      marketStatusLabel: '',
+      updatedAt: row.updatedAt || null
+    };
+    mapped.marketStatusLabel = getAcpRankingMarketStatus(mapped);
+    return mapped;
+  });
+  const comparators = {
+    cheap: (left, right) => left.currentPrice - right.currentPrice || left.sectorName.localeCompare(right.sectorName, 'de'),
+    expensive: (left, right) => right.currentPrice - left.currentPrice || left.sectorName.localeCompare(right.sectorName, 'de'),
+    scarcity: (left, right) => left.surplusRatio - right.surplusRatio || right.currentPrice - left.currentPrice,
+    surplus: (left, right) => right.surplusRatio - left.surplusRatio || left.currentPrice - right.currentPrice,
+    change_up: (left, right) => right.changePercent - left.changePercent || right.currentPrice - left.currentPrice,
+    change_down: (left, right) => left.changePercent - right.changePercent || left.currentPrice - right.currentPrice
+  };
+  const ordered = [...rows].sort(comparators[sort] || comparators.cheap).map((row, index) => ({
+    rank: index + 1,
+    ...row
+  }));
+  return {
+    resourceType: resourceKey,
+    resourceLabel: RESOURCE_MARKET_CONFIG[resourceKey]?.label || resourceKey,
+    sort: comparators[sort] ? sort : 'cheap',
+    updatedAt: ordered[0]?.updatedAt || null,
+    sectors: ordered
+  };
 }

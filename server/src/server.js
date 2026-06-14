@@ -23,6 +23,7 @@ import {
   purchaseMarketDemand,
   readCompanyOwnership,
   readCampaignState,
+  readAcpSectorRanking,
   readMarketSummary,
   readMarketCompanyDetail,
   readEconomySector,
@@ -1373,6 +1374,25 @@ app.get('/api/economy/market/search', (req, res) => {
   } catch (error) {
     console.error('Economy market search endpoint failed', error);
     res.status(error.status || 500).json({ error: error.message || 'Aktiensuche konnte nicht geladen werden.' });
+  }
+});
+
+app.get('/api/economy/acp/ranking', (req, res) => {
+  try {
+    const { state } = readCampaignState(db);
+    const inflationRate = Math.min(0.25, Number(state.resources?.GAR?.credits || 0) / 2000000);
+    try {
+      runMarketTick(db, inflationRate, Date.now(), state);
+    } catch (tickError) {
+      console.error('ACP ranking tick failed', tickError);
+    }
+    res.json(readAcpSectorRanking(db, {
+      resourceType: String(req.query?.resourceType || 'METALLE'),
+      sort: String(req.query?.sort || 'cheap')
+    }));
+  } catch (error) {
+    console.error('ACP ranking endpoint failed', error);
+    res.status(error.status || 500).json({ error: error.message || 'ACP-Ranking konnte nicht geladen werden.' });
   }
 });
 

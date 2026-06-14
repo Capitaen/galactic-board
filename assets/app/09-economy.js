@@ -37,6 +37,15 @@ const MARKET_RANGE_OPTIONS = {
   sixMonths: { label: '6 Monate', ms: 183 * 24 * 60 * 60 * 1000 }
 };
 
+const ACP_RANKING_SORT_OPTIONS = {
+  cheap: 'Günstigste zuerst',
+  expensive: 'Teuerste zuerst',
+  scarcity: 'Stärkste Knappheit',
+  surplus: 'Größter Überschuss',
+  change_up: 'Stärkster Anstieg',
+  change_down: 'Stärkster Fall'
+};
+
 function getMarketRangeCutoff(rangeKey = economyViewState.marketRange) {
   const option = MARKET_RANGE_OPTIONS[rangeKey] || MARKET_RANGE_OPTIONS.today;
   return Date.now() - option.ms;
@@ -372,6 +381,40 @@ function renderAcpChart(resourceKey) {
   </svg></div>`;
 }
 
+function renderAcpRankingTable() {
+  const ranking = economyViewState.acpRanking || { sectors: [] };
+  const rows = Array.isArray(ranking.sectors) ? ranking.sectors : [];
+  if (economyViewState.acpRankingLoading && !rows.length) {
+    return '<div class="muted-box">Sektorales Ressourcenpreis-Ranking wird geladen...</div>';
+  }
+  if (economyViewState.acpRankingError) {
+    return `<div class="muted-box">${escapeLoginManagerText(economyViewState.acpRankingError)}</div>`;
+  }
+  if (!rows.length) {
+    return '<div class="muted-box">Noch keine sektoralen Ressourcenpreise vorhanden.</div>';
+  }
+  return `<table class="data-table">
+    <thead><tr><th>Rang</th><th>Sektor</th><th>Kontrolle</th><th>Aktueller Preis</th><th>Basispreis</th><th>Veränderung</th><th>Nachfrage</th><th>Angebot</th><th>Überschuss / Knappheit</th><th>Marktstatus</th></tr></thead>
+    <tbody>${rows.map((entry) => {
+      const changeClass = Number(entry.change || 0) >= 0 ? 'market-change-positive' : 'market-change-negative';
+      const balanceClass = entry.surplusRatio < 0.9 ? 'market-change-negative' : (entry.surplusRatio > 1.1 ? 'market-change-positive' : '');
+      const controlLabel = entry.isEmbargoed ? `${entry.controlStatus} / Embargo` : entry.controlStatus;
+      return `<tr>
+        <td>${entry.rank}</td>
+        <td><button class="mini-btn" onclick="openEconomySectorFromAcp('${entry.sectorId}')">${escapeLoginManagerText(entry.sectorName)}</button></td>
+        <td>${escapeLoginManagerText(controlLabel || '-')}</td>
+        <td>${formatCredits(entry.currentPrice)}</td>
+        <td>${formatCredits(entry.basePrice)}</td>
+        <td class="${changeClass}">${formatSignedCredits(entry.change)}<br><small>${formatSignedPercent(entry.changePercent)}</small></td>
+        <td>${Number(entry.demandScore || 0).toFixed(2).replace('.', ',')}</td>
+        <td>${Number(entry.supplyScore || 0).toFixed(2).replace('.', ',')}</td>
+        <td class="${balanceClass}">${escapeLoginManagerText(entry.balanceLabel || 'Ausgeglichen')}<br><small>Ratio ${Number(entry.surplusRatio || 0).toFixed(2).replace('.', ',')}</small></td>
+        <td>${escapeLoginManagerText(entry.marketStatusLabel || 'Normal')}</td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table>`;
+}
+
 function updateMarketQuantity(kind, companyId, value) {
   const range = document.getElementById(`${kind}Quantity_${companyId}`);
   const output = document.getElementById(`${kind}QuantityOutput_${companyId}`);
@@ -420,6 +463,12 @@ async function fetchEconomyView(options = {}) {
       searchResults: String(economyViewState.sectorQuery || '').trim() ? economyViewState.searchResults : []
     });
     loadedSuccessfully = summaryCompanies.length > 0;
+    if (economyViewState.activeSection === 'acp') {
+      void fetchAcpRanking({
+        resourceType: economyViewState.acpSelectedResource,
+        sort: economyViewState.acpRankingSort
+      });
+    }
     if (options.markBootReady) markBootTask('economyReady', loadedSuccessfully);
   } catch (error) {
     economyViewState.error = error.message;
@@ -542,6 +591,7 @@ function setEconomySection(section) {
   economyViewState.activeSection = ['trade', 'detail', 'portfolio', 'acp', 'sectorEconomy'].includes(section) ? section : 'overview';
   renderEconomyView();
   if (economyViewState.activeSection === 'sectorEconomy') void fetchSectorEconomyList();
+  if (economyViewState.activeSection === 'acp') void fetchAcpRanking();
 }
 
 function openMarketCompanyOverview(companyId) {
@@ -696,6 +746,52 @@ async function saveEconomyPolicy() {
   } catch (error) {
     setStatus(error.message);
   }
+}
+
+async function fetchAcpRanking(options = {}) {
+  const force = Boolean(options.force);
+  if (economyViewState.acpRankingLoading && !force) return;
+  const resourceType = String(options.resourceType || economyViewState.acpSelectedResource || 'quadraniumErz');
+  const sort = String(options.sort || economyViewState.acpRankingSort || 'cheap');
+  economyViewState.acpRankingLoading = true;
+  economyViewState.acpRankingError = '';
+  economyViewState.acpSelectedResource = resourceType;
+  economyViewState.acpRankingSort = sort;
+  if (activeMainTab === 'economy' && economyViewState.activeSection === 'acp') renderEconomyView();
+  try {
+    const response = await fetch(`/api/economy/acp/ranking?resourceType=${encodeURIComponent(resourceType)}&sort=${encodeURIComponent(sort)}`, { credentials: 'include' });
+    const payload = await readJsonResponse(response, 'ACP-Ranking konnte nicht geladen werden.');
+    if (!response.ok) throw new Error(payload.error || 'ACP-Ranking konnte nicht geladen werden.');
+    economyViewState.acpRanking = payload || { resourceType, sectors: [] };
+  } catch (error) {
+    economyViewState.acpRankingError = error.message;
+  } finally {
+    economyViewState.acpRankingLoading = false;
+    if (activeMainTab === 'economy' && economyViewState.activeSection === 'acp') renderEconomyView();
+  }
+}
+
+function setAcpRankingResource(resourceType) {
+  economyViewState.acpSelectedResource = resourceType;
+  void fetchAcpRanking({ resourceType, sort: economyViewState.acpRankingSort, force: true });
+}
+
+function setAcpRankingSort(sort) {
+  economyViewState.acpRankingSort = sort;
+  void fetchAcpRanking({ resourceType: economyViewState.acpSelectedResource, sort, force: true });
+}
+
+async function openEconomySectorFromAcp(sectorId) {
+  const normalizedSectorId = String(sectorId || '').trim();
+  if (!normalizedSectorId) return;
+  economyViewState.selectedEconomySectorId = normalizedSectorId;
+  economyViewState.activeSection = 'sectorEconomy';
+  renderEconomyView();
+  if (!Array.isArray(economyViewState.economySectors) || !economyViewState.economySectors.length) {
+    await fetchSectorEconomyList({ force: true });
+    return;
+  }
+  await fetchSectorEconomyDetail(normalizedSectorId, { renderLoading: true });
 }
 
 function renderEconomyMetricCard(label, metric) {
@@ -1152,14 +1248,13 @@ function renderEconomyView() {
     return;
   }
   if (economyViewState.activeSection === 'acp') {
-    const selectedResource = economyViewState.resourceFilter !== 'all'
-      ? economyViewState.resourceFilter
-      : (acpRows[0]?.resourceKey || 'quadraniumErz');
+    const selectedResource = economyViewState.acpSelectedResource || acpRows[0]?.resourceKey || 'quadraniumErz';
+    const rankingUpdatedAt = economyViewState.acpRanking?.updatedAt ? formatMarketDateTime(economyViewState.acpRanking.updatedAt) : '-';
     workspacePanel.innerHTML = `
       <div class="workspace-head">
         <div>
           <h2>ACP Übersicht</h2>
-          <p>Average Commodity Price: Durchschnittskurse aller Rohstoff-Holdings je Ressourcentyp.</p>
+          <p>ACP als Rohstoffpreisindex. Basiert auf sektoralen Ressourcenpreisen, nicht auf Aktienkursen.</p>
         </div>
         <div class="toolbar-row end">
           <button class="mini-btn" onclick="setEconomySection('overview')">Zur Übersicht</button>
@@ -1175,7 +1270,7 @@ function renderEconomyView() {
           return `<div class="stat-card">
             <strong>${escapeLoginManagerText(entry.label)}</strong>
             <span>${formatCredits(entry.averagePrice)}</span>
-            <small style="color:${changeFromBase >= 0 ? '#55d68b' : '#ff6b6b'}">${changeFromBase >= 0 ? '+' : ''}${formatCredits(changeFromBase)} zu Basis</small>
+            <small style="color:${changeFromBase >= 0 ? '#55d68b' : '#ff6b6b'}">${changeFromBase >= 0 ? '+' : ''}${formatCredits(changeFromBase)} zu Basis • ${entry.sectorCount || 0} Sektoren</small>
           </div>`;
         }).join('')}
       </div>
@@ -1183,7 +1278,7 @@ function renderEconomyView() {
         <h3>ACP Verlauf</h3>
         ${renderMarketRangeControls()}
         <div class="toolbar-row" style="margin:12px 0 8px 0;">
-          ${acpRows.map((entry) => `<button class="mini-btn ${selectedResource === entry.resourceKey ? 'active' : ''}" onclick="economyViewState.resourceFilter='${entry.resourceKey}'; renderEconomyView()">${escapeLoginManagerText(entry.label)}</button>`).join('')}
+          ${acpRows.map((entry) => `<button class="mini-btn ${selectedResource === entry.resourceKey ? 'active' : ''}" onclick="setAcpRankingResource('${entry.resourceKey}')">${escapeLoginManagerText(entry.label)}</button>`).join('')}
         </div>
         ${renderAcpChart(selectedResource)}
       </div>
@@ -1191,14 +1286,26 @@ function renderEconomyView() {
         <div class="workspace-card">
           <h3>Aktuelle ACP-Werte</h3>
           <table class="data-table">
-            <thead><tr><th>Rohstoff</th><th>Ø Preis</th><th>Basis</th><th>Holdings</th></tr></thead>
-            <tbody>${acpRows.map((entry) => `<tr><td>${escapeLoginManagerText(entry.label)}</td><td>${formatCredits(entry.averagePrice)}</td><td>${formatCredits(entry.averageBasePrice)}</td><td>${entry.companyCount}</td></tr>`).join('')}</tbody>
+            <thead><tr><th>Rohstoff</th><th>Ø Preis</th><th>Basis</th><th>Holdings</th><th>Sektoren</th></tr></thead>
+            <tbody>${acpRows.map((entry) => `<tr><td>${escapeLoginManagerText(entry.label)}</td><td>${formatCredits(entry.averagePrice)}</td><td>${formatCredits(entry.averageBasePrice)}</td><td>${entry.companyCount}</td><td>${entry.sectorCount || 0}</td></tr>`).join('')}</tbody>
           </table>
         </div>
         <div class="workspace-card">
           <h3>Marktberichte</h3>
           ${(economyViewState.intelligenceReports || []).slice(0, 8).map((report) => `<div class="project-card"><h4>${escapeLoginManagerText(RESOURCE_LABELS[report.resourceType] || report.resourceType)}</h4><p>${escapeLoginManagerText(report.message)}</p><small>${formatMarketDateTime(report.createdAt)}</small></div>`).join('') || '<div class="muted-box">Noch keine Marktberichte.</div>'}
         </div>
+      </div>
+      <div class="workspace-section">
+        <h3>Sektorale Ressourcenpreise</h3>
+        <p class="muted">Sortiertes Ranking nach sektoralen Rohstoffpreisen. Ein Klick auf einen Sektor öffnet direkt die Sektorwirtschaft.</p>
+        <div class="toolbar-row" style="margin:12px 0 8px 0;">
+          ${acpRows.map((entry) => `<button class="mini-btn ${selectedResource === entry.resourceKey ? 'active' : ''}" onclick="setAcpRankingResource('${entry.resourceKey}')">${escapeLoginManagerText(entry.label)}</button>`).join('')}
+        </div>
+        <div class="toolbar-row" style="margin:0 0 12px 0;">
+          ${Object.entries(ACP_RANKING_SORT_OPTIONS).map(([sortKey, sortLabel]) => `<button class="mini-btn ${economyViewState.acpRankingSort === sortKey ? 'active' : ''}" onclick="setAcpRankingSort('${sortKey}')">${escapeLoginManagerText(sortLabel)}</button>`).join('')}
+        </div>
+        <p class="muted">Letzte Aktualisierung: ${rankingUpdatedAt}${economyViewState.acpRankingLoading ? ' • aktualisiert gerade...' : ''}</p>
+        <div class="workspace-card">${renderAcpRankingTable()}</div>
       </div>
     `;
     return;
