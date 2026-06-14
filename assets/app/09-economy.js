@@ -625,7 +625,13 @@ async function sellMarketShare(companyId) {
 function setEconomySection(section) {
   economyViewState.activeSection = ['trade', 'detail', 'portfolio', 'acp', 'sectorEconomy'].includes(section) ? section : 'overview';
   renderEconomyView();
-  if (economyViewState.activeSection === 'sectorEconomy') void fetchSectorEconomyList();
+  if (economyViewState.activeSection === 'sectorEconomy') {
+    if (!Array.isArray(economyViewState.economySectors) || !economyViewState.economySectors.length) {
+      void fetchSectorEconomyList();
+    } else if (!economyViewState.selectedEconomySector && economyViewState.selectedEconomySectorId) {
+      void fetchSectorEconomyDetail(economyViewState.selectedEconomySectorId, { renderLoading: true });
+    }
+  }
   if (economyViewState.activeSection === 'acp') void fetchAcpRanking();
   if (economyViewState.activeSection === 'portfolio') void fetchPortfolioHistory(economyViewState.marketRange);
 }
@@ -664,7 +670,7 @@ async function fetchSectorEconomyList(options = {}) {
     if (!economyViewState.selectedEconomySectorId && economyViewState.economySectors.length) {
       economyViewState.selectedEconomySectorId = economyViewState.economySectors[0].id;
     }
-    if (economyViewState.selectedEconomySectorId) {
+    if (options.includeDetail && economyViewState.selectedEconomySectorId) {
       await fetchSectorEconomyDetail(economyViewState.selectedEconomySectorId, { renderLoading: false });
     }
     loadedSuccessfully = Array.isArray(economyViewState.economySectors) && economyViewState.economySectors.length > 0;
@@ -830,8 +836,7 @@ async function openEconomySectorFromAcp(sectorId) {
   economyViewState.activeSection = 'sectorEconomy';
   renderEconomyView();
   if (!Array.isArray(economyViewState.economySectors) || !economyViewState.economySectors.length) {
-    await fetchSectorEconomyList({ force: true });
-    return;
+    await fetchSectorEconomyList({ force: true, includeDetail: false });
   }
   await fetchSectorEconomyDetail(normalizedSectorId, { renderLoading: true });
 }
