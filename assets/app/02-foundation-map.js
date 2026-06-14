@@ -41,6 +41,29 @@ function ensureWarehouseStore() {
   return state.meta.planetWarehouses;
 }
 
+function createBuildJobRecord(data = {}) {
+  return {
+    id: data.id || `build_${Math.random().toString(36).slice(2, 10)}`,
+    jobType: data.jobType || 'ship',
+    classId: data.classId,
+    shipName: data.shipName || '',
+    projectName: data.projectName || '',
+    buildLocationPlanetId: data.buildLocationPlanetId || '',
+    targetSlotIndex: Number.isInteger(data.targetSlotIndex) ? data.targetSlotIndex : -1,
+    resourceKey: data.resourceKey || '',
+    buildingKey: data.buildingKey || data.resourceKey || '',
+    sourceSectorId: String(data.sourceSectorId || '').trim(),
+    targetSectorId: String(data.targetSectorId || '').trim(),
+    amount: Math.max(0, Number(data.amount || 0)),
+    startedAt: data.startedAt || Date.now(),
+    finishesAt: data.finishesAt || Date.now(),
+    faction: data.faction || 'GAR',
+    status: data.status || 'building',
+    producedShipId: data.producedShipId || '',
+    completedAt: Number(data.completedAt || 0) || 0
+  };
+}
+
 function createManualSectorRecord(data = {}) {
   const points = Array.isArray(data.points)
     ? data.points
