@@ -1322,23 +1322,29 @@ async function finalizeSuccessfulLogin(payload) {
   safeRefreshRoleChrome();
   hideLoginModal();
   if (serverSync.enabled) {
-    try {
-      const response = await fetch('/api/bootstrap', { credentials: 'include' });
-      if (response.ok) {
-        const bootstrapPayload = await response.json();
-        updateServerSession(bootstrapPayload.me || payload.user || { id: null, username: '', role: 'Viewer' });
-        const nextRevision = Number(bootstrapPayload.revision || 0);
-        if (nextRevision > serverRevision) {
-          applyServerCampaign(bootstrapPayload.campaign || DEFAULT_DATA, nextRevision, { playOwnerEffects: true, updatedAt: bootstrapPayload.updatedAt });
-        } else {
-          syncAuthUsersFromCampaign(bootstrapPayload.campaign);
+    const hasCampaignState = serverRevision > 0 && Array.isArray(state?.planets) && state.planets.length > 0;
+    if (!hasCampaignState) {
+      try {
+        const response = await fetch('/api/bootstrap', { credentials: 'include' });
+        if (response.ok) {
+          const bootstrapPayload = await response.json();
+          updateServerSession(bootstrapPayload.me || payload.user || { id: null, username: '', role: 'Viewer' });
+          const nextRevision = Number(bootstrapPayload.revision || 0);
+          if (nextRevision > serverRevision) {
+            applyServerCampaign(bootstrapPayload.campaign || DEFAULT_DATA, nextRevision, { playOwnerEffects: true, updatedAt: bootstrapPayload.updatedAt });
+          } else {
+            syncAuthUsersFromCampaign(bootstrapPayload.campaign);
+          }
+          serverSyncReady = true;
+          serverRevision = nextRevision;
+          serverSync.revision = nextRevision;
         }
-        serverSyncReady = true;
-        serverRevision = nextRevision;
-        serverSync.revision = nextRevision;
+      } catch (error) {
+        console.warn('Post-login bootstrap refresh failed', error);
       }
-    } catch (error) {
-      console.warn('Post-login bootstrap refresh failed', error);
+    } else {
+      serverSyncReady = true;
+      serverSync.revision = serverRevision;
     }
     connectServerSocket();
   }
