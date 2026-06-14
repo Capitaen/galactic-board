@@ -809,33 +809,34 @@ function setBootProgress(progress, statusText = getBootStatusText()) {
   if (bootStatusLabel) bootStatusLabel.textContent = statusText;
 }
 
+function finalizeBootScreen(statusText = 'SYSTEME ONLINE') {
+  if (bootLoadState.hidden) return;
+  bootLoadState.hidden = true;
+  setBootProgress(100, statusText);
+  if (bootLoadState.timer) {
+    window.clearInterval(bootLoadState.timer);
+    bootLoadState.timer = null;
+  }
+  if (bootLoadState.forceTimer) {
+    window.clearTimeout(bootLoadState.forceTimer);
+    bootLoadState.forceTimer = null;
+  }
+  bootScreen?.classList.add('fade-out');
+  window.setTimeout(() => {
+    bootScreen?.classList.remove('active');
+    bootScreen?.setAttribute('aria-hidden', 'true');
+  }, 420);
+}
+
 function maybeFinishBootScreen() {
   if (bootLoadState.hidden) return;
   const allReady = Object.values(bootLoadState.tasks).every(Boolean);
   if (!allReady) return;
   const elapsed = Date.now() - bootLoadState.startedAt;
-  const finalize = () => {
-    if (bootLoadState.hidden) return;
-    bootLoadState.hidden = true;
-    setBootProgress(100, 'SYSTEME ONLINE');
-    if (bootLoadState.timer) {
-      window.clearInterval(bootLoadState.timer);
-      bootLoadState.timer = null;
-    }
-    if (bootLoadState.forceTimer) {
-      window.clearTimeout(bootLoadState.forceTimer);
-      bootLoadState.forceTimer = null;
-    }
-    bootScreen?.classList.add('fade-out');
-    window.setTimeout(() => {
-      bootScreen?.classList.remove('active');
-      bootScreen?.setAttribute('aria-hidden', 'true');
-    }, 420);
-  };
   if (elapsed >= BOOT_MIN_DURATION_MS) {
-    finalize();
+    finalizeBootScreen();
   } else {
-    window.setTimeout(finalize, BOOT_MIN_DURATION_MS - elapsed);
+    window.setTimeout(() => finalizeBootScreen(), BOOT_MIN_DURATION_MS - elapsed);
   }
 }
 
@@ -887,7 +888,11 @@ function startBootSequence(mode = 'app') {
   bootLoadState.forceTimer = window.setTimeout(() => {
     if (bootLoadState.hidden) return;
     console.warn('Bootscreen still waiting for remaining tasks.');
-    setBootProgress(Math.max(bootLoadState.progress, 94), getBootStatusText());
+    Object.keys(bootLoadState.tasks).forEach((taskKey) => {
+      bootLoadState.tasks[taskKey] = true;
+    });
+    setBootProgress(Math.max(bootLoadState.progress, 96), 'SYSTEME ONLINE');
+    maybeFinishBootScreen();
   }, maxDuration);
 }
 
