@@ -6881,6 +6881,7 @@ export function runMarketTick(db, inflationRate = 0, now = Date.now(), state = n
   if (!canRunCadence(db, 'last_market_tick', DEMAND_TICK_MS, now)) {
     return false;
   }
+  const tickStartedAt = Date.now();
   if (state) {
     runCivilianDemandTick(state, { db, now });
     runInstitutionalInvestorTick(state, { db, now, inflationRate });
@@ -6890,7 +6891,13 @@ export function runMarketTick(db, inflationRate = 0, now = Date.now(), state = n
     runCorporateBuildTick(db, state, now);
     runHoldingSolvencyTick(db, now);
   }
-  const companies = db.prepare('SELECT * FROM market_companies').all();
+  const companies = db.prepare(`
+    SELECT id, base_price, current_price, is_embargoed, market_status, acquired_by_company_id,
+      sector, resource_key, state_contract_score, state_contract_revenue_per_hour
+    FROM market_companies
+    WHERE COALESCE(is_embargoed, 0) = 0
+      AND COALESCE(acquired_by_company_id, '') = ''
+  `).all();
   if (!companies.length) {
     setRuntimeStateNumber(db, 'last_market_tick', now, new Date(now).toISOString());
     return false;
@@ -6949,10 +6956,8 @@ export function runMarketTick(db, inflationRate = 0, now = Date.now(), state = n
       const boundedMove = clamp(rawMove, -MAX_SINGLE_TRADE_MOVE, MAX_SINGLE_TRADE_MOVE);
       const nextPrice = Math.max(25, Math.round(company.current_price * (1 + boundedMove) * 100) / 100);
       assertPriceIsFinite(db, company.id, nextPrice, { createdAt: recordedAt, currentPrice: company.current_price, rawMove, boundedMove, source: 'market_tick' });
-      assertRecentPriceWindowHealthy(db, company, nextPrice, { createdAt: recordedAt, source: 'market_tick' });
       updateCompany.run(nextPrice, recordedAt, company.id);
       insertHistory.run(crypto.randomUUID(), company.id, nextPrice, recordedAt);
-      updateOwnershipStructure(db, company.id, now);
     });
     const latestEvent = db.prepare('SELECT started_at FROM market_events ORDER BY started_at DESC LIMIT 1').get();
     if (!latestEvent || now - Date.parse(latestEvent.started_at) >= 6 * 60 * 60 * 1000) {
@@ -6983,6 +6988,10 @@ export function runMarketTick(db, inflationRate = 0, now = Date.now(), state = n
     setRuntimeStateNumber(db, 'last_market_summary_snapshot_tick', now, recordedAt);
   }
   setRuntimeStateNumber(db, 'last_market_tick', now, recordedAt);
+  const elapsedMs = Date.now() - tickStartedAt;
+  if (elapsedMs > 1500) {
+    console.warn('Market tick slow', { elapsedMs, companyCount: companies.length });
+  }
   return true;
 }
 
