@@ -36,7 +36,13 @@ try {
   safeRefreshRoleChrome();
   syncMobileOrientationUi();
   showLoginModal();
-  setStatus('Bitte einloggen oder als Gast fortfahren.');
+  const shouldResumeAppEntry = shouldResumeAppEntryOnStartup();
+  if (shouldResumeAppEntry) {
+    setStatus('Sitzung wird wiederhergestellt. Grundsysteme werden geladen.');
+    void beginAppLoadSequence();
+  } else {
+    setStatus('Bitte einloggen oder als Gast fortfahren.');
+  }
 } catch (error) {
   console.error('Initial app startup failed', error);
   showLoginModal();

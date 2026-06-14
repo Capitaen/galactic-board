@@ -1322,6 +1322,7 @@ async function ensureEconomyViewLoaded(options = {}) {
 async function finalizeSuccessfulLogin(payload) {
   viewerModeActive = false;
   pendingLoginAttempt = null;
+  setAppEntrySessionActive(true);
   serverSync.session = payload.user || { id: null, username: '', role: 'Viewer' };
   currentAuthenticatedUsername = payload.user?.username || '';
   if (roleSelect) roleSelect.value = payload.user?.role || 'Viewer';
@@ -1379,6 +1380,7 @@ async function finalizeSuccessfulLogin(payload) {
 function restoreLoginAfterFailure(message) {
   pendingLoginAttempt = null;
   viewerModeActive = false;
+  setAppEntrySessionActive(false);
   currentAuthenticatedUsername = '';
   serverSync.session = { id: null, username: '', role: 'Viewer' };
   if (roleSelect) roleSelect.value = 'Viewer';
@@ -1419,6 +1421,7 @@ async function verifyDeferredLogin(loginAttempt) {
 function continueAsGuest() {
   viewerModeActive = true;
   pendingLoginAttempt = null;
+  setAppEntrySessionActive(true);
   currentAuthenticatedUsername = '';
   serverSync.session = { id: null, username: '', role: 'Viewer' };
   if (roleSelect) roleSelect.value = 'Viewer';
@@ -1449,6 +1452,7 @@ async function logoutCurrentUser() {
   }
   viewerModeActive = false;
   pendingLoginAttempt = null;
+  setAppEntrySessionActive(false);
   currentAuthenticatedUsername = '';
   serverSync.session = { id: null, username: '', role: 'Viewer' };
   if (roleSelect) roleSelect.value = 'Viewer';
@@ -1468,6 +1472,7 @@ async function attemptLogin() {
   }
   pendingLoginAttempt = { id: crypto.randomUUID(), username, password };
   viewerModeActive = false;
+  setAppEntrySessionActive(true);
   hideLoginModal();
   setStatus('Zugangsdaten werden geprüft. Grundsysteme werden bereits geladen.');
   if (!hasLoadedCampaignState()) {

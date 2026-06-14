@@ -313,6 +313,7 @@ const SHIP_CLASS_IMPORT_PATTERNS = [
 const LOCAL_STATE_MAX_BYTES = 2.5 * 1024 * 1024;
 const LOCAL_STATE_STORAGE_KEY = 'gcb_state_v2';
 const LOCAL_STATE_SCHEMA_VERSION = 2;
+const APP_ENTRY_SESSION_KEY = 'gcb_app_entry_active';
 const DEFAULT_DATA = {
   planets: [],
   fleets: [],
@@ -385,6 +386,22 @@ function warmDeferredCampaignAssets() {
   window.setTimeout(() => {
     void ensurePlanetDemographicsLoaded();
   }, 2500);
+}
+function setAppEntrySessionActive(active) {
+  try {
+    if (active) sessionStorage.setItem(APP_ENTRY_SESSION_KEY, '1');
+    else sessionStorage.removeItem(APP_ENTRY_SESSION_KEY);
+  } catch (error) {
+    console.warn('App entry session flag could not be updated.', error);
+  }
+}
+function shouldResumeAppEntryOnStartup() {
+  try {
+    return sessionStorage.getItem(APP_ENTRY_SESSION_KEY) === '1';
+  } catch (error) {
+    console.warn('App entry session flag could not be read.', error);
+    return false;
+  }
 }
 function sanitizeCampaignMeta(meta) {
   const source = meta && typeof meta === 'object' && !Array.isArray(meta) ? meta : {};
