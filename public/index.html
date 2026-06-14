@@ -13028,6 +13028,38 @@ function renderSectorStockpileCards(stockpiles = {}) {
   `).join('');
 }
 
+function renderCorporateInventoryTable(resourceBag = {}, inventoryValue = 0) {
+  const bag = resourceBag || {};
+  return `<div class="workspace-card">
+    <h3>Holding-Lager</h3>
+    <table class="data-table">
+      <thead><tr><th>Ressource</th><th>Menge</th></tr></thead>
+      <tbody>${RESOURCE_KEYS.map((key) => `<tr>
+        <td>${escapeLoginManagerText(RESOURCE_LABELS[key] || key)}</td>
+        <td>${Number(bag[key] || 0).toLocaleString('de-DE', { maximumFractionDigits: 2 })}</td>
+      </tr>`).join('')}</tbody>
+    </table>
+    <p class="muted">Geschätzter Lagerwert: ${formatCredits(inventoryValue || 0)}</p>
+  </div>`;
+}
+
+function renderCorporateTradeTable(title, trades = []) {
+  return `<div class="workspace-card">
+    <h3>${escapeLoginManagerText(title)}</h3>
+    <table class="data-table">
+      <thead><tr><th>Zeit</th><th>Ressource</th><th>Menge</th><th>Preis</th><th>Gesamt</th><th>Gegenpartei</th></tr></thead>
+      <tbody>${trades.map((trade) => `<tr>
+        <td>${formatMarketDateTime(trade.createdAt)}</td>
+        <td>${escapeLoginManagerText(trade.resourceLabel || RESOURCE_LABELS[trade.resourceType] || trade.resourceType)}</td>
+        <td>${Number(trade.quantity || 0).toLocaleString('de-DE', { maximumFractionDigits: 2 })}</td>
+        <td>${formatCredits(trade.unitPrice)}</td>
+        <td>${formatCredits(trade.totalPrice)}</td>
+        <td>${escapeLoginManagerText(!trade.sellerCompanyId ? 'Ziviler Markt' : (trade.sellerName || trade.buyerName || '-'))}</td>
+      </tr>`).join('') || '<tr><td colspan="6">Keine Trades.</td></tr>'}</tbody>
+    </table>
+  </div>`;
+}
+
 function renderSectorAssetTable(title, rows = []) {
   return `<div class="workspace-card">
     <h3>${escapeLoginManagerText(title)}</h3>
@@ -13049,7 +13081,7 @@ function renderSectorHoldingsTable(holdings = []) {
   return `<div class="workspace-card">
     <h3>Holdings im Sektor</h3>
     <table class="data-table">
-      <thead><tr><th>Holding</th><th>Ressourcen</th><th>Kurs</th><th>Tag</th><th>Staatsverträge</th><th>Corporate Cash</th><th>Private Assets</th><th>Strategie</th><th>Risiko</th><th>Status</th><th></th></tr></thead>
+      <thead><tr><th>Holding</th><th>Ressourcen</th><th>Kurs</th><th>Tag</th><th>Staatsverträge</th><th>Corporate Cash</th><th>Lagerwert</th><th>Private Assets</th><th>Strategie</th><th>Risiko</th><th>Status</th><th></th></tr></thead>
       <tbody>${holdings.map((holding) => {
         const change = Number(holding.dailyChange || 0);
         return `<tr>
@@ -13059,13 +13091,14 @@ function renderSectorHoldingsTable(holdings = []) {
           <td style="color:${change >= 0 ? '#55d68b' : '#ff6b6b'}">${change >= 0 ? '+' : ''}${formatCredits(change)} (${Number(holding.dailyChangePercent || 0).toFixed(2).replace('.', ',')} %)</td>
           <td>${formatCredits(holding.stateContractRevenuePerHour || 0)} / h<br><small>${Number(holding.stateBackedSlotCount || 0)} GAR-Slots</small></td>
           <td>${formatCredits(holding.corporateCash || 0)}</td>
+          <td>${formatCredits(holding.inventoryValue || 0)}</td>
           <td>${formatCredits(holding.privateAssetValue || 0)}<br><small>${Number(holding.corporateAssets?.length || 0)} Standorte / ${Number(holding.corporateProjects?.filter((entry) => ['planned', 'building'].includes(entry.status)).length || 0)} Projekte</small></td>
           <td>${escapeLoginManagerText(holding.corporateStrategy || 'conservative')}</td>
           <td>${Math.round(Number(holding.bankruptcyRisk || 0) * 100)} %</td>
           <td>${escapeLoginManagerText(holding.marketStatusLabel || holding.marketStatus || 'Handelbar')}</td>
           <td><button class="mini-btn" onclick="openSectorHolding('${holding.id}')">Zur Aktienübersicht</button></td>
         </tr>`;
-      }).join('') || '<tr><td colspan="11">Keine Holdings in diesem Sektor.</td></tr>'}</tbody>
+      }).join('') || '<tr><td colspan="12">Keine Holdings in diesem Sektor.</td></tr>'}</tbody>
     </table>
   </div>`;
 }
@@ -13287,6 +13320,10 @@ function renderEconomyView() {
         <div class="stat-card"><strong>Marktkapitalisierung</strong><span>${formatCredits(company.marketCap)}</span></div>
         <div class="stat-card"><strong>Kontrolle</strong><span>${escapeLoginManagerText(company.controllingShareholder || 'Streubesitz')}</span></div>
         <div class="stat-card"><strong>Corporate Cash</strong><span>${formatCredits(company.corporateCash || 0)}</span></div>
+        <div class="stat-card"><strong>Lagerwert</strong><span>${formatCredits(company.inventoryValue || 0)}</span></div>
+        <div class="stat-card"><strong>Umsatz 1h</strong><span>${formatCredits(company.realizedRevenueLastHour || 0)}</span></div>
+        <div class="stat-card"><strong>Umsatz 24h</strong><span>${formatCredits(company.realizedRevenueLast24h || 0)}</span></div>
+        <div class="stat-card"><strong>Einkäufe 24h</strong><span>${formatCredits(company.purchaseSpendLast24h || 0)}</span></div>
         <div class="stat-card"><strong>Staatsvertrag / h</strong><span>${formatCredits(company.stateContractRevenuePerHour || 0)}</span></div>
         <div class="stat-card"><strong>GAR-Slots</strong><span>${Number(company.stateBackedSlotCount || 0)}</span></div>
         <div class="stat-card"><strong>Private Asset Value</strong><span>${formatCredits(company.privateAssetValue || 0)}</span></div>
@@ -13298,6 +13335,7 @@ function renderEconomyView() {
       <div class="workspace-section"><h3>Kursverlauf</h3>${renderMarketRangeControls()}${renderMarketDetailChart(company.id || company.companyId)}</div>
       <div class="workspace-section"><h3>Anteilseigner</h3><div class="workspace-card">${renderOwnershipPie(company)}</div></div>
       <div class="workspace-section workspace-columns">
+        ${renderCorporateInventoryTable(company.corporateResources || {}, company.inventoryValue || 0)}
         ${renderSectorAssetTable('Private Standorte', (company.corporateAssets || []).map((asset) => ({
           name: asset.label || asset.buildingType || 'Privates Asset',
           planetName: asset.planetName || asset.planetId || '',
@@ -13325,6 +13363,10 @@ function renderEconomyView() {
           </tr></tbody>
         </table>
       </div></div>` : ''}
+      <div class="workspace-section workspace-columns">
+        ${renderCorporateTradeTable('Letzte Ressourcenverkäufe', company.recentCorporateSales || [])}
+        ${renderCorporateTradeTable('Letzte Ressourcenkäufe', company.recentCorporatePurchases || [])}
+      </div>
       <div class="workspace-section workspace-columns">
         <div class="workspace-card"><h3>Kaufen</h3><p>Verfügbar: ${formatCredits(portfolioBalance)} • Free Float: ${availableShares.toLocaleString('de-DE')} Aktie(n) • Maximal ${buyMax} Aktie(n)</p>
           ${economyViewState.portfolioEnabled && buyMax > 0 ? `<div class="trade-quantity"><input id="buyQuantity_${company.id}" type="range" min="1" max="${buyMax}" value="1" oninput="updateMarketQuantity('buy','${company.id}',this.value)"><output id="buyQuantityOutput_${company.id}">1</output></div>` : ''}
