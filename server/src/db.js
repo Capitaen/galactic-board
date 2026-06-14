@@ -4974,6 +4974,30 @@ function mapMarketCompanySummaryRow(company, companyStats = null) {
   };
 }
 
+function mapMarketCompanyPreviewRow(company) {
+  return {
+    id: company.id,
+    symbol: company.symbol,
+    name: company.name,
+    faction: company.faction,
+    basePrice: Number(company.basePrice || 0),
+    sector: company.sector,
+    sectorId: company.sectorId,
+    resourceKey: company.resourceKey,
+    resourceRefs: parseResourceRefs(company),
+    marketStatus: company.marketStatus,
+    marketStatusLabel: displayMarketStatus(company.marketStatus),
+    bankruptcyRisk: Number(company.bankruptcyRisk || 0),
+    isEmbargoed: Boolean(company.isEmbargoed),
+    currentPrice: Number(company.currentPrice || 0),
+    previousPrice: Number(company.previousPrice || 0),
+    totalShares: Number(company.totalShares || 0),
+    freeFloatShares: Number(company.freeFloatShares || 0),
+    marketCap: Number(company.marketCap || 0),
+    updatedAt: company.updatedAt || null
+  };
+}
+
 function readMarketCompanyStatsMap(db) {
   const assetStats = new Map(
     db.prepare(`
@@ -5074,6 +5098,20 @@ function readMarketCompanySummaryRows(db, whereSql = '', params = []) {
   `).all(...params);
 }
 
+function readMarketCompanyPreviewRows(db, whereSql = '', params = []) {
+  return db.prepare(`
+    SELECT id, symbol, name, faction, base_price AS basePrice,
+      sector, sector_id AS sectorId, resource_key AS resourceKey, resource_refs_json AS resourceRefsJson,
+      market_status AS marketStatus, bankruptcy_risk AS bankruptcyRisk,
+      is_embargoed AS isEmbargoed, current_price AS currentPrice,
+      previous_price AS previousPrice, total_shares AS totalShares,
+      free_float_shares AS freeFloatShares, market_cap AS marketCap,
+      updated_at AS updatedAt
+    FROM market_companies
+    ${whereSql}
+  `).all(...params);
+}
+
 function buildMarketTopLastHour(companies, hourHistoryByCompany) {
   return companies.map((company) => {
     const points = hourHistoryByCompany[company.id] || [];
@@ -5094,13 +5132,12 @@ function buildMarketTopLastHour(companies, hourHistoryByCompany) {
 }
 
 function buildMarketSummarySnapshot(db, now = Date.now()) {
-  const historyCutoff = new Date(now - (96 * 60 * 60 * 1000)).toISOString();
+  const historyCutoff = new Date(now - (48 * 60 * 60 * 1000)).toISOString();
   const oneHourAgoIso = new Date(now - (60 * 60 * 1000)).toISOString();
-  const statsMap = readMarketCompanyStatsMap(db);
-  const allCompanies = readMarketCompanySummaryRows(db, 'ORDER BY symbol')
-    .map((row) => mapMarketCompanySummaryRow(row, statsMap.get(row.id)));
-  const featuredCompanies = readMarketCompanySummaryRows(db, 'ORDER BY current_price DESC, symbol LIMIT 60')
-    .map((row) => mapMarketCompanySummaryRow(row, statsMap.get(row.id)));
+  const allCompanies = readMarketCompanyPreviewRows(db, 'ORDER BY symbol')
+    .map((row) => mapMarketCompanyPreviewRow(row));
+  const featuredCompanies = readMarketCompanyPreviewRows(db, 'ORDER BY current_price DESC, symbol LIMIT 50')
+    .map((row) => mapMarketCompanyPreviewRow(row));
   const hourHistoryRows = db.prepare(`
     SELECT company_id AS companyId, price, recorded_at AS recordedAt
     FROM market_history
@@ -5129,20 +5166,20 @@ function buildMarketSummarySnapshot(db, now = Date.now()) {
     WHERE i.portfolio_enabled = 1
     GROUP BY i.id
     ORDER BY portfolioValue DESC
-    LIMIT 20
+    LIMIT 10
   `).all();
   const events = db.prepare(`
     SELECT id, event_type AS eventType, title, description, impact,
       started_at AS startedAt, ends_at AS endsAt
     FROM market_events
-    ORDER BY started_at DESC LIMIT 15
+    ORDER BY started_at DESC LIMIT 8
   `).all();
   const policy = getPolicyForEconomy(db);
   const intelligenceReports = db.prepare(`
     SELECT id, severity, sector_id AS sectorId, resource_type AS resourceType, message, created_at AS createdAt
     FROM market_intelligence_reports
     ORDER BY created_at DESC
-    LIMIT 20
+    LIMIT 8
   `).all();
   const institutionalTrades = db.prepare(`
     SELECT t.id, i.name AS investorName, t.company_id AS companyId, t.sector_id AS sectorId,
@@ -5151,7 +5188,7 @@ function buildMarketSummarySnapshot(db, now = Date.now()) {
     FROM institutional_trades t
     LEFT JOIN institutional_investors i ON i.id = t.investor_id
     ORDER BY t.created_at DESC
-    LIMIT 20
+    LIMIT 12
   `).all();
   const institutionalInvestors = db.prepare(`
     SELECT i.id, i.name, i.strategy, i.risk_tolerance AS riskTolerance,
@@ -5165,6 +5202,7 @@ function buildMarketSummarySnapshot(db, now = Date.now()) {
     LEFT JOIN market_companies c ON c.id = h.company_id
     GROUP BY i.id
     ORDER BY totalValue DESC, i.name COLLATE NOCASE
+    LIMIT 8
   `).all();
   const factionAccounts = Object.fromEntries(db.prepare(`
     SELECT faction, credits, updated_at AS updatedAt
@@ -5207,16 +5245,15 @@ function ensureMarketSummarySnapshot(db, now = Date.now()) {
 
 export function readMarketSummary(db, investorId = '', userId = '') {
   const snapshot = ensureMarketSummarySnapshot(db, Date.now());
-  const historyCutoff = new Date(Date.now() - (96 * 60 * 60 * 1000)).toISOString();
+  const historyCutoff = new Date(Date.now() - (48 * 60 * 60 * 1000)).toISOString();
   const investor = investorId ? getOrCreateMarketInvestor(db, investorId, userId) : null;
   const holdings = investorId ? db.prepare(`
     SELECT company_id AS companyId, shares
     FROM market_holdings WHERE investor_id = ?
   `).all(investorId) : [];
   const heldIds = holdings.map((entry) => entry.companyId);
-  const statsMap = readMarketCompanyStatsMap(db);
   const heldCompaniesRaw = heldIds.length
-    ? readMarketCompanySummaryRows(db, `WHERE id IN (${heldIds.map(() => '?').join(', ')})`, heldIds)
+    ? readMarketCompanyPreviewRows(db, `WHERE id IN (${heldIds.map(() => '?').join(', ')})`, heldIds)
     : [];
   const combinedMap = new Map();
   (Array.isArray(snapshot.companies) ? snapshot.companies : []).forEach((company) => {
@@ -5224,7 +5261,7 @@ export function readMarketSummary(db, investorId = '', userId = '') {
     combinedMap.set(company.id, company);
   });
   heldCompaniesRaw.forEach((row) => {
-    const company = mapMarketCompanySummaryRow(row, statsMap.get(row.id));
+    const company = mapMarketCompanyPreviewRow(row);
     if (!combinedMap.has(company.id)) combinedMap.set(company.id, company);
   });
   const companies = [...combinedMap.values()].sort((left, right) => String(left.symbol || '').localeCompare(String(right.symbol || ''), 'de'));
@@ -5270,8 +5307,7 @@ export function searchMarketCompanies(db, options = {}) {
   const query = String(options.query || '').trim().toLocaleLowerCase('de');
   const resourceFilter = String(options.resourceFilter || 'all').trim();
   const limit = clamp(Number(options.limit || 60), 1, 100);
-  const statsMap = readMarketCompanyStatsMap(db);
-  const historyCutoff = new Date(Date.now() - ACP_HISTORY_WINDOW_MS).toISOString();
+  const historyCutoff = new Date(Date.now() - (48 * 60 * 60 * 1000)).toISOString();
   const whereParts = [];
   const params = [];
   if (resourceFilter !== 'all') {
@@ -5283,8 +5319,8 @@ export function searchMarketCompanies(db, options = {}) {
     params.push(`%${query}%`);
   }
   const whereSql = whereParts.length ? `WHERE ${whereParts.join(' AND ')}` : '';
-  const rows = readMarketCompanySummaryRows(db, `${whereSql} ORDER BY symbol COLLATE NOCASE LIMIT ${limit}`, params);
-  const companies = rows.map((row) => mapMarketCompanySummaryRow(row, statsMap.get(row.id)));
+  const rows = readMarketCompanyPreviewRows(db, `${whereSql} ORDER BY symbol COLLATE NOCASE LIMIT ${limit}`, params);
+  const companies = rows.map((row) => mapMarketCompanyPreviewRow(row));
   return {
     companies,
     history: loadCompactMarketHistoryForCompanyIds(db, companies.map((company) => company.id), historyCutoff)
