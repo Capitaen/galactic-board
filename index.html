@@ -6180,11 +6180,6 @@ function getBuildJobDisplayName(job) {
 }
 
 function getBuildJobLocationName(job) {
-  if (job?.jobType === 'transport') {
-    const source = getLogisticsLocationName(job.sourceSectorId);
-    const target = getLogisticsLocationName(job.targetSectorId);
-    return `${source} -> ${target}`;
-  }
   return planetIndex.get(job?.buildLocationPlanetId)?.name || '—';
 }
 
@@ -6193,7 +6188,6 @@ function getSectorDisplayName(sectorId) {
 }
 
 function getBuildJobTypeLabel(job) {
-  if (job?.jobType === 'transport') return 'Ressourcentransport';
   if (job?.jobType !== 'mine') return 'Schiffbau';
   const category = getMineProjectMeta(job.buildingKey || job.resourceKey)?.category;
   if (category === 'development') return 'Wirtschafts- und Entwicklungszentrum';
@@ -6354,56 +6348,6 @@ function upgradeWarehouse(warehouseId) {
   if (activeMainTab === 'buildProjects') renderBuildProjectsView();
   if (activeMainTab === 'shipyard') renderShipyardView();
   setStatus(`Lager-Upgrade abgeschlossen: Universallager jetzt Stufe ${warehouse.level}.`);
-}
-
-function startWarehouseTransport() {
-  if (!canManageWarehouseLogistics()) {
-    setStatus('Nur Navy, Senats-Admins oder Admins können Transporte anordnen.');
-    return;
-  }
-  const sourceSectorId = document.getElementById('warehouseSourceSector')?.value || '';
-  const targetSectorId = document.getElementById('warehouseTargetSector')?.value || '';
-  const resourceKey = document.getElementById('warehouseTransportResource')?.value || '';
-  const amount = Math.floor(Number(document.getElementById('warehouseTransportAmount')?.value || 0));
-  if (!sourceSectorId || !targetSectorId || sourceSectorId === targetSectorId) {
-    setStatus('Bitte zwei unterschiedliche Sektoren für den Transport wählen.');
-    return;
-  }
-  if (!STORAGE_RESOURCE_KEYS.includes(resourceKey) || amount <= 0) {
-    setStatus('Bitte Ressource und Menge für den Transport korrekt angeben.');
-    return;
-  }
-  const sourceSummary = getLogisticsLocationSummary(sourceSectorId);
-  if (Number(sourceSummary.resources?.[resourceKey]?.stock || 0) < amount) {
-    setStatus('Im Ausgangssektor ist nicht genug Bestand für diesen Transport vorhanden.');
-    return;
-  }
-  const targetSummary = getLogisticsLocationSummary(targetSectorId);
-  if (targetSectorId !== CENTRAL_WAREHOUSE_ID && !Number(targetSummary.warehouses?.length || 0)) {
-    setStatus('Im Zielsektor existiert noch kein lokales Lager. Bitte zuerst eines bauen.');
-    return;
-  }
-  const removed = removeStockFromLogisticsLocation(sourceSectorId, resourceKey, amount);
-  if (removed < amount) {
-    setStatus('Der Bestand konnte nicht vollständig reserviert werden.');
-    return;
-  }
-  state.buildJobs.push(createBuildJobRecord({
-    jobType: 'transport',
-    projectName: `${RESOURCE_LABELS[resourceKey]}-Transport`,
-    resourceKey,
-    sourceSectorId,
-    targetSectorId,
-    amount,
-    startedAt: Date.now(),
-    finishesAt: Date.now() + (2 * RESOURCE_PRODUCTION_TICK_MS),
-    faction: 'GAR',
-    status: 'building'
-  }));
-  saveLocal();
-  renderBuildProjectsView();
-  if (activeMainTab === 'shipyard') renderShipyardView();
-  setStatus(`Transport angeordnet: ${formatResourceAmount(amount)} ${RESOURCE_LABELS[resourceKey]} unterwegs nach ${getLogisticsLocationName(targetSectorId)}.`);
 }
 
 function closeMineBuildPlanetResults() {
@@ -13637,7 +13581,6 @@ function renderShipyardView() {
   const locations = locationChoices.filter((planet) => planet.enabled);
   const selectedLocationId = document.getElementById('shipyardLocation')?.value || locations[0]?.id || locationChoices[0]?.id || '';
   const faction = getActiveShipyardFaction();
-  const production = getEffectiveFactionProductionRate(faction);
   const pool = getFactionResourcePool(faction);
   const selectedLocationPlanet = planetIndex.get(selectedLocationId);
   const sectorCostSummary = faction === 'GAR' && selectedLocationPlanet ? getSectorShipyardCostSummary(selectedLocationId, selectedMeta?.cost || {}) : null;
@@ -13710,13 +13653,9 @@ function renderShipyardView() {
         <button class="primary" onclick="startBuildOrder()" ${canBuildAnything && locations.length && (faction === 'KUS' || DEBUG_DISABLE_GAR_BUILD_LIMITS || canAffordSectorShipyardCost(selectedLocationId, selectedMeta?.cost)) ? '' : 'disabled'}>${faction === 'KUS' || DEBUG_DISABLE_GAR_BUILD_LIMITS ? `${faction}-Schiff sofort erzeugen` : 'Bau starten'}</button>
       </div>
       <div class="workspace-card">
-        <h3>Stündliche Produktion / Staatseinnahmen</h3>
-        <table class="data-table">
-          <thead><tr><th>Rohstoff</th><th>Pro Stunde</th></tr></thead>
-          <tbody>
-            ${RESOURCE_KEYS.map((key) => `<tr><td>${RESOURCE_LABELS[key]}</td><td>+${formatResourceAmount(production[key])}</td></tr>`).join('')}
-          </tbody>
-        </table>
+        <h3>Bauhinweise</h3>
+        <p>GAR-Schiffbau nutzt automatisch das zentrale Coruscant-Lager und prüft zusätzlich, ob im Zielsektor genug lokale Lagerbestände verfügbar sind.</p>
+        <p class="muted">Die stündliche Produktionsübersicht findest du jetzt im Tab <strong>Logistik & Lager</strong> unter Bauprojekte.</p>
       </div>
     </div>
     <div class="workspace-section">
@@ -13784,7 +13723,6 @@ function renderBuildProjectsView() {
   const selectedPlanetProduction = selectedPlanet ? getPlanetProductionRate(selectedPlanet.id) : createEmptyFactionResources();
   const selectedPlanetBonuses = selectedPlanet ? getPlanetCivilianBonuses(selectedPlanet.id) : createEmptyFactionResources();
   const logisticsSectors = getLogisticsSectorChoices();
-  const logisticsLocations = getLogisticsLocationChoices();
   const selectedLogisticsSectorId = document.getElementById('warehouseSectorSelect')?.value || logisticsSectors[0]?.id || '';
   const selectedLogisticsSector = logisticsSectors.find((entry) => entry.id === selectedLogisticsSectorId) || logisticsSectors[0] || null;
   const sectorWarehouseSummary = selectedLogisticsSector ? getSectorWarehouseSummary(selectedLogisticsSector.id) : null;
@@ -13793,10 +13731,9 @@ function renderBuildProjectsView() {
   const selectedWarehousePlanetId = document.getElementById('warehouseBuildPlanet')?.value || warehousePlanetChoices[0]?.id || '';
   const selectedWarehousePlanet = warehousePlanetChoices.find((planet) => planet.id === selectedWarehousePlanetId) || warehousePlanetChoices[0] || null;
   const selectedWarehousePlanetSlots = selectedWarehousePlanet ? getAvailableMineSlots(selectedWarehousePlanet.id) : [];
-  const transportJobs = buildJobs.filter((job) => job.jobType === 'transport');
   const canStartMineProject = canBuildMineProjects();
   const canBuildWarehouseInfra = canBuildWarehouses();
-  const canManageLogistics = canManageWarehouseLogistics();
+  const logisticsProduction = faction === 'GAR' ? getEffectiveFactionProductionRate('GAR') : createEmptyFactionResources();
   const activeTab = buildProjectsViewTab === 'logistics' ? 'logistics' : 'infrastructure';
   workspacePanel.innerHTML = `
     <div class="workspace-head">
@@ -13926,21 +13863,14 @@ function renderBuildProjectsView() {
         <p class="muted">Alle militärischen Fördergebäude speisen ihre Rohstoffe direkt in das zentrale Republik-Lager auf Coruscant ein.</p>
       </div>
       <div class="workspace-card">
-        <h3>Lokales Lager bauen</h3>
-        <p>${canBuildWarehouseInfra ? 'Lokale Lager dürfen nur auf republikanischen Planeten mit sichtbarer Hyperraumroute gebaut werden. Sie lagern alle fünf Ressourcen gemeinsam.' : 'Nur Senats-Admins und globale Admins können lokale Lager errichten.'}</p>
-        <div class="form-row">
-          <label>Planet</label>
-          <select id="warehouseBuildPlanet" ${canBuildWarehouseInfra ? '' : 'disabled'} onchange="renderBuildProjectsView()">
-            ${warehousePlanetChoices.map((planet) => `<option value="${planet.id}" ${planet.id === selectedWarehousePlanet?.id ? 'selected' : ''}>${planet.name} • ${planet.sector || '—'} • ${planet.grid || '—'}</option>`).join('')}
-          </select>
-        </div>
-        <div class="workspace-card compact">
-          <strong>${selectedWarehousePlanet?.name || 'Kein Planet gewählt'}</strong>
-          <p>${selectedWarehousePlanet ? `${getPlanetSlotUsage(selectedWarehousePlanet.id).used}/10 Slots belegt • ${selectedWarehousePlanet.storageEligible ? 'Hyperraumroute sichtbar' : 'Keine sichtbare Hyperraumroute'}` : '—'}</p>
-          <p>Startkapazität: ${formatResourceAmount(getWarehouseCapacity(1))} • Ausbau je Stufe: +${formatResourceAmount(WAREHOUSE_LEVEL_STEP_CAPACITY)}</p>
-          <p>Kosten: ${RESOURCE_KEYS.map((key) => `${RESOURCE_LABELS[key]} ${getMineProjectMeta(LOCAL_WAREHOUSE_BUILDING_KEY)?.cost?.[key] || 0}`).join(' • ')}</p>
-        </div>
-        <button class="primary" onclick="startWarehouseBuildProject()" ${(canBuildWarehouseInfra && selectedWarehousePlanet && selectedWarehousePlanet.storageEligible && selectedWarehousePlanetSlots.length && !getPlanetWarehouses(selectedWarehousePlanet.id).length && canAffordGarInfrastructureCost(getMineProjectMeta(LOCAL_WAREHOUSE_BUILDING_KEY)?.cost || {})) ? '' : 'disabled'}>Lokales Lager bauen</button>
+        <h3>Stündliche Produktion / Staatseinnahmen</h3>
+        <table class="data-table">
+          <thead><tr><th>Rohstoff</th><th>Pro Stunde</th></tr></thead>
+          <tbody>
+            ${RESOURCE_KEYS.map((key) => `<tr><td>${RESOURCE_LABELS[key]}</td><td>+${formatResourceAmount(logisticsProduction[key])}</td></tr>`).join('')}
+          </tbody>
+        </table>
+        <p class="muted">Militärische Produktion läuft automatisch ins Coruscant-Lager. Baukosten und Schiffbau ziehen benötigte Bestände automatisch aus dem zentralen GAR-Lager.</p>
       </div>
     </div>
     <div class="workspace-section workspace-columns">
@@ -13966,7 +13896,21 @@ function renderBuildProjectsView() {
             </tbody>
           </table>
           <div class="workspace-card compact" style="margin-top:12px">
-            <strong>Lokale Lager im Sektor</strong>
+            <strong>Lokale Lager im Sektor</strong><br>
+            <small>Neue Lager dürfen nur auf GAR-Planeten mit sichtbarer Hyperraumroute gebaut werden.</small>
+            <div class="form-row" style="margin-top:10px">
+              <label>Planet</label>
+              <select id="warehouseBuildPlanet" ${canBuildWarehouseInfra ? '' : 'disabled'} onchange="renderBuildProjectsView()">
+                ${warehousePlanetChoices.map((planet) => `<option value="${planet.id}" ${planet.id === selectedWarehousePlanet?.id ? 'selected' : ''}>${planet.name} • ${planet.sector || '—'} • ${planet.grid || '—'}</option>`).join('')}
+              </select>
+            </div>
+            <div class="workspace-card compact" style="margin-top:10px">
+              <strong>${selectedWarehousePlanet?.name || 'Kein Planet gewählt'}</strong>
+              <p>${selectedWarehousePlanet ? `${getPlanetSlotUsage(selectedWarehousePlanet.id).used}/10 Slots belegt • ${selectedWarehousePlanet.storageEligible ? 'Hyperraumroute sichtbar' : 'Keine sichtbare Hyperraumroute'}` : '—'}</p>
+              <p>Startkapazität: ${formatResourceAmount(getWarehouseCapacity(1))} • Ausbau je Stufe: +${formatResourceAmount(WAREHOUSE_LEVEL_STEP_CAPACITY)}</p>
+              <p>Kosten: ${RESOURCE_KEYS.map((key) => `${RESOURCE_LABELS[key]} ${getMineProjectMeta(LOCAL_WAREHOUSE_BUILDING_KEY)?.cost?.[key] || 0}`).join(' • ')}</p>
+              <button class="primary" onclick="startWarehouseBuildProject()" ${(canBuildWarehouseInfra && selectedWarehousePlanet && selectedWarehousePlanet.storageEligible && selectedWarehousePlanetSlots.length && !getPlanetWarehouses(selectedWarehousePlanet.id).length && canAffordGarInfrastructureCost(getMineProjectMeta(LOCAL_WAREHOUSE_BUILDING_KEY)?.cost || {})) ? '' : 'disabled'}>Lokales Lager bauen</button>
+            </div>
             ${sectorWarehouseSummary.warehouses.length
               ? sectorWarehouseSummary.warehouses.map((warehouse) => `
                 <div style="margin-top:10px">
@@ -13978,52 +13922,6 @@ function renderBuildProjectsView() {
               : '<div class="muted-box" style="margin-top:10px">In diesem Sektor existiert noch kein lokales Lager.</div>'}
           </div>
         ` : '<div class="muted-box">Noch keine GAR-Sektoren mit Lagern gefunden.</div>'}
-      </div>
-      <div class="workspace-card">
-        <h3>Transporte anordnen</h3>
-        <p>${canManageLogistics ? 'Navy, Senats-Admins und Admins können sektorweite Ressourcentransporte anlegen.' : 'Für diese Aktion fehlen dir die nötigen Rechte.'}</p>
-        <div class="form-row">
-          <label>Ausgangslager</label>
-          <select id="warehouseSourceSector" ${canManageLogistics ? '' : 'disabled'}>
-            ${logisticsLocations.map((location) => `<option value="${location.id}">${location.name}</option>`).join('')}
-          </select>
-        </div>
-        <div class="form-row">
-          <label>Ziellager</label>
-          <select id="warehouseTargetSector" ${canManageLogistics ? '' : 'disabled'}>
-            ${logisticsLocations.map((location) => `<option value="${location.id}" ${location.id === selectedLogisticsSector?.id ? 'selected' : ''}>${location.name}</option>`).join('')}
-          </select>
-        </div>
-        <div class="form-row">
-          <label>Ressource</label>
-          <select id="warehouseTransportResource" ${canManageLogistics ? '' : 'disabled'}>
-            ${STORAGE_RESOURCE_KEYS.map((resourceKey) => `<option value="${resourceKey}">${RESOURCE_LABELS[resourceKey]}</option>`).join('')}
-          </select>
-        </div>
-        <div class="form-row">
-          <label>Menge</label>
-          <input id="warehouseTransportAmount" type="number" min="1" step="1" value="100" ${canManageLogistics ? '' : 'disabled'}>
-        </div>
-        <button class="primary" onclick="startWarehouseTransport()" ${canManageLogistics ? '' : 'disabled'}>Transport anordnen</button>
-        <div class="workspace-card compact" style="margin-top:12px">
-          ${transportJobs.length
-            ? transportJobs.map((job) => `<div><strong>${RESOURCE_LABELS[job.resourceKey] || job.resourceKey}</strong><br><small>${getBuildJobLocationName(job)} • ${formatResourceAmount(job.amount)} • ${job.status === 'building' ? formatDuration((job.finishesAt || 0) - Date.now()) : 'Abgeschlossen'}</small></div>`).join('<hr style="border-color:rgba(255,255,255,.08)">')
-            : '<span class="muted">Keine laufenden Transporte.</span>'}
-        </div>
-      </div>
-    </div>
-    <div class="workspace-section">
-      <div class="workspace-card">
-        <h3>Logistik-Aktivität</h3>
-        ${buildActivity.filter((entry) => entry.jobType === 'transport').length
-          ? buildActivity.filter((entry) => entry.jobType === 'transport').map((entry) => `
-            <div class="project-card">
-              <h4>${escapeHtml(entry.title || 'Transport')}</h4>
-              <p>${escapeHtml(entry.details || '')}</p>
-              <small>${formatMarketDateTime(entry.createdAt)}</small>
-            </div>
-          `).join('')
-          : '<div class="muted-box">Noch keine Transportaktivitäten geloggt.</div>'}
       </div>
     </div>
     `}
