@@ -1159,36 +1159,11 @@ app.get('/api/bootstrap', (req, res) => {
   const session = getSession(req);
   const me = session || { id: null, username: '', role: 'Viewer' };
   const { state, revision, updatedAt } = readCampaignState(db);
-  const resetResult = applyOneTimeResourceReset(state);
-  const productionResult = applyServerProductionTicks(resetResult.state);
-  const ownerPassResult = applyOwnerFrontlineImagePass(productionResult.state);
-  const changedKeys = [];
-  let effectiveState = state;
-  let effectiveRevision = revision;
-  let effectiveUpdatedAt = updatedAt;
-  if (resetResult.changed || ownerPassResult.changed || productionResult.changed) {
-    effectiveState = ownerPassResult.state;
-    if (resetResult.changed) changedKeys.push('resources', 'lastResourceTickAt', 'meta');
-    if (ownerPassResult.changed) changedKeys.push('planets', 'meta');
-    if (productionResult.changed) changedKeys.push('resources', 'lastResourceTickAt');
-    effectiveRevision = revision + 1;
-    effectiveUpdatedAt = writeCampaignState(db, effectiveState, effectiveRevision);
-    broadcastCampaignChange({
-      revision: effectiveRevision,
-      updatedAt: effectiveUpdatedAt,
-      changedKeys: [...new Set(changedKeys)],
-      actor: {
-        id: 'server',
-        username: 'server',
-        role: 'System'
-      }
-    });
-  }
   res.json({
     me,
-    campaign: sanitizeStateForRole(effectiveState, me),
-    revision: effectiveRevision,
-    updatedAt: effectiveUpdatedAt
+    campaign: sanitizeStateForRole(state, me),
+    revision,
+    updatedAt
   });
 });
 
