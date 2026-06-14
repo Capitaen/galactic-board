@@ -154,6 +154,9 @@ window.updateMarketQuantity = updateMarketQuantity;
 window.updateEconomySectorQuery = updateEconomySectorQuery;
 window.saveEconomyPolicy = saveEconomyPolicy;
 
+normalizeCampaignState();
+rebuildIndexes();
+syncFleetTravelStateFromCampaign();
 syncWorldSizeToMap();
 render({ transform: true, positions: true, layers: true });
 document.querySelectorAll('.main-tab-btn').forEach((btn) => {
