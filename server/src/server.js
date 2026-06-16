@@ -1953,16 +1953,32 @@ io.on('connection', (socket) => {
 });
 
 function runServerCampaignMaintenance() {
+  const maintenanceStartedAt = Date.now();
   const { state, revision } = readCampaignState(db);
   const inflationRate = Math.min(0.25, Number(state.resources?.GAR?.credits || 0) / 2000000);
   try {
+    const marketTickStartedAt = Date.now();
     runMarketTick(db, inflationRate, Date.now(), state);
+    const marketTickElapsedMs = Date.now() - marketTickStartedAt;
+    if (marketTickElapsedMs > 1000) {
+      console.error('runServerCampaignMaintenance:runMarketTick slow', { elapsedMs: marketTickElapsedMs });
+    } else if (marketTickElapsedMs > 100) {
+      console.warn('runServerCampaignMaintenance:runMarketTick slow', { elapsedMs: marketTickElapsedMs });
+    }
   } catch (error) {
     console.warn('Economy maintenance tick failed', error);
   }
+  const productionStartedAt = Date.now();
   const resetResult = applyOneTimeResourceReset(state);
   const productionResult = applyServerProductionTicks(resetResult.state);
+  const productionElapsedMs = Date.now() - productionStartedAt;
+  if (productionElapsedMs > 1000) {
+    console.error('runServerCampaignMaintenance:production slow', { elapsedMs: productionElapsedMs });
+  } else if (productionElapsedMs > 100) {
+    console.warn('runServerCampaignMaintenance:production slow', { elapsedMs: productionElapsedMs });
+  }
   if (!resetResult.changed && !productionResult.changed) return;
+  const persistStartedAt = Date.now();
   const nextRevision = revision + 1;
   const nextUpdatedAt = writeCampaignState(db, productionResult.state, nextRevision);
   broadcastCampaignChange({
@@ -1975,6 +1991,18 @@ function runServerCampaignMaintenance() {
       role: 'System'
     }
   });
+  const persistElapsedMs = Date.now() - persistStartedAt;
+  if (persistElapsedMs > 1000) {
+    console.error('runServerCampaignMaintenance:persist slow', { elapsedMs: persistElapsedMs });
+  } else if (persistElapsedMs > 100) {
+    console.warn('runServerCampaignMaintenance:persist slow', { elapsedMs: persistElapsedMs });
+  }
+  const maintenanceElapsedMs = Date.now() - maintenanceStartedAt;
+  if (maintenanceElapsedMs > 1000) {
+    console.error('runServerCampaignMaintenance:total slow', { elapsedMs: maintenanceElapsedMs });
+  } else if (maintenanceElapsedMs > 100) {
+    console.warn('runServerCampaignMaintenance:total slow', { elapsedMs: maintenanceElapsedMs });
+  }
 }
 
 setInterval(() => {

@@ -359,6 +359,16 @@ function safeNumber(value, fallback = 0, min = -Infinity, max = Infinity) {
   return clamp(numeric, min, max);
 }
 
+function logTimedPhase(label, startedAt, details = {}) {
+  const elapsedMs = Date.now() - startedAt;
+  if (elapsedMs > 1000) {
+    console.error(`${label} slow`, { elapsedMs, ...details });
+  } else if (elapsedMs > 100) {
+    console.warn(`${label} slow`, { elapsedMs, ...details });
+  }
+  return elapsedMs;
+}
+
 function sanitizeResourceBag(input, defaultValue = 0) {
   const bag = typeof input === 'string' ? safeJsonParse(input, {}) : (input && typeof input === 'object' ? input : {});
   return Object.fromEntries(RESOURCE_KEYS.map((key) => [key, round2(safeNumber(bag[key], defaultValue, 0, 1e9))]));
@@ -4614,11 +4624,13 @@ export function runInstitutionalInvestorTick(state, options = {}) {
   const db = options.db;
   if (!db) return { ran: false, reason: 'no-db' };
   const now = Number(options.now || Date.now());
+  const totalStartedAt = Date.now();
   const latestTrade = db.prepare('SELECT MAX(created_at) AS createdAt FROM institutional_trades').get()?.createdAt;
   if (latestTrade && (now - Date.parse(latestTrade)) < INSTITUTIONAL_TICK_MS) {
     return { ran: false, reason: 'cooldown' };
   }
   const recordedAt = new Date(now).toISOString();
+  const demandStartedAt = Date.now();
   const demandRows = db.prepare(`
     SELECT d.sector_id AS sectorId, d.sector_name AS sectorName, d.resource_type AS resourceType,
       d.demand_score AS demandScore, d.supply_score AS supplyScore,
@@ -4632,16 +4644,18 @@ export function runInstitutionalInvestorTick(state, options = {}) {
     WHERE COALESCE(s.is_embargoed, 0) = 0
       AND COALESCE(s.control_status, 'Neutral') <> 'OPFOR'
   `).all();
+  logTimedPhase('runInstitutionalInvestorTick:demandRows', demandStartedAt, { rowCount: demandRows.length });
   if (!demandRows.length) return { ran: false, reason: 'no-demand' };
+  const lookupStartedAt = Date.now();
   const companies = db.prepare(`
-    SELECT id, name, sector, resource_key AS resourceKey,
-      current_price AS currentPrice, base_price AS basePrice,
-      bankruptcy_risk AS bankruptcyRisk, market_status AS marketStatus
-    FROM market_companies
-    WHERE id LIKE 'sector_holding_%'
-      AND COALESCE(is_embargoed, 0) = 0
-      AND COALESCE(market_status, 'tradeable') = 'tradeable'
-      AND acquired_by_company_id IS NULL
+    SELECT c.id, c.name, c.sector, c.resource_key AS resourceKey,
+      c.current_price AS currentPrice, c.base_price AS basePrice,
+      c.bankruptcy_risk AS bankruptcyRisk, c.market_status AS marketStatus
+    FROM market_companies c
+    WHERE c.id LIKE 'sector_holding_%'
+      AND COALESCE(c.is_embargoed, 0) = 0
+      AND COALESCE(c.market_status, 'tradeable') = 'tradeable'
+      AND c.acquired_by_company_id IS NULL
   `).all();
   const companyMap = new Map(companies.map((company) => [`${company.sector}::${company.resourceKey}`, company]));
   const recentPlayerDemand = new Map(db.prepare(`
@@ -4655,6 +4669,11 @@ export function runInstitutionalInvestorTick(state, options = {}) {
       corruption_affinity AS corruptionAffinity, credit_balance AS creditBalance
     FROM institutional_investors
   `).all();
+  const policy = getPolicyForEconomy(db);
+  logTimedPhase('runInstitutionalInvestorTick:loadLookups', lookupStartedAt, {
+    companyCount: companies.length,
+    investorCount: investors.length
+  });
   const getInstHolding = db.prepare(`
     SELECT shares, average_cost AS averageCost
     FROM institutional_holdings
@@ -4692,8 +4711,9 @@ export function runInstitutionalInvestorTick(state, options = {}) {
     INSERT INTO corruption_watch_log (
       id, timestamp, policy_change_id, project_id, affected_sector, affected_resource,
       affected_holding, institutional_investor, trade_action, corruption_opportunity_score, estimated_benefit
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
+  const transactionStartedAt = Date.now();
   db.transaction(() => {
     investors.forEach((investor, index) => {
       const ranked = demandRows
@@ -4755,7 +4775,7 @@ export function runInstitutionalInvestorTick(state, options = {}) {
       let nextBalance = Number(investor.creditBalance || 0);
       if (!wantsToSell && nextBalance < value) return;
       const corruptionOpportunityScore = calculateCorruptionOpportunity(
-        { subsidy: getPolicyForEconomy(db).subsidy, activeShipProjects: 1, resourceType: pick.resourceType },
+        { subsidy: policy?.subsidy || 'none', activeShipProjects: 1, resourceType: pick.resourceType },
         pick.sectorName,
         pick.resourceType
       ) * Number(investor.corruptionAffinity || 0.5);
@@ -4818,9 +4838,17 @@ export function runInstitutionalInvestorTick(state, options = {}) {
         SELECT id FROM institutional_trades
         ORDER BY created_at DESC
         LIMIT ${MAX_TRADE_HISTORY_ROWS}
-      )
-    `).run();
+        )
+      `).run();
   })();
+  logTimedPhase('runInstitutionalInvestorTick:transaction', transactionStartedAt, {
+    demandRows: demandRows.length,
+    investors: investors.length
+  });
+  logTimedPhase('runInstitutionalInvestorTick:total', totalStartedAt, {
+    demandRows: demandRows.length,
+    investors: investors.length
+  });
   return { ran: true, recordedAt };
 }
 
@@ -6327,7 +6355,9 @@ function runHoldingSolvencyTick(db, now = Date.now()) {
   if (!canRunCadence(db, 'last_solvency_tick', SOLVENCY_TICK_MS, now)) {
     return { ran: false, reason: 'cooldown' };
   }
+  const totalStartedAt = Date.now();
   const recordedAt = new Date(now).toISOString();
+  const loadStartedAt = Date.now();
   const rows = db.prepare(`
     SELECT c.id, c.name, c.sector, c.sector_id AS sectorId, c.resource_key AS resourceKey,
       c.resource_refs_json AS resourceRefsJson, c.current_price AS currentPrice, c.base_price AS basePrice,
@@ -6343,15 +6373,17 @@ function runHoldingSolvencyTick(db, now = Date.now()) {
       e.market_sentiment AS marketSentiment, e.war_pressure AS warPressure
     FROM market_companies c
     LEFT JOIN sector_resource_demand s ON s.sector_id = c.sector_id AND s.resource_type = c.resource_key
-    LEFT JOIN sector_economy_state e ON e.sector_id = c.sector_id
+      LEFT JOIN sector_economy_state e ON e.sector_id = c.sector_id
     WHERE c.id LIKE 'sector_holding_%' AND c.acquired_by_company_id IS NULL
   `).all();
+  logTimedPhase('runHoldingSolvencyTick:loadRows', loadStartedAt, { companyCount: rows.length });
   const updateRisk = db.prepare(`
     UPDATE market_companies
     SET bankruptcy_risk = ?, debt_index = ?, confidence_index = ?, market_status = ?, is_embargoed = ?,
       risk_since = ?, suspended_since = ?, insolvent_since = ?, updated_at = ?
     WHERE id = ?
   `);
+  const transactionStartedAt = Date.now();
   db.transaction(() => {
     const decisions = rows.map((company) => {
       const diagnostics = buildHoldingSolvencyDiagnosticsV2(db, company);
@@ -6487,6 +6519,8 @@ function runHoldingSolvencyTick(db, now = Date.now()) {
     });
     setRuntimeStateNumber(db, 'last_solvency_tick', now, recordedAt);
   })();
+  logTimedPhase('runHoldingSolvencyTick:transaction', transactionStartedAt, { companyCount: rows.length });
+  logTimedPhase('runHoldingSolvencyTick:total', totalStartedAt, { companyCount: rows.length });
   return { ran: true, recordedAt };
 }
 
@@ -6883,14 +6917,29 @@ export function runMarketTick(db, inflationRate = 0, now = Date.now(), state = n
   }
   const tickStartedAt = Date.now();
   if (state) {
+    let phaseStartedAt = Date.now();
     runCivilianDemandTick(state, { db, now });
+    logTimedPhase('runMarketTick:runCivilianDemandTick', phaseStartedAt);
+    phaseStartedAt = Date.now();
     runInstitutionalInvestorTick(state, { db, now, inflationRate });
+    logTimedPhase('runMarketTick:runInstitutionalInvestorTick', phaseStartedAt);
+    phaseStartedAt = Date.now();
     completeCorporateBuildProjects(db, state, now);
+    logTimedPhase('runMarketTick:completeCorporateBuildProjects', phaseStartedAt);
+    phaseStartedAt = Date.now();
     runCorporateProductionTick(db, state, now);
+    logTimedPhase('runMarketTick:runCorporateProductionTick', phaseStartedAt);
+    phaseStartedAt = Date.now();
     runCorporateFinanceTick(db, state, now);
+    logTimedPhase('runMarketTick:runCorporateFinanceTick', phaseStartedAt);
+    phaseStartedAt = Date.now();
     runCorporateBuildTick(db, state, now);
+    logTimedPhase('runMarketTick:runCorporateBuildTick', phaseStartedAt);
+    phaseStartedAt = Date.now();
     runHoldingSolvencyTick(db, now);
+    logTimedPhase('runMarketTick:runHoldingSolvencyTick', phaseStartedAt);
   }
+  const loadCompaniesStartedAt = Date.now();
   const companies = db.prepare(`
     SELECT id, base_price, current_price, is_embargoed, market_status, acquired_by_company_id,
       sector, resource_key, state_contract_score, state_contract_revenue_per_hour
@@ -6898,6 +6947,7 @@ export function runMarketTick(db, inflationRate = 0, now = Date.now(), state = n
     WHERE COALESCE(is_embargoed, 0) = 0
       AND COALESCE(acquired_by_company_id, '') = ''
   `).all();
+  logTimedPhase('runMarketTick:loadCompanies', loadCompaniesStartedAt, { companyCount: companies.length });
   if (!companies.length) {
     setRuntimeStateNumber(db, 'last_market_tick', now, new Date(now).toISOString());
     return false;
@@ -6922,6 +6972,7 @@ export function runMarketTick(db, inflationRate = 0, now = Date.now(), state = n
     FROM sector_resource_demand d
     LEFT JOIN sector_economy_state e ON e.sector_id = d.sector_id
   `).all().map((row) => [`${row.sectorName}::${row.resourceType}`, row]));
+  const priceLoopStartedAt = Date.now();
   db.transaction(() => {
     companies.forEach((company) => {
       if (
@@ -6974,24 +7025,28 @@ export function runMarketTick(db, inflationRate = 0, now = Date.now(), state = n
       `).run(crypto.randomUUID(), eventType, title, description, impact, recordedAt, new Date(now + 3 * 60 * 60 * 1000).toISOString());
     }
   })();
+  logTimedPhase('runMarketTick:priceLoopTransaction', priceLoopStartedAt, { companyCount: companies.length });
   if (canRunCadence(db, 'last_portfolio_snapshot_tick', PORTFOLIO_SNAPSHOT_TICK_MS, now)) {
+    const portfolioStartedAt = Date.now();
     db.prepare('SELECT id FROM market_investors WHERE portfolio_enabled = 1').all()
       .forEach((investor) => writePortfolioSnapshot(db, investor.id, recordedAt));
     setRuntimeStateNumber(db, 'last_portfolio_snapshot_tick', now, recordedAt);
+    logTimedPhase('runMarketTick:portfolioSnapshots', portfolioStartedAt);
   }
   if (canRunCadence(db, 'last_acp_history_snapshot_tick', ACP_HISTORY_SNAPSHOT_TICK_MS, now)) {
+    const acpHistoryStartedAt = Date.now();
     writeSectorResourcePriceHistorySnapshot(db, recordedAt);
     setRuntimeStateNumber(db, 'last_acp_history_snapshot_tick', now, recordedAt);
+    logTimedPhase('runMarketTick:acpHistorySnapshot', acpHistoryStartedAt);
   }
   if (canRunCadence(db, 'last_market_summary_snapshot_tick', MARKET_SUMMARY_SNAPSHOT_TICK_MS, now)) {
+    const marketSummaryStartedAt = Date.now();
     writeMarketSummarySnapshot(db, now);
     setRuntimeStateNumber(db, 'last_market_summary_snapshot_tick', now, recordedAt);
+    logTimedPhase('runMarketTick:marketSummarySnapshot', marketSummaryStartedAt);
   }
   setRuntimeStateNumber(db, 'last_market_tick', now, recordedAt);
-  const elapsedMs = Date.now() - tickStartedAt;
-  if (elapsedMs > 1500) {
-    console.warn('Market tick slow', { elapsedMs, companyCount: companies.length });
-  }
+  logTimedPhase('runMarketTick:total', tickStartedAt, { companyCount: companies.length });
   return true;
 }
 
