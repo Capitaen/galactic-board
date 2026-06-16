@@ -347,7 +347,14 @@ async function resolvePlanetCardData(planet) {
 app.use(express.json({ limit: '50mb' }));
 app.use(cookieParser());
 app.use((req, res, next) => {
-  if (req.path === '/' || req.path.endsWith('.html')) {
+  if (
+    req.path === '/'
+    || req.path.endsWith('.html')
+    || req.path.startsWith('/assets/app/')
+    || req.path === '/assets/app-shell.css'
+    || req.path === '/assets/arcgis-compact.js'
+    || req.path === '/assets/planet-demographics.js'
+  ) {
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');

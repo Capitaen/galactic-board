@@ -818,12 +818,12 @@ function scheduleCampaignRefresh(delay = 250) {
 
 function schedulePollingRefresh(delay) {
   if (!serverSync.enabled) return;
-  const normalizedDelay = Math.max(4000, Number(delay) || 12000);
+  const normalizedDelay = Math.max(8000, Number(delay) || 20000);
   clearServerRefreshTimer();
   serverSync.refreshTimer = window.setTimeout(async () => {
     serverSync.refreshTimer = null;
     await refreshCampaignFromServer();
-    schedulePollingRefresh(document.hidden ? 20000 : 12000);
+    schedulePollingRefresh(document.hidden ? 45000 : 20000);
   }, normalizedDelay);
 }
 

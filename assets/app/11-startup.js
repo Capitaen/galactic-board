@@ -77,7 +77,7 @@ window.setInterval(() => {
 window.setInterval(() => {
   if (document.hidden || activeMainTab !== 'economy') return;
   void fetchEconomyView({ renderLoading: false });
-}, 15000);
+}, 60000);
 window.savePlanet = savePlanet;
 window.saveSector = saveSector;
 window.deleteManualSector = deleteManualSector;

@@ -5223,6 +5223,7 @@ function buildMarketSummarySnapshot(db, now = Date.now()) {
     .map((row) => mapMarketCompanyPreviewRow(row));
   const featuredCompanies = readMarketCompanyPreviewRows(db, 'ORDER BY current_price DESC, symbol LIMIT 50')
     .map((row) => mapMarketCompanyPreviewRow(row));
+  const summaryCompanies = featuredCompanies.length ? featuredCompanies : allCompanies.slice(0, 50);
   const hourHistoryRows = db.prepare(`
     SELECT company_id AS companyId, price, recorded_at AS recordedAt
     FROM market_history
@@ -5236,7 +5237,7 @@ function buildMarketSummarySnapshot(db, now = Date.now()) {
   });
   const topLastHour = buildMarketTopLastHour(allCompanies, hourHistoryByCompany);
   const historyCompanyIds = [...new Set([
-    ...featuredCompanies.map((company) => company.id),
+    ...summaryCompanies.map((company) => company.id),
     ...topLastHour.map((company) => company.id)
   ])];
   const companyHistory = loadCompactMarketHistoryForCompanyIds(db, historyCompanyIds, historyCutoff);
@@ -5297,7 +5298,7 @@ function buildMarketSummarySnapshot(db, now = Date.now()) {
   return {
     snapshotVersion: MARKET_SUMMARY_SNAPSHOT_VERSION,
     generatedAt: new Date(now).toISOString(),
-    companies: featuredCompanies,
+    companies: summaryCompanies,
     history: companyHistory,
     topLastHour,
     leaderboard,

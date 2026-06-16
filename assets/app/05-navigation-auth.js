@@ -28,7 +28,7 @@ function setMainTab(tabId) {
   } else if (tabId === 'economy') {
     renderEconomyView();
     if (!economyViewState.loaded) void ensureEconomyViewLoaded({ showLoader: true });
-    else if ((Date.now() - Number(economyViewState.lastLoadedAt || 0)) > 30000) void fetchEconomyView({ renderLoading: false });
+    else if ((Date.now() - Number(economyViewState.lastLoadedAt || 0)) > 120000) void fetchEconomyView({ renderLoading: false });
   } else if (tabId === 'loginManager') {
     renderLoginManagerView();
   } else if (tabId === 'radioCommandCenter') {
@@ -1311,7 +1311,7 @@ async function ensureEconomyViewLoaded(options = {}) {
   const showLoader = options.showLoader !== false;
   if (showLoader) startBootSequence('economy');
   let summaryLoaded = economyViewState.loaded;
-  if (!summaryLoaded || (Date.now() - Number(economyViewState.lastLoadedAt || 0)) > 30000) {
+  if (!summaryLoaded || (Date.now() - Number(economyViewState.lastLoadedAt || 0)) > 120000) {
     summaryLoaded = await fetchEconomyView({ renderLoading: false });
   }
   const loaded = Boolean(summaryLoaded);
