@@ -1,7 +1,7 @@
 ﻿// Generated from app-shell.js: core constants, DOM refs, runtime state
 
 const WORLD_SIZE = 2048;
-const ASSET_VERSION_TAG = '20260618c';
+const ASSET_VERSION_TAG = '20260618d';
 const MIN_ZOOM = 0.3;
 const MAX_ZOOM = 3.3;
 const CLUSTER_MAX_ZOOM = 10.5;
@@ -26,7 +26,7 @@ const GALACTIC_CORE_CENTER = { x: WORLD_SIZE / 2, y: WORLD_SIZE / 2 };
 const SECTOR_SNAP_RADII = [0.06, 0.08, 0.1, 0.12, 0.14, 0.17, 0.2, 0.24, 0.28, 0.32, 0.37, 0.42, 0.48, 0.55, 0.63, 0.72, 0.82].map((factor) => WORLD_SIZE * factor * 0.5);
 const SECTOR_ANGLE_STEP_DEG = 10;
 const AUTO_PLACEMENT_VERSION = 3;
-const POSITION_CALIBRATION_VERSION = 3;
+const POSITION_CALIBRATION_VERSION = 1;
 const ARCGIS_IMPORT_VERSION = 1;
 const CAMPAIGN_PRIORITY_PLANET_KEYS = new Set([
   'coruscant',
@@ -66,13 +66,6 @@ const POSITION_CALIBRATION_ANCHORS = [
   { id: 'zakuul', old: { x: 325, y: 1193 }, next: { x: 414, y: 1226 } },
   { id: 'rakata_prime', old: { x: 578, y: 1006 }, next: { x: 647, y: 1096 } },
   { id: 'jedha', old: { x: 663, y: 942 }, next: { x: 749, y: 950 } }
-];
-const SCHEMATIC_POSITION_RECOVERY_ZONES = [
-  {
-    center: { x: 1188, y: 1042 },
-    shift: { x: -169, y: -89 },
-    radius: 180
-  }
 ];
 const RESOURCE_DEFS = [
   { key: 'quadraniumErz', label: 'METALLE' },

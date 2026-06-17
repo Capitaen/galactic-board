@@ -473,18 +473,10 @@ function rebuildTacticalRouteCache(data, projectionMode) {
     }
     const route = groupedRoutes.get(routeName);
     (lane.paths || []).forEach((lanePath) => {
-      const sourceProjectedPath = Array.isArray(lanePath) ? lanePath.map((point) => projectArcgisToWorld(point[0], point[1], routeProjectionMode)) : [];
-      if (sourceProjectedPath.length < 2) return;
-      const startPlanet = getNearestPlanetByDisplayPoint(sourceProjectedPath[0].x, sourceProjectedPath[0].y, routeProjectionMode);
-      const endPlanet = getNearestPlanetByDisplayPoint(sourceProjectedPath[sourceProjectedPath.length - 1].x, sourceProjectedPath[sourceProjectedPath.length - 1].y, routeProjectionMode);
-      if (projectionMode === 'schematic' && (!startPlanet || !endPlanet)) return;
-      const projectedPath = projectionMode === 'schematic' && startPlanet && endPlanet
-        ? sourceProjectedPath.map((point, index, points) => {
-          if (index === 0) return getSchematicPlanetPosition(startPlanet);
-          if (index === points.length - 1) return getSchematicPlanetPosition(endPlanet);
-          return applySchematicRecoveryWarp(point);
-        })
-        : sourceProjectedPath;
+      const projectedPath = Array.isArray(lanePath) ? lanePath.map((point) => projectArcgisToWorld(point[0], point[1], routeProjectionMode)) : [];
+      if (projectedPath.length < 2) return;
+      const startPlanet = getNearestPlanetByDisplayPoint(projectedPath[0].x, projectedPath[0].y);
+      const endPlanet = getNearestPlanetByDisplayPoint(projectedPath[projectedPath.length - 1].x, projectedPath[projectedPath.length - 1].y);
       route.pathEntries.push({
         projectedPath,
         svgPath: projectedPath.map((point, index) => `${index ? 'L' : 'M'}${point.x.toFixed(2)},${point.y.toFixed(2)}`).join(' '),
