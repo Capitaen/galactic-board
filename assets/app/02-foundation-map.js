@@ -1272,7 +1272,8 @@ function getSchematicCellCenter(grid) {
 }
 
 function getSchematicPlanetPosition(planet) {
-  return { x: planet.x, y: planet.y };
+  const basePoint = { x: planet.x, y: planet.y };
+  return applySchematicRecoveryWarp(basePoint);
 }
 
 function getImagePlanetPosition(planet) {
@@ -1312,6 +1313,31 @@ function getPlanetDisplayPosition(planet) {
   return getClusterExpandedPoint(basePosition);
 }
 
+function applySchematicRecoveryWarp(point) {
+  if (!point || !Array.isArray(SCHEMATIC_POSITION_RECOVERY_ZONES) || !SCHEMATIC_POSITION_RECOVERY_ZONES.length) {
+    return point;
+  }
+  let nextX = Number(point.x) || 0;
+  let nextY = Number(point.y) || 0;
+  SCHEMATIC_POSITION_RECOVERY_ZONES.forEach((zone) => {
+    const centerX = Number(zone?.center?.x);
+    const centerY = Number(zone?.center?.y);
+    const shiftX = Number(zone?.shift?.x);
+    const shiftY = Number(zone?.shift?.y);
+    const radius = Math.max(1, Number(zone?.radius) || 0);
+    if (![centerX, centerY, shiftX, shiftY, radius].every(Number.isFinite)) return;
+    const distance = Math.hypot(nextX - centerX, nextY - centerY);
+    if (distance > radius) return;
+    const strength = Math.pow(1 - (distance / radius), 1.25);
+    nextX += shiftX * strength;
+    nextY += shiftY * strength;
+  });
+  return {
+    x: clamp(nextX, 0, WORLD_SIZE),
+    y: clamp(nextY, 0, WORLD_SIZE)
+  };
+}
+
 function getCalibrationDisplacement(x, y) {
   let totalWeight = 0;
   let dx = 0;
@@ -1343,7 +1369,10 @@ function getCalibratedPositionForPlanet(planet) {
 
 function applyPositionCalibration(force = false) {
   state.meta = state.meta || {};
-  if (!force && state.meta.positionCalibrationVersion === POSITION_CALIBRATION_VERSION) return false;
+  if (!force) {
+    state.meta.positionCalibrationVersion = POSITION_CALIBRATION_VERSION;
+    return false;
+  }
   state.planets.forEach((planet) => {
     const calibrated = getCalibratedPositionForPlanet(planet);
     setPlanetWorldPosition(planet, calibrated.x, calibrated.y);
