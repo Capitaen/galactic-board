@@ -479,7 +479,11 @@ function rebuildTacticalRouteCache(data, projectionMode) {
       const endPlanet = getNearestPlanetByDisplayPoint(sourceProjectedPath[sourceProjectedPath.length - 1].x, sourceProjectedPath[sourceProjectedPath.length - 1].y, routeProjectionMode);
       if (projectionMode === 'schematic' && (!startPlanet || !endPlanet)) return;
       const projectedPath = projectionMode === 'schematic' && startPlanet && endPlanet
-        ? [getSchematicPlanetPosition(startPlanet), getSchematicPlanetPosition(endPlanet)]
+        ? sourceProjectedPath.map((point, index, points) => {
+          if (index === 0) return getSchematicPlanetPosition(startPlanet);
+          if (index === points.length - 1) return getSchematicPlanetPosition(endPlanet);
+          return applySchematicRecoveryWarp(point);
+        })
         : sourceProjectedPath;
       route.pathEntries.push({
         projectedPath,
