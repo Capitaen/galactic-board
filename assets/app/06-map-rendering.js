@@ -382,11 +382,11 @@ function drawCanvasPolyline(ctx, points, strokeStyle, lineWidth, dash = []) {
   ctx.restore();
 }
 
-function getNearestPlanetByDisplayPoint(x, y) {
+function getNearestPlanetByDisplayPoint(x, y, positionMode = (viewMode === 'schematic' ? 'schematic' : 'image')) {
   let best = null;
   let bestDistanceSq = Infinity;
   state.planets.forEach((planet) => {
-    const display = getPlanetDisplayPosition(planet);
+    const display = positionMode === 'image' ? getImagePlanetPosition(planet) : getSchematicPlanetPosition(planet);
     const dx = display.x - x;
     const dy = display.y - y;
     const distanceSq = dx * dx + dy * dy;
@@ -473,10 +473,14 @@ function rebuildTacticalRouteCache(data, projectionMode) {
     }
     const route = groupedRoutes.get(routeName);
     (lane.paths || []).forEach((lanePath) => {
-      const projectedPath = Array.isArray(lanePath) ? lanePath.map((point) => projectArcgisToWorld(point[0], point[1], routeProjectionMode)) : [];
-      if (projectedPath.length < 2) return;
-      const startPlanet = getNearestPlanetByDisplayPoint(projectedPath[0].x, projectedPath[0].y);
-      const endPlanet = getNearestPlanetByDisplayPoint(projectedPath[projectedPath.length - 1].x, projectedPath[projectedPath.length - 1].y);
+      const sourceProjectedPath = Array.isArray(lanePath) ? lanePath.map((point) => projectArcgisToWorld(point[0], point[1], routeProjectionMode)) : [];
+      if (sourceProjectedPath.length < 2) return;
+      const startPlanet = getNearestPlanetByDisplayPoint(sourceProjectedPath[0].x, sourceProjectedPath[0].y, routeProjectionMode);
+      const endPlanet = getNearestPlanetByDisplayPoint(sourceProjectedPath[sourceProjectedPath.length - 1].x, sourceProjectedPath[sourceProjectedPath.length - 1].y, routeProjectionMode);
+      if (projectionMode === 'schematic' && (!startPlanet || !endPlanet)) return;
+      const projectedPath = projectionMode === 'schematic' && startPlanet && endPlanet
+        ? [getSchematicPlanetPosition(startPlanet), getSchematicPlanetPosition(endPlanet)]
+        : sourceProjectedPath;
       route.pathEntries.push({
         projectedPath,
         svgPath: projectedPath.map((point, index) => `${index ? 'L' : 'M'}${point.x.toFixed(2)},${point.y.toFixed(2)}`).join(' '),
@@ -1462,7 +1466,7 @@ function renderTacticalBase() {
     });
   }
 
-  if (layers.hyperlanes) {
+  if (layers.hyperlanes && viewMode !== 'schematic') {
     const adjacency = getInfluenceAdjacency();
     routeCache.forEach(({ a, b }) => {
       const start = getSchematicPlanetPosition(a);
@@ -1477,6 +1481,10 @@ function renderTacticalBase() {
       line.style.stroke = visual.color;
       frag.appendChild(line);
     });
+  }
+
+  if (layers.hyperlanes) {
+    const adjacency = getInfluenceAdjacency();
     tacticalRouteCache.filter(isCustomRoute).forEach((route) => {
       route.svgPaths.forEach((pathData, pathIndex) => {
         const connection = getRouteConnections(route)[pathIndex];

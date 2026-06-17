@@ -1,7 +1,7 @@
 ﻿// Generated from app-shell.js: core constants, DOM refs, runtime state
 
 const WORLD_SIZE = 2048;
-const ASSET_VERSION_TAG = '20260617b';
+const ASSET_VERSION_TAG = '20260617c';
 const MIN_ZOOM = 0.3;
 const MAX_ZOOM = 3.3;
 const CLUSTER_MAX_ZOOM = 10.5;

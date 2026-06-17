@@ -1269,8 +1269,6 @@ function getSchematicCellCenter(grid) {
 }
 
 function getSchematicPlanetPosition(planet) {
-  const arcgisPlanet = getArcgisPlanetRecord(planet);
-  if (arcgisPlanet) return projectArcgisToWorld(arcgisPlanet.x, arcgisPlanet.y, 'image');
   return { x: planet.x, y: planet.y };
 }
 
