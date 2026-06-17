@@ -1193,7 +1193,7 @@ function createTacticalSectionCanvas(width, height) {
 }
 
 function getHyperlaneProjectionMode(projectionMode) {
-  return projectionMode === 'schematic' ? 'image' : projectionMode;
+  return projectionMode === 'image' ? 'image' : 'schematic';
 }
 
 function renderTacticalSectionToContext(ctx, sectionName, data, projectionMode) {
