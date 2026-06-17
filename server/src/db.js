@@ -23,6 +23,9 @@ const CORPORATE_BUILD_TICK_MS = 30 * 60 * 1000;
 const CORPORATE_PRODUCTION_TICK_MS = 15 * 60 * 1000;
 const CORPORATE_FINANCE_TICK_MS = 15 * 60 * 1000;
 const CORPORATE_BUILD_DURATION_MS = 10 * 60 * 60 * 1000;
+const CORPORATE_BUILD_TICK_TIME_BUDGET_MS = 1500;
+const CORPORATE_BUILD_TICK_COMPANY_LIMIT = 12;
+const CORPORATE_BUILD_SELLER_SCAN_LIMIT = 12;
 const CORPORATE_MAX_ACTIVE_PROJECTS = 5;
 const CORPORATE_MAX_COMPLETED_48H = 5;
 const CORPORATE_COMPLETION_WINDOW_MS = 48 * 60 * 60 * 1000;
@@ -2548,6 +2551,7 @@ export function readCompanyOwnership(db, companyId) {
 
 export function runCorporateBuildTick(db, state, now = Date.now()) {
   if (!state || !canRunCadence(db, 'last_corporate_build_tick', CORPORATE_BUILD_TICK_MS, now)) return 0;
+  const tickStartedAt = Date.now();
   const rows = db.prepare(`
     SELECT id, name, sector_id AS sectorId, resource_refs_json AS resourceRefsJson,
       market_status AS marketStatus, is_embargoed AS isEmbargoed,
@@ -2588,39 +2592,43 @@ export function runCorporateBuildTick(db, state, now = Date.now()) {
     WHERE id = ?
   `);
   let started = 0;
+  let processed = 0;
   db.transaction(() => {
-    rows.forEach((company) => {
-      if (normalizeMarketStatus(company.marketStatus) !== 'tradeable' || Number(company.isEmbargoed || 0)) return;
+    for (const company of rows) {
+      if (processed >= CORPORATE_BUILD_TICK_COMPANY_LIMIT) break;
+      if ((Date.now() - tickStartedAt) >= CORPORATE_BUILD_TICK_TIME_BUDGET_MS) break;
+      processed += 1;
+      if (normalizeMarketStatus(company.marketStatus) !== 'tradeable' || Number(company.isEmbargoed || 0)) continue;
       const sectorState = sectorStateMap.get(company.sectorId) || {};
-      if (Number(sectorState.isEmbargoed || 0)) return;
+      if (Number(sectorState.isEmbargoed || 0)) continue;
       const activity = getCompanyActivityWindowStats(db, company.id, now);
-      if (activity.activeProjects >= CORPORATE_MAX_ACTIVE_PROJECTS || activity.completed48h >= CORPORATE_MAX_COMPLETED_48H) return;
-      if (safeNumber(company.corporateBuildCooldownUntil, 0, 0, Number.MAX_SAFE_INTEGER) > now) return;
+      if (activity.activeProjects >= CORPORATE_MAX_ACTIVE_PROJECTS || activity.completed48h >= CORPORATE_MAX_COMPLETED_48H) continue;
+      if (safeNumber(company.corporateBuildCooldownUntil, 0, 0, Number.MAX_SAFE_INTEGER) > now) continue;
       const opportunities = evaluateCorporateBuildOpportunities(company, sectorState, demandBySector.get(company.sectorId) || [], state);
       const choice = opportunities[0];
-      if (!choice) return;
+      if (!choice) continue;
       const cost = calculateCorporateBuildCost(company, choice.buildingType, sectorState);
-      if (!cost || safeNumber(company.corporateCash, 0, 0, 1e9) < cost.costCredits) return;
+      if (!cost || safeNumber(company.corporateCash, 0, 0, 1e9) < cost.costCredits) continue;
       const procurement = procureResourcesForCorporateBuild(db, state, company, cost, {
         reason: `Input-Beschaffung fuer ${choice.buildingType}`,
         expectedRoi: choice.expectedRoi,
         createdAt: new Date(now).toISOString()
       });
-      if (!procurement.ok) return;
+      if (!procurement.ok) continue;
       const refreshedCompany = db.prepare(`
         SELECT id, corporate_cash AS corporateCash, corporate_resources_json AS corporateResourcesJson
         FROM market_companies
         WHERE id = ?
         LIMIT 1
       `).get(company.id);
-      if (!refreshedCompany) return;
+      if (!refreshedCompany) continue;
       const refreshedResources = sanitizeResourceBag(refreshedCompany.corporateResourcesJson);
-      if (RESOURCE_KEYS.some((key) => safeNumber(refreshedResources[key], 0, 0, 1e9) < safeNumber(cost.costResources[key], 0, 0, 1e9))) return;
-      if (safeNumber(refreshedCompany.corporateCash, 0, 0, 1e9) < safeNumber(cost.costCredits, 0, 0, 1e9)) return;
+      if (RESOURCE_KEYS.some((key) => safeNumber(refreshedResources[key], 0, 0, 1e9) < safeNumber(cost.costResources[key], 0, 0, 1e9))) continue;
+      if (safeNumber(refreshedCompany.corporateCash, 0, 0, 1e9) < safeNumber(cost.costCredits, 0, 0, 1e9)) continue;
       const planets = getSectorPlanetsForCompany(state, company);
       const currentAssets = readCompanyCorporateAssets(db, state, company.id);
       const targetPlanet = pickCorporateAssetPlanet(planets, `${company.id}:build`, currentAssets, true);
-      if (!targetPlanet) return;
+      if (!targetPlanet) continue;
       const charged = chargeCorporateBuildCost({
         corporateCash: refreshedCompany.corporateCash,
         corporateResourcesJson: JSON.stringify(refreshedResources)
@@ -2661,7 +2669,7 @@ export function runCorporateBuildTick(db, state, now = Date.now()) {
         startedAt: createdAt
       });
       started += 1;
-    });
+    }
     setRuntimeStateNumber(db, 'last_corporate_build_tick', now, new Date(now).toISOString());
   })();
   return started;
@@ -4473,13 +4481,18 @@ function procureResourcesForCorporateBuild(db, state, company, buildCost, option
         AND COALESCE(e.control_status, 'BLUFOR') <> 'OPFOR'
         AND COALESCE(json_extract(c.corporate_resources_json, '$.${resourceType}'), 0) > 0
       ORDER BY availableAmount DESC
-    `).all(buyerCompanyId).sort((left, right) => {
-      const distanceLeft = getCorporateTradeDistanceModifier(state, left.sectorId, currentCompany.sectorId);
-      const distanceRight = getCorporateTradeDistanceModifier(state, right.sectorId, currentCompany.sectorId);
-      const priceLeft = getCorporateTradeUnitPrice(db, state, left, currentCompany, resourceType, Math.max(1, remaining));
-      const priceRight = getCorporateTradeUnitPrice(db, state, right, currentCompany, resourceType, Math.max(1, remaining));
-      return distanceLeft - distanceRight || priceLeft - priceRight || safeNumber(right.availableAmount, 0, 0, 1e9) - safeNumber(left.availableAmount, 0, 0, 1e9);
-    });
+    `).all(buyerCompanyId)
+      .map((seller) => ({
+        ...seller,
+        _distanceModifier: getCorporateTradeDistanceModifier(state, seller.sectorId, currentCompany.sectorId),
+        _unitPrice: getCorporateTradeUnitPrice(db, state, seller, currentCompany, resourceType, Math.max(1, remaining))
+      }))
+      .sort((left, right) => (
+        left._distanceModifier - right._distanceModifier
+        || left._unitPrice - right._unitPrice
+        || safeNumber(right.availableAmount, 0, 0, 1e9) - safeNumber(left.availableAmount, 0, 0, 1e9)
+      ))
+      .slice(0, CORPORATE_BUILD_SELLER_SCAN_LIMIT);
     sellers.forEach((seller) => {
       if (!(remaining > 0)) return;
       const availableAmount = safeNumber(seller.availableAmount, 0, 0, 1e9);
