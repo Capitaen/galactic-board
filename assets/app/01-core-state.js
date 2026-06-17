@@ -1,7 +1,7 @@
 ﻿// Generated from app-shell.js: core constants, DOM refs, runtime state
 
 const WORLD_SIZE = 2048;
-const ASSET_VERSION_TAG = '20260618d';
+const ASSET_VERSION_TAG = '20260618e';
 const MIN_ZOOM = 0.3;
 const MAX_ZOOM = 3.3;
 const CLUSTER_MAX_ZOOM = 10.5;
@@ -61,6 +61,7 @@ const IMAGE_MODE_ARCGIS_FINE_AFFINE = {
   tx: -49.1006293701747,
   ty: -113.911063908293
 };
+const SCHEMATIC_REFERENCE_OFFSET = { x: -31, y: -19 };
 const POSITION_CALIBRATION_ANCHORS = [
   { id: 'lwhekk', old: { x: 245, y: 1419 }, next: { x: 357, y: 1466 } },
   { id: 'zakuul', old: { x: 325, y: 1193 }, next: { x: 414, y: 1226 } },

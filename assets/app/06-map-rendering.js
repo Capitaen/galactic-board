@@ -473,7 +473,12 @@ function rebuildTacticalRouteCache(data, projectionMode) {
     }
     const route = groupedRoutes.get(routeName);
     (lane.paths || []).forEach((lanePath) => {
-      const projectedPath = Array.isArray(lanePath) ? lanePath.map((point) => projectArcgisToWorld(point[0], point[1], routeProjectionMode)) : [];
+      const projectedPath = Array.isArray(lanePath)
+        ? lanePath.map((point) => {
+          const projected = projectArcgisToWorld(point[0], point[1], routeProjectionMode);
+          return projectionMode === 'schematic' ? applySchematicReferenceOffset(projected) : projected;
+        })
+        : [];
       if (projectedPath.length < 2) return;
       const startPlanet = getNearestPlanetByDisplayPoint(projectedPath[0].x, projectedPath[0].y);
       const endPlanet = getNearestPlanetByDisplayPoint(projectedPath[projectedPath.length - 1].x, projectedPath[projectedPath.length - 1].y);

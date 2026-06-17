@@ -1273,7 +1273,7 @@ function getSchematicCellCenter(grid) {
 
 function getSchematicPlanetPosition(planet) {
   const arcgisPlanet = getArcgisPlanetRecord(planet);
-  if (arcgisPlanet) return projectArcgisToWorld(arcgisPlanet.x, arcgisPlanet.y, 'image');
+  if (arcgisPlanet) return applySchematicReferenceOffset(projectArcgisToWorld(arcgisPlanet.x, arcgisPlanet.y, 'image'));
   return { x: planet.x, y: planet.y };
 }
 
@@ -1312,6 +1312,14 @@ function applyArcgisPlanetImport(force = false) {
 function getPlanetDisplayPosition(planet) {
   const basePosition = viewMode === 'schematic' ? getSchematicPlanetPosition(planet) : getImagePlanetPosition(planet);
   return getClusterExpandedPoint(basePosition);
+}
+
+function applySchematicReferenceOffset(point) {
+  if (!point) return point;
+  return {
+    x: clamp((Number(point.x) || 0) + (Number(SCHEMATIC_REFERENCE_OFFSET?.x) || 0), 0, WORLD_SIZE),
+    y: clamp((Number(point.y) || 0) + (Number(SCHEMATIC_REFERENCE_OFFSET?.y) || 0), 0, WORLD_SIZE)
+  };
 }
 
 function getCalibrationDisplacement(x, y) {
