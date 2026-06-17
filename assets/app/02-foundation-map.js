@@ -756,11 +756,13 @@ function describeViewStatus() {
 
 function getClusterZoomProgress() {
   if (!isClusterZoomActive()) return 0;
+  if (viewMode === 'schematic') return 0;
   return clamp((zoom - MAX_ZOOM) / Math.max(0.001, CLUSTER_MAX_ZOOM - MAX_ZOOM), 0, 1);
 }
 
 function getClusterExpandedPoint(point) {
   if (!isClusterZoomActive() || !point) return point;
+  if (viewMode === 'schematic') return point;
   const progress = getClusterZoomProgress();
   if (progress <= 0) return point;
   const center = clusterZoomState.center;
@@ -779,6 +781,7 @@ function getClusterExpandedPoint(point) {
 
 function isPlanetVisibleInClusterZoom(planet) {
   if (!isClusterZoomActive()) return true;
+  if (viewMode === 'schematic') return true;
   if (!planet) return false;
   if (selected?.type === 'planet' && selected.id === planet.id) return true;
   if (hoveredPlanetId === planet.id) return true;
@@ -837,7 +840,7 @@ function updateZoomFromInput(multiplier, clientX, clientY) {
   if (!zoomIn && nextClusterState && zoom <= CLUSTER_RELEASE_ZOOM) {
     nextClusterState = null;
   }
-  if (zoomIn && !nextClusterState && zoom >= CLUSTER_ZOOM_ENTRY_THRESHOLD) {
+  if (viewMode !== 'schematic' && zoomIn && !nextClusterState && zoom >= CLUSTER_ZOOM_ENTRY_THRESHOLD) {
     nextClusterState = findClusterZoomCandidate(worldX, worldY);
   }
 
@@ -847,7 +850,7 @@ function updateZoomFromInput(multiplier, clientX, clientY) {
   if (!zoomIn && nextZoom <= MAX_ZOOM) {
     nextClusterState = null;
   }
-  if (zoomIn && !nextClusterState && zoom >= MAX_ZOOM && nextZoom >= MAX_ZOOM) {
+  if (viewMode !== 'schematic' && zoomIn && !nextClusterState && zoom >= MAX_ZOOM && nextZoom >= MAX_ZOOM) {
     setClusterZoomState(null);
     setStatus('Cluster-Zoom ist nur in dichten Planet-Clustern verfuegbar.');
     return false;
