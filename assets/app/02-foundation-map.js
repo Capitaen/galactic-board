@@ -1285,6 +1285,10 @@ function applyArcgisPlanetImport(force = false) {
   if (!data) return false;
   state.meta = state.meta || {};
   if (!force && state.meta.arcgisImportVersion === ARCGIS_IMPORT_VERSION) return false;
+  if (!force) {
+    state.meta.arcgisImportVersion = ARCGIS_IMPORT_VERSION;
+    return false;
+  }
   let updatedCount = 0;
   state.planets.forEach((planet) => {
     const match = getArcgisPlanetRecord(planet);
