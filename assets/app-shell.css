@@ -865,9 +865,11 @@ textarea { min-height:82px; resize:vertical; }
   display:grid;
   place-items:center;
   padding:24px;
-  pointer-events:none;
+  pointer-events:auto;
   opacity:0;
   transition:opacity .28s ease;
+  background:radial-gradient(circle at center, rgba(6,16,28,.55), rgba(3,7,14,.92));
+  backdrop-filter:blur(4px);
 }
 .restart-verification-splash.visible {
   opacity:1;
@@ -900,6 +902,12 @@ textarea { min-height:82px; resize:vertical; }
   font-family:'Aurebesh Condensed', var(--font-ui);
   color:#8feaff;
   letter-spacing:.12em;
+}
+.restart-verification-timer {
+  color:#c8eef8;
+  font-size:14px;
+  letter-spacing:.24em;
+  text-transform:uppercase;
 }
 .boot-screen-kicker {
   font-size:12px;

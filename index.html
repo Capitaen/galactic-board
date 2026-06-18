@@ -11,20 +11,30 @@
   <div class="restart-verification-card">
     <div class="restart-verification-line">Burnout ist auch ein König</div>
     <div class="restart-verification-line aurebesh">Burnout ist auch ein König</div>
+    <div class="restart-verification-timer">Sichtbar für 20 Sekunden</div>
   </div>
 </div>
 <script>
   (function () {
     const splash = document.getElementById('restartVerificationSplash');
     if (!splash) return;
-    splash.classList.remove('hidden');
-    splash.classList.add('visible');
-    splash.setAttribute('aria-hidden', 'false');
-    window.setTimeout(() => {
-      splash.classList.remove('visible');
-      splash.classList.add('hidden');
-      splash.setAttribute('aria-hidden', 'true');
-    }, 20000);
+    const showSplash = () => {
+      splash.classList.remove('hidden');
+      splash.classList.add('visible');
+      splash.setAttribute('aria-hidden', 'false');
+      window.setTimeout(() => {
+        splash.classList.remove('visible');
+        splash.classList.add('hidden');
+        splash.setAttribute('aria-hidden', 'true');
+      }, 20000);
+    };
+    if (document.readyState === 'complete') {
+      requestAnimationFrame(showSplash);
+    } else {
+      window.addEventListener('load', () => {
+        requestAnimationFrame(showSplash);
+      }, { once: true });
+    }
   }());
 </script>
 <div id="bootScreen" class="boot-screen" aria-hidden="true">
