@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "node server/src/server.js",
+    "start:ops": "node server/src/opsServer.js",
     "dev": "node --watch server/src/server.js",
     "dispatch:audit": "node server/scripts/dispatchAuditToDiscord.js",
     "repair:sqlite": "node server/scripts/repairSqliteDatabase.js"
