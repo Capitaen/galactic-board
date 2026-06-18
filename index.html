@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Galactic Campaign Command Board - MVP</title>
-<link rel="stylesheet" href="assets/app-shell.css?v=20260618c">
+<link rel="stylesheet" href="assets/app-shell.css?v=20260618d">
 </head>
 <body>
 <div id="restartVerificationSplash" class="restart-verification-splash hidden" aria-hidden="true">
@@ -13,6 +13,20 @@
     <div class="restart-verification-line aurebesh">Burnout ist auch ein König</div>
   </div>
 </div>
+<script>
+  (function () {
+    const splash = document.getElementById('restartVerificationSplash');
+    if (!splash) return;
+    splash.classList.remove('hidden');
+    splash.classList.add('visible');
+    splash.setAttribute('aria-hidden', 'false');
+    window.setTimeout(() => {
+      splash.classList.remove('visible');
+      splash.classList.add('hidden');
+      splash.setAttribute('aria-hidden', 'true');
+    }, 20000);
+  }());
+</script>
 <div id="bootScreen" class="boot-screen" aria-hidden="true">
   <div class="boot-screen-card">
     <div class="boot-screen-grid"></div>
@@ -192,17 +206,17 @@
 </div>
 
 <script src="/socket.io/socket.io.js" defer></script>
-<script src="assets/app/01-core-state.js?v=20260618c" defer></script>
-<script src="assets/app/02-foundation-map.js?v=20260618c" defer></script>
-<script src="assets/app/03-ui-boot-sync.js?v=20260618c" defer></script>
-<script src="assets/app/04-resources-logistics.js?v=20260618c" defer></script>
-<script src="assets/app/05-navigation-auth.js?v=20260618c" defer></script>
-<script src="assets/app/06-map-rendering.js?v=20260618c" defer></script>
-<script src="assets/app/07-entities-fleets.js?v=20260618c" defer></script>
-<script src="assets/app/08-admin-views.js?v=20260618c" defer></script>
-<script src="assets/app/09-economy.js?v=20260618c" defer></script>
-<script src="assets/app/10-shipyard-build-map-input.js?v=20260618c" defer></script>
-<script src="assets/app/11-startup.js?v=20260618c" defer></script>
+<script src="assets/app/01-core-state.js?v=20260618d" defer></script>
+<script src="assets/app/02-foundation-map.js?v=20260618d" defer></script>
+<script src="assets/app/03-ui-boot-sync.js?v=20260618d" defer></script>
+<script src="assets/app/04-resources-logistics.js?v=20260618d" defer></script>
+<script src="assets/app/05-navigation-auth.js?v=20260618d" defer></script>
+<script src="assets/app/06-map-rendering.js?v=20260618d" defer></script>
+<script src="assets/app/07-entities-fleets.js?v=20260618d" defer></script>
+<script src="assets/app/08-admin-views.js?v=20260618d" defer></script>
+<script src="assets/app/09-economy.js?v=20260618d" defer></script>
+<script src="assets/app/10-shipyard-build-map-input.js?v=20260618d" defer></script>
+<script src="assets/app/11-startup.js?v=20260618d" defer></script>
 </body>
 </html>
 

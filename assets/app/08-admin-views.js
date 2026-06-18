@@ -258,7 +258,7 @@ let serverReloadAdminState = {
   startedAt: '',
   finishedAt: '',
   updatedAt: '',
-  message: '',
+  message: 'Status noch nicht geladen.',
   logTail: '',
   commands: [],
   loading: false
@@ -330,12 +330,12 @@ async function fetchServerReloadStatus(options = {}) {
       serverReloadAdminState = {
         ...serverReloadAdminState,
         loading: false,
-        status: 'error',
-        message: 'Diese Serverinstanz kennt den Reload-Status-Endpunkt noch nicht. Bitte einmal `git pull`, `pm2 restart galactic` und `pm2 save` auf dem Server ausführen.'
+        status: 'idle',
+        message: 'Reload-Status ist gerade nicht verfuegbar. Du kannst den Reload trotzdem manuell starten.'
       };
       clearServerReloadPollTimer();
       if (activeMainTab === 'loginManager') renderLoginManagerView();
-      if (!silent) setStatus('Server-Reload-Status ist auf dieser Serverversion noch nicht verfuegbar.');
+      if (!silent) setStatus('Reload-Status ist momentan nicht verfuegbar.');
       return;
     }
     if (!response.ok) throw new Error(payload.error || 'Server-Reload-Status konnte nicht geladen werden.');
@@ -612,9 +612,6 @@ function renderLoginManagerView() {
       ` : ''}
     </div>
   `;
-  if (actorDefinition.level === 'global' && !serverReloadAdminState.loading && !serverReloadAdminState.updatedAt) {
-    fetchServerReloadStatus({ silent: true });
-  }
 }
 
 function escapeRadioCommandText(value) {
