@@ -444,6 +444,9 @@ function makeLocalCampaignSnapshot(nextState) {
 }
 function loadInitialCampaignState() {
   try {
+    if (window.location.protocol.startsWith('http')) {
+      return JSON.parse(JSON.stringify(DEFAULT_DATA));
+    }
     const raw = localStorage.getItem(LOCAL_STATE_STORAGE_KEY);
     if (!raw) return JSON.parse(JSON.stringify(DEFAULT_DATA));
     if (raw.length > LOCAL_STATE_MAX_BYTES) {
