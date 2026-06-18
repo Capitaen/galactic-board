@@ -33,15 +33,24 @@ const ALLOWED_PREFIXES = [
   'git pull',
   'git status',
   'git rev-parse',
+  'pm2 flush',
+  'pm2 delete galactic',
   'pm2 restart galactic',
   'pm2 restart audit-dispatch',
+  'pm2 restart galactic-ops',
+  'pm2 start .\\server\\src\\server.js --name galactic',
   'pm2 save',
   'pm2 status',
   'pm2 show galactic',
   'pm2 show audit-dispatch',
+  'pm2 show galactic-ops',
   'pm2 jlist',
+  'node --check server/src/server.js',
+  'node --check server/src/db.js',
+  'node --check server/src/opsServer.js',
   'curl.exe -k',
   'Get-Content ',
+  'Get-ChildItem ',
   'Select-String ',
   'Get-NetTCPConnection ',
   'Get-Process ',
@@ -64,10 +73,28 @@ const PRESETS = [
     commands: ['git pull', 'pm2 restart galactic', 'pm2 restart audit-dispatch', 'pm2 save']
   },
   {
+    id: 'hard_restart_galactic',
+    label: 'Galactic Hard Restart',
+    description: 'Delete and clean-start galactic, then save PM2 state',
+    commands: [
+      'pm2 delete galactic',
+      'Start-Sleep -Seconds 2',
+      'pm2 start .\\server\\src\\server.js --name galactic',
+      'pm2 save',
+      'pm2 show galactic'
+    ]
+  },
+  {
+    id: 'pm2_flush_and_status',
+    label: 'PM2 Flush + Status',
+    description: 'Flush PM2 logs and re-check process state',
+    commands: ['pm2 flush', 'pm2 status', 'pm2 show galactic', 'pm2 show audit-dispatch', 'pm2 show galactic-ops']
+  },
+  {
     id: 'pm2_status',
     label: 'PM2 Status',
     description: 'Show PM2 status and process details',
-    commands: ['pm2 status', 'pm2 show galactic', 'pm2 show audit-dispatch']
+    commands: ['pm2 status', 'pm2 show galactic', 'pm2 show audit-dispatch', 'pm2 show galactic-ops']
   },
   {
     id: 'port_443_check',
@@ -76,6 +103,43 @@ const PRESETS = [
     commands: [
       'Get-NetTCPConnection -LocalPort 443 -State Listen',
       '$pid443 = (Get-NetTCPConnection -LocalPort 443 -State Listen | Select-Object -First 1 -ExpandProperty OwningProcess); if ($pid443) { Get-Process -Id $pid443 | Select-Object Id,ProcessName,Path }'
+    ]
+  },
+  {
+    id: 'local_api_health',
+    label: 'Local API Health',
+    description: 'Check bootstrap, market summary and reload status locally',
+    commands: [
+      'curl.exe -k https://127.0.0.1:443/api/bootstrap',
+      'curl.exe -k https://127.0.0.1:443/api/economy/market/summary',
+      'curl.exe -k https://127.0.0.1:443/api/server-reload-status',
+      'curl.exe -k https://127.0.0.1:4443/api/health'
+    ]
+  },
+  {
+    id: 'frontend_backend_diagnostic',
+    label: 'Frontend + Backend Diagnose',
+    description: 'Bundle from PM2, port binding, local API and recent logs',
+    commands: [
+      'pm2 status',
+      'Get-NetTCPConnection -LocalPort 443 -State Listen',
+      '$pid443 = (Get-NetTCPConnection -LocalPort 443 -State Listen | Select-Object -First 1 -ExpandProperty OwningProcess); if ($pid443) { Get-Process -Id $pid443 | Select-Object Id,ProcessName,Path }',
+      'curl.exe -k https://127.0.0.1:443/api/bootstrap',
+      'curl.exe -k https://127.0.0.1:443/api/economy/market/summary',
+      'Get-Content C:\\Users\\Administrator\\.pm2\\logs\\galactic-out.log -Tail 60',
+      'Get-Content C:\\Users\\Administrator\\.pm2\\logs\\galactic-error.log -Tail 60'
+    ]
+  },
+  {
+    id: 'source_route_analysis',
+    label: 'Source + Route Analyse',
+    description: 'Validate core source files and grep reload routes',
+    commands: [
+      'node --check server/src/server.js',
+      'node --check server/src/db.js',
+      'node --check server/src/opsServer.js',
+      'Select-String -Path .\\server\\src\\server.js -Pattern "server-reload-status"',
+      'Select-String -Path .\\server\\src\\server.js -Pattern "api/server-reload"'
     ]
   },
   {
@@ -94,6 +158,15 @@ const PRESETS = [
     commands: [
       'Get-Content C:\\Users\\Administrator\\.pm2\\logs\\galactic-out.log -Tail 80',
       'Get-Content C:\\Users\\Administrator\\.pm2\\logs\\galactic-error.log -Tail 80'
+    ]
+  },
+  {
+    id: 'ops_logs',
+    label: 'Ops Logs',
+    description: 'Read recent ops-console logs',
+    commands: [
+      'Get-Content C:\\Users\\Administrator\\.pm2\\logs\\galactic-ops-out.log -Tail 80',
+      'Get-Content C:\\Users\\Administrator\\.pm2\\logs\\galactic-ops-error.log -Tail 80'
     ]
   }
 ];
