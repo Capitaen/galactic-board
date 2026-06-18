@@ -1298,9 +1298,11 @@ function connectServerSocket() {
     timeout: 2500
   });
   serverSync.socket.on('connect', () => {
+    const wasReconnect = serverSync.reconnectAttempt > 0 || serverSync.offlineMode;
     serverSync.offlineMode = false;
     serverSync.reconnectAttempt = 0;
     clearServerReconnectTimer();
+    if (wasReconnect) showRestartVerificationSplash();
     setStatus('Live-Sync mit Server verbunden.');
   });
   serverSync.socket.on('socket:ready', (payload) => {

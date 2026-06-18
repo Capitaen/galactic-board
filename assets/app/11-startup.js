@@ -16,6 +16,7 @@ loginModalUser?.addEventListener('keydown', (event) => {
   }
 });
 try {
+  showRestartVerificationSplash();
   mapImageLoaded = Boolean(mapEl?.complete);
   if (!mapImageLoaded) {
     mapEl?.addEventListener('load', () => {
