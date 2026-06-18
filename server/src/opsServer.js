@@ -1,5 +1,4 @@
 import fs from 'node:fs';
-import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
 import express from 'express';
@@ -23,8 +22,9 @@ const OPS_PORT = Number(process.env.OPS_CONSOLE_PORT || 4443);
 const OPS_COOKIE_NAME = 'gcb_ops_session';
 const OPS_USERNAME = String(process.env.OPS_CONSOLE_USERNAME || 'opsadmin').trim();
 const OPS_PASSWORD = String(process.env.OPS_CONSOLE_PASSWORD || 'change-me-now').trim();
+
 const sessions = new Map();
-const jobs = [];
+const queuedJobs = [];
 const recentJobs = [];
 let nextJobId = 1;
 let activeJob = null;
@@ -55,37 +55,24 @@ const PRESETS = [
     id: 'deploy_galactic',
     label: 'Galactic Deploy',
     description: 'Git pull, galactic restart, pm2 save',
-    commands: [
-      'git pull',
-      'pm2 restart galactic',
-      'pm2 save'
-    ]
+    commands: ['git pull', 'pm2 restart galactic', 'pm2 save']
   },
   {
     id: 'deploy_all',
     label: 'Galactic + Audit Deploy',
-    description: 'Git pull, beide PM2-Apps restarten, pm2 save',
-    commands: [
-      'git pull',
-      'pm2 restart galactic',
-      'pm2 restart audit-dispatch',
-      'pm2 save'
-    ]
+    description: 'Git pull, restart both PM2 apps, pm2 save',
+    commands: ['git pull', 'pm2 restart galactic', 'pm2 restart audit-dispatch', 'pm2 save']
   },
   {
     id: 'pm2_status',
     label: 'PM2 Status',
-    description: 'Zeigt Status und Details der laufenden Prozesse',
-    commands: [
-      'pm2 status',
-      'pm2 show galactic',
-      'pm2 show audit-dispatch'
-    ]
+    description: 'Show PM2 status and process details',
+    commands: ['pm2 status', 'pm2 show galactic', 'pm2 show audit-dispatch']
   },
   {
     id: 'port_443_check',
     label: 'Port 443 Check',
-    description: 'Prüft Listener und Prozess auf Port 443',
+    description: 'Inspect listener and owning process on port 443',
     commands: [
       'Get-NetTCPConnection -LocalPort 443 -State Listen',
       '$pid443 = (Get-NetTCPConnection -LocalPort 443 -State Listen | Select-Object -First 1 -ExpandProperty OwningProcess); if ($pid443) { Get-Process -Id $pid443 | Select-Object Id,ProcessName,Path }'
@@ -94,7 +81,7 @@ const PRESETS = [
   {
     id: 'reload_route_check',
     label: 'Reload Route Check',
-    description: 'Prüft lokale Reload-Routen des galactic-Servers',
+    description: 'Check local reload routes of the galactic server',
     commands: [
       'curl.exe -k https://127.0.0.1:443/api/server-reload-status',
       'curl.exe -k https://127.0.0.1:443/api/admin/server-reload-status'
@@ -103,7 +90,7 @@ const PRESETS = [
   {
     id: 'galactic_logs',
     label: 'Galactic Logs',
-    description: 'Liest die letzten galactic Logs',
+    description: 'Read recent galactic logs',
     commands: [
       'Get-Content C:\\Users\\Administrator\\.pm2\\logs\\galactic-out.log -Tail 80',
       'Get-Content C:\\Users\\Administrator\\.pm2\\logs\\galactic-error.log -Tail 80'
@@ -111,7 +98,7 @@ const PRESETS = [
   }
 ];
 
-function htmlEscape(value) {
+function escapeHtml(value) {
   return String(value || '')
     .replaceAll('&', '&amp;')
     .replaceAll('<', '&lt;')
@@ -121,9 +108,9 @@ function htmlEscape(value) {
 
 function makeOpsPage() {
   const presetCards = PRESETS.map((preset) => `
-    <button class="preset-card" data-preset-id="${htmlEscape(preset.id)}">
-      <strong>${htmlEscape(preset.label)}</strong>
-      <span>${htmlEscape(preset.description)}</span>
+    <button class="preset-card" data-preset-id="${escapeHtml(preset.id)}" type="button">
+      <strong>${escapeHtml(preset.label)}</strong>
+      <span>${escapeHtml(preset.description)}</span>
     </button>
   `).join('');
 
@@ -137,12 +124,11 @@ function makeOpsPage() {
     :root {
       --bg:#07101a;
       --panel:#0e1a26;
-      --panel-2:#132435;
       --line:rgba(131,220,255,.18);
       --text:#eef8ff;
       --muted:#9eb4c5;
       --accent:#56cfff;
-      --accent-2:#7ef0ff;
+      --accent2:#7ef0ff;
       --danger:#ff7f7f;
       --ok:#79e8ae;
     }
@@ -156,13 +142,7 @@ function makeOpsPage() {
       color:var(--text);
       min-height:100vh;
     }
-    .shell {
-      max-width:1200px;
-      margin:0 auto;
-      padding:24px;
-      display:grid;
-      gap:20px;
-    }
+    .shell { max-width:1200px; margin:0 auto; padding:24px; display:grid; gap:20px; }
     .hero, .panel {
       border:1px solid var(--line);
       border-radius:22px;
@@ -172,15 +152,11 @@ function makeOpsPage() {
     .hero { padding:24px; }
     .hero h1 { margin:0 0 8px; font-size:30px; letter-spacing:.06em; }
     .hero p { margin:0; color:var(--muted); line-height:1.5; }
-    .hero-status { margin-top:14px; color:var(--accent-2); font-size:14px; letter-spacing:.12em; text-transform:uppercase; }
+    .hero-status { margin-top:14px; color:var(--accent2); font-size:14px; letter-spacing:.12em; text-transform:uppercase; }
     .grid { display:grid; gap:20px; grid-template-columns:1.1fr .9fr; }
     .panel { padding:18px; }
     .panel h2 { margin:0 0 14px; font-size:18px; letter-spacing:.06em; }
-    .preset-grid {
-      display:grid;
-      grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));
-      gap:12px;
-    }
+    .preset-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:12px; }
     .preset-card, .action-btn {
       border:1px solid rgba(130,219,255,.16);
       background:linear-gradient(180deg, rgba(21,37,54,.96), rgba(11,21,32,.98));
@@ -205,16 +181,9 @@ function makeOpsPage() {
     }
     textarea { min-height:160px; resize:vertical; }
     .toolbar { display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
-    .action-btn.primary {
-      background:linear-gradient(180deg, rgba(58,149,255,.98), rgba(38,111,204,.98));
-      border-color:rgba(126,240,255,.24);
-    }
-    .action-btn.secondary {
-      background:linear-gradient(180deg, rgba(18,31,45,.98), rgba(10,17,27,.98));
-    }
-    .action-btn.logout {
-      margin-left:auto;
-    }
+    .action-btn.primary { background:linear-gradient(180deg, rgba(58,149,255,.98), rgba(38,111,204,.98)); }
+    .action-btn.secondary { background:linear-gradient(180deg, rgba(18,31,45,.98), rgba(10,17,27,.98)); }
+    .action-btn.logout { margin-left:auto; }
     .status-line {
       padding:12px 14px;
       border-radius:14px;
@@ -225,17 +194,13 @@ function makeOpsPage() {
     }
     .status-line.ok { color:var(--ok); }
     .status-line.error { color:var(--danger); }
-    .job-list {
-      display:grid;
-      gap:10px;
-      max-height:240px;
-      overflow:auto;
-    }
+    .job-list { display:grid; gap:10px; max-height:240px; overflow:auto; }
     .job-card {
       border:1px solid rgba(128,217,255,.12);
       border-radius:14px;
       background:rgba(8,16,25,.88);
       padding:12px;
+      text-align:left;
     }
     .job-meta { color:var(--muted); font-size:12px; margin-bottom:8px; }
     .console {
@@ -250,12 +215,7 @@ function makeOpsPage() {
       overflow:auto;
       color:#d9f6ff;
     }
-    .login-wrap {
-      min-height:100vh;
-      display:grid;
-      place-items:center;
-      padding:20px;
-    }
+    .login-wrap { min-height:100vh; display:grid; place-items:center; padding:20px; }
     .login-card {
       width:min(460px, 92vw);
       padding:24px;
@@ -307,7 +267,11 @@ function makeOpsPage() {
       });
       const text = await response.text();
       let payload = {};
-      try { payload = text ? JSON.parse(text) : {}; } catch { payload = { error: text }; }
+      try {
+        payload = text ? JSON.parse(text) : {};
+      } catch {
+        payload = { error: text };
+      }
       if (!response.ok) throw new Error(payload.error || ('HTTP ' + response.status));
       return payload;
     }
@@ -323,11 +287,11 @@ function makeOpsPage() {
         appState.authenticated = true;
         appState.jobs = Array.isArray(payload.jobs) ? payload.jobs : [];
         const active = appState.jobs.find((job) => job.status === 'running' || job.status === 'queued') || appState.jobs[0] || null;
-        appState.activeJobId = active?.id || '';
-        appState.activeOutput = active?.output || '';
+        appState.activeJobId = active ? active.id : '';
+        appState.activeOutput = active ? active.output : '';
         render();
         if (appState.jobs.some((job) => job.status === 'running' || job.status === 'queued')) schedulePoll();
-      } catch (error) {
+      } catch {
         appState.authenticated = false;
         render();
       }
@@ -365,7 +329,7 @@ function makeOpsPage() {
           method: 'POST',
           body: JSON.stringify({ presetId: id })
         });
-        appState.activeJobId = payload.job?.id || '';
+        appState.activeJobId = payload.job ? payload.job.id : '';
         setStatus('Preset in Warteschlange gelegt: ' + preset.label, 'ok');
         await loadJobs();
       } catch (error) {
@@ -381,7 +345,7 @@ function makeOpsPage() {
           method: 'POST',
           body: JSON.stringify({ commandText })
         });
-        appState.activeJobId = payload.job?.id || '';
+        appState.activeJobId = payload.job ? payload.job.id : '';
         setStatus('Eigener Befehl in Warteschlange gelegt.', 'ok');
         await loadJobs();
       } catch (error) {
@@ -392,7 +356,7 @@ function makeOpsPage() {
     function selectJob(id) {
       appState.activeJobId = id;
       const active = appState.jobs.find((job) => job.id === id);
-      appState.activeOutput = active?.output || '';
+      appState.activeOutput = active ? active.output : '';
       render();
     }
 
@@ -401,12 +365,12 @@ function makeOpsPage() {
         <div class="login-wrap">
           <form class="login-card" onsubmit="login(event)">
             <h1>Galactic Ops Console</h1>
-            <p>Separater Wartungszugang für Deploys, Diagnosen und sichere Shell-Kommandos.</p>
+            <p>Separater Wartungszugang fuer Deploys, Diagnosen und sichere Shell-Kommandos.</p>
             <input id="loginUser" placeholder="Benutzername" autocomplete="username" value="opsadmin">
             <div style="height:10px"></div>
             <input id="loginPass" type="password" placeholder="Passwort" autocomplete="current-password">
             <div style="height:14px"></div>
-            <button class="action-btn primary" type="submit"><strong>Einloggen</strong><span>Ops-Konsole öffnen</span></button>
+            <button class="action-btn primary" type="submit"><strong>Einloggen</strong><span>Ops-Konsole oeffnen</span></button>
             <div style="height:12px"></div>
             <div class="status-line \${appState.statusType === 'error' ? 'error' : appState.statusType === 'ok' ? 'ok' : ''}">\${escapeHtml(appState.statusText)}</div>
           </form>
@@ -416,13 +380,13 @@ function makeOpsPage() {
 
     function renderApp() {
       const activeJob = appState.jobs.find((job) => job.id === appState.activeJobId) || appState.jobs[0] || null;
-      const output = activeJob?.output || appState.activeOutput || 'Noch keine Ausgabe.';
+      const output = activeJob ? activeJob.output : (appState.activeOutput || 'Noch keine Ausgabe.');
       return \`
         <div class="shell">
           <div class="hero">
             <h1>Galactic Ops Console</h1>
-            <p>Separater Admin-Prozess für Deploys und Diagnosen. Diese Seite selbst läuft unabhängig von der eigentlichen Galactic-Website und bietet nur eingeschränkte, allowlist-basierte Befehle.</p>
-            <div class="hero-status">Port ${OPS_PORT} • Prozess bleibt beim galactic-Restart online</div>
+            <p>Separater Admin-Prozess fuer Deploys und Diagnosen. Diese Seite laeuft unabhaengig von der eigentlichen Galactic-Website und bietet nur eingeschraenkte allowlist-basierte Befehle.</p>
+            <div class="hero-status">Port ${OPS_PORT} - Prozess bleibt beim galactic-Restart online</div>
           </div>
           <div class="grid">
             <div class="panel">
@@ -435,21 +399,21 @@ function makeOpsPage() {
               <div class="custom-box">
                 <h2>Eigene Analyse-Kommandos</h2>
                 <div class="help">Erlaubt sind nur sichere Read-/Deploy-Kommandos ohne Pipes, Redirects oder Dateischreibzugriffe. Ein optionales <code>cd C:\\Users\\Administrator\\galactic-board</code> am Anfang wird ignoriert.</div>
-                <textarea id="customCommand" spellcheck="false">${htmlEscape(appState.customCommand)}</textarea>
+                <textarea id="customCommand" spellcheck="false">\${escapeHtml(appState.customCommand)}</textarea>
                 <div class="toolbar">
-                  <button class="action-btn primary" type="button" onclick="runCustom()"><strong>Kommandos ausführen</strong><span>Zeilenweise, nacheinander</span></button>
+                  <button class="action-btn primary" type="button" onclick="runCustom()"><strong>Kommandos ausfuehren</strong><span>Zeilenweise, nacheinander</span></button>
                   <button class="action-btn secondary" type="button" onclick="loadJobs()"><strong>Aktualisieren</strong><span>Jobs neu laden</span></button>
                 </div>
-                <div class="status-line ${appState.statusType === 'error' ? 'error' : appState.statusType === 'ok' ? 'ok' : ''}">${htmlEscape(appState.statusText)}</div>
+                <div class="status-line \${appState.statusType === 'error' ? 'error' : appState.statusType === 'ok' ? 'ok' : ''}">\${escapeHtml(appState.statusText)}</div>
               </div>
             </div>
             <div class="panel">
               <h2>Job-Verlauf</h2>
               <div class="job-list">
-                ${(appState.jobs.length ? appState.jobs : [{ id:'', status:'idle', label:'Noch keine Jobs', createdAt:'', output:'' }]).map((job) => \`
-                  <button class="job-card" type="button" onclick="selectJob('${htmlEscape(job.id)}')">
+                \${(appState.jobs.length ? appState.jobs : [{ id:'', status:'idle', label:'Noch keine Jobs', createdAt:'', output:'' }]).map((job) => \`
+                  <button class="job-card" type="button" onclick="selectJob('\${escapeHtml(job.id)}')">
                     <div><strong>\${escapeHtml(job.label || 'Unbenannter Job')}</strong></div>
-                    <div class="job-meta">#\${escapeHtml(job.id || '—')} • \${escapeHtml(job.status || 'idle')} • \${escapeHtml(job.createdAt || '')}</div>
+                    <div class="job-meta">#\${escapeHtml(job.id || '-')} - \${escapeHtml(job.status || 'idle')} - \${escapeHtml(job.createdAt || '')}</div>
                   </button>
                 \`).join('')}
               </div>
@@ -457,7 +421,7 @@ function makeOpsPage() {
           </div>
           <div class="panel">
             <h2>Ausgabe</h2>
-            <div class="console">${htmlEscape(output)}</div>
+            <div class="console">\${escapeHtml(output)}</div>
           </div>
         </div>
       \`;
@@ -495,7 +459,7 @@ function normalizeCommandLine(line) {
     throw new Error('Nur das Projektverzeichnis darf als cd-Ziel verwendet werden.');
   }
   if (/[\r\n]/.test(trimmed)) throw new Error('Mehrzeilige Einzelkommandos sind nicht erlaubt.');
-  if (/[|&;><`]/.test(trimmed)) throw new Error('Pipes, Redirects und Shell-Verkettungen sind nicht erlaubt.');
+  if (/[|&;><\`]/.test(trimmed)) throw new Error('Pipes, Redirects und Shell-Verkettungen sind nicht erlaubt.');
   if (!ALLOWED_PREFIXES.some((prefix) => trimmed.toLowerCase().startsWith(prefix.toLowerCase()))) {
     throw new Error(`Nicht erlaubtes Kommando: ${trimmed}`);
   }
@@ -507,7 +471,7 @@ function parseCommandText(commandText) {
     .split(/\r?\n/)
     .map((line) => normalizeCommandLine(line))
     .filter(Boolean);
-  if (!lines.length) throw new Error('Keine ausführbaren Kommandos gefunden.');
+  if (!lines.length) throw new Error('Keine ausfuehrbaren Kommandos gefunden.');
   return lines;
 }
 
@@ -588,13 +552,13 @@ async function executeJob(job) {
 
 async function processQueue() {
   if (activeJob) return;
-  const nextJob = jobs.find((job) => job.status === 'queued');
+  const nextJob = queuedJobs.find((job) => job.status === 'queued');
   if (!nextJob) return;
   activeJob = nextJob;
   await executeJob(nextJob);
   recentJobs.unshift(serializeJob(nextJob));
   if (recentJobs.length > 20) recentJobs.length = 20;
-  jobs.splice(jobs.findIndex((job) => job.id === nextJob.id), 1);
+  queuedJobs.splice(queuedJobs.findIndex((job) => job.id === nextJob.id), 1);
   activeJob = null;
   void processQueue();
 }
@@ -611,7 +575,7 @@ function enqueueJob({ label, requestedBy, commands }) {
     finishedAt: '',
     output: `>>> Eingereiht von ${requestedBy}\n`
   };
-  jobs.unshift(job);
+  queuedJobs.unshift(job);
   void processQueue();
   return job;
 }
@@ -628,13 +592,10 @@ app.post('/api/login', (req, res) => {
   const username = String(req.body?.username || '').trim();
   const password = String(req.body?.password || '');
   if (username !== OPS_USERNAME || password !== OPS_PASSWORD) {
-    return res.status(401).json({ error: 'Ungültige Zugangsdaten.' });
+    return res.status(401).json({ error: 'Ungueltige Zugangsdaten.' });
   }
   const token = crypto.randomUUID();
-  sessions.set(token, {
-    username,
-    createdAt: new Date().toISOString()
-  });
+  sessions.set(token, { username, createdAt: new Date().toISOString() });
   res.cookie(OPS_COOKIE_NAME, token, {
     httpOnly: true,
     sameSite: 'lax',
@@ -654,14 +615,11 @@ app.post('/api/logout', requireAuth, (req, res) => {
 app.get('/api/jobs', requireAuth, (req, res) => {
   const visibleJobs = [];
   if (activeJob) visibleJobs.push(serializeJob(activeJob));
-  jobs.forEach((job) => {
-    if (job.id !== activeJob?.id) visibleJobs.push(serializeJob(job));
+  queuedJobs.forEach((job) => {
+    if (!activeJob || job.id !== activeJob.id) visibleJobs.push(serializeJob(job));
   });
   recentJobs.forEach((job) => visibleJobs.push(job));
-  res.json({
-    ok: true,
-    jobs: visibleJobs.slice(0, 25)
-  });
+  res.json({ ok: true, jobs: visibleJobs.slice(0, 25) });
 });
 
 app.post('/api/run-preset', requireAuth, (req, res) => {
@@ -691,13 +649,13 @@ app.get('/api/health', (_req, res) => {
     ok: true,
     service: 'galactic-ops-console',
     port: OPS_PORT,
-    queueLength: jobs.length + (activeJob ? 1 : 0)
+    queueLength: queuedJobs.length + (activeJob ? 1 : 0)
   });
 });
 
 server.listen(OPS_PORT, '0.0.0.0', () => {
   console.log(`Galactic Ops Console listening on https://0.0.0.0:${OPS_PORT}`);
   if (OPS_PASSWORD === 'change-me-now') {
-    console.warn('OPS_CONSOLE_PASSWORD nutzt noch den Default-Wert. Bitte vor Internetfreigabe ändern.');
+    console.warn('OPS_CONSOLE_PASSWORD nutzt noch den Default-Wert. Bitte vor Internetfreigabe aendern.');
   }
 });
