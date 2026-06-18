@@ -23,6 +23,77 @@ function cloneWithoutKeys(item, keys = []) {
   return clone;
 }
 
+function pointInPolygon(point, polygon) {
+  if (!point || !Array.isArray(polygon) || polygon.length < 3) return false;
+  let inside = false;
+  for (let index = 0, previous = polygon.length - 1; index < polygon.length; previous = index, index += 1) {
+    const currentPoint = polygon[index];
+    const previousPoint = polygon[previous];
+    if (!currentPoint || !previousPoint) continue;
+    const intersects = ((Number(currentPoint.y) > Number(point.y)) !== (Number(previousPoint.y) > Number(point.y)))
+      && (Number(point.x) < ((Number(previousPoint.x) - Number(currentPoint.x)) * (Number(point.y) - Number(currentPoint.y))) / ((Number(previousPoint.y) - Number(currentPoint.y)) || Number.EPSILON) + Number(currentPoint.x));
+    if (intersects) inside = !inside;
+  }
+  return inside;
+}
+
+function polygonArea(points = []) {
+  if (!Array.isArray(points) || points.length < 3) return Number.POSITIVE_INFINITY;
+  let area = 0;
+  for (let index = 0; index < points.length; index += 1) {
+    const current = points[index];
+    const next = points[(index + 1) % points.length];
+    area += (Number(current?.x || 0) * Number(next?.y || 0)) - (Number(next?.x || 0) * Number(current?.y || 0));
+  }
+  return Math.abs(area / 2);
+}
+
+function centroidOfPolygon(points = []) {
+  if (!Array.isArray(points) || !points.length) return { x: 0, y: 0 };
+  const sum = points.reduce((accumulator, point) => ({
+    x: accumulator.x + Number(point?.x || 0),
+    y: accumulator.y + Number(point?.y || 0)
+  }), { x: 0, y: 0 });
+  return {
+    x: sum.x / points.length,
+    y: sum.y / points.length
+  };
+}
+
+function resolvePlanetSectorFromManualSectors(planet, manualSectors = []) {
+  const point = {
+    x: Number(planet?.x),
+    y: Number(planet?.y)
+  };
+  if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) return String(planet?.sector || '').trim();
+  const matches = manualSectors
+    .map((sector) => {
+      const name = String(sector?.name || '').trim();
+      const polygon = Array.isArray(sector?.points) ? sector.points : [];
+      if (!name || polygon.length < 3 || !pointInPolygon(point, polygon)) return null;
+      const centroid = centroidOfPolygon(polygon);
+      return {
+        name,
+        area: polygonArea(polygon),
+        distance: Math.hypot(point.x - centroid.x, point.y - centroid.y)
+      };
+    })
+    .filter(Boolean)
+    .sort((left, right) => left.area - right.area || left.distance - right.distance || left.name.localeCompare(right.name, 'de'));
+  return matches[0]?.name || String(planet?.sector || '').trim();
+}
+
+function normalizePlanetSectorsFromManualSectors(state) {
+  const manualSectors = Array.isArray(state?.meta?.manualSectors) ? state.meta.manualSectors : [];
+  if (!manualSectors.length || !Array.isArray(state?.planets)) return;
+  state.planets.forEach((planet) => {
+    const resolvedSector = resolvePlanetSectorFromManualSectors(planet, manualSectors);
+    if (resolvedSector && String(planet?.sector || '').trim() !== resolvedSector) {
+      planet.sector = resolvedSector;
+    }
+  });
+}
+
 const ROLE_BASE_ROLES = {
   'Republic Navy Admin': 'Republic Navy / GAR',
   'Galaktischer Senats Admin': 'Senat',
@@ -267,6 +338,7 @@ export function validateNextCampaignState(role, previousState, nextState) {
   const assignedRole = actor.role;
   const effectiveRole = ROLE_BASE_ROLES[assignedRole] || assignedRole;
   ensure(effectiveRole !== 'Viewer', 'Viewer may not mutate campaign state');
+  normalizePlanetSectorsFromManualSectors(nextState);
   if (assignedRole === 'Senat') {
     ensure(!hasChanged(previousState.resources || {}, nextState.resources || {}), 'Only Senate admins may manage the GAR budget');
     ensure(!hasChanged(previousState.planetResources || {}, nextState.planetResources || {}), 'Only Senate admins may manage GAR infrastructure');

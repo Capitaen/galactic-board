@@ -769,6 +769,29 @@ function pointInPolygon(point, polygon) {
   return inside;
 }
 
+function polygonArea(points) {
+  if (!Array.isArray(points) || points.length < 3) return Number.POSITIVE_INFINITY;
+  let area = 0;
+  for (let index = 0; index < points.length; index += 1) {
+    const current = points[index];
+    const next = points[(index + 1) % points.length];
+    area += (Number(current?.x || 0) * Number(next?.y || 0)) - (Number(next?.x || 0) * Number(current?.y || 0));
+  }
+  return Math.abs(area / 2);
+}
+
+function centroidOfPolygon(points) {
+  if (!Array.isArray(points) || !points.length) return { x: 0, y: 0 };
+  const sum = points.reduce((accumulator, point) => ({
+    x: accumulator.x + Number(point?.x || 0),
+    y: accumulator.y + Number(point?.y || 0)
+  }), { x: 0, y: 0 });
+  return {
+    x: sum.x / points.length,
+    y: sum.y / points.length
+  };
+}
+
 function resolveManualSectorName(planet, manualSectors) {
   if (!planet || !Array.isArray(manualSectors) || !manualSectors.length) return '';
   const point = {
@@ -776,13 +799,21 @@ function resolveManualSectorName(planet, manualSectors) {
     y: Number(planet.y)
   };
   if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) return '';
-  for (const sector of manualSectors) {
-    const name = String(sector?.name || '').trim();
-    const polygon = Array.isArray(sector?.points) ? sector.points : [];
-    if (!name || polygon.length < 3) continue;
-    if (pointInPolygon(point, polygon)) return name;
-  }
-  return '';
+  const matches = manualSectors
+    .map((sector) => {
+      const name = String(sector?.name || '').trim();
+      const polygon = Array.isArray(sector?.points) ? sector.points : [];
+      if (!name || polygon.length < 3 || !pointInPolygon(point, polygon)) return null;
+      const centroid = centroidOfPolygon(polygon);
+      return {
+        name,
+        area: polygonArea(polygon),
+        distance: Math.hypot(point.x - centroid.x, point.y - centroid.y)
+      };
+    })
+    .filter(Boolean)
+    .sort((left, right) => left.area - right.area || left.distance - right.distance || left.name.localeCompare(right.name, 'de'));
+  return matches[0]?.name || '';
 }
 
 export function createDb(projectRoot) {
