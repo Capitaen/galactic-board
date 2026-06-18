@@ -900,7 +900,7 @@ function renderCorporateTradeTable(title, trades = []) {
         <td>${Number(trade.quantity || 0).toLocaleString('de-DE', { maximumFractionDigits: 2 })}</td>
         <td>${formatCredits(trade.unitPrice)}</td>
         <td>${formatCredits(trade.totalPrice)}</td>
-        <td>${escapeLoginManagerText(!trade.sellerCompanyId ? 'Ziviler Markt' : (trade.sellerName || trade.buyerName || '-'))}</td>
+        <td>${escapeLoginManagerText(trade.counterpartyName || '-')}</td>
       </tr>`).join('') || '<tr><td colspan="6">Keine Trades.</td></tr>'}</tbody>
     </table>
   </div>`;

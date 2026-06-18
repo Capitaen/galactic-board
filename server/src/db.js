@@ -21,11 +21,15 @@ const MARKET_SUMMARY_SNAPSHOT_TICK_MS = 2 * 60 * 1000;
 const ACP_HISTORY_SNAPSHOT_TICK_MS = 5 * 60 * 1000;
 const CORPORATE_BUILD_TICK_MS = 30 * 60 * 1000;
 const CORPORATE_PRODUCTION_TICK_MS = 15 * 60 * 1000;
+const CORPORATE_CIVILIAN_SALE_TICK_MS = 15 * 60 * 1000;
 const CORPORATE_FINANCE_TICK_MS = 15 * 60 * 1000;
 const CORPORATE_BUILD_DURATION_MS = 10 * 60 * 60 * 1000;
 const CORPORATE_BUILD_TICK_TIME_BUDGET_MS = 1500;
 const CORPORATE_BUILD_TICK_COMPANY_LIMIT = 12;
 const CORPORATE_BUILD_SELLER_SCAN_LIMIT = 12;
+const CORPORATE_CIVILIAN_SALE_MIN_RATIO = 0.01;
+const CORPORATE_CIVILIAN_SALE_MAX_RATIO = 0.05;
+const CORPORATE_CIVILIAN_SALE_HARD_CAP = 180;
 const CORPORATE_MAX_ACTIVE_PROJECTS = 5;
 const CORPORATE_MAX_COMPLETED_48H = 5;
 const CORPORATE_COMPLETION_WINDOW_MS = 48 * 60 * 60 * 1000;
@@ -3813,6 +3817,11 @@ function readRecentCorporateTrades(db, companyId, direction = 'all', limit = 12)
     LIMIT ${clamp(Number(limit || 12), 1, 50)}
   `).all(...params).map((trade) => ({
     ...trade,
+    counterpartyName: normalizedDirection === 'sales'
+      ? (trade.buyerName || (trade.buyerType === 'civilian_market' ? 'Ziviler Markt' : '-'))
+      : normalizedDirection === 'purchases'
+        ? (trade.sellerName || (!trade.sellerCompanyId ? 'Ziviler Markt' : '-'))
+        : (trade.buyerName || trade.sellerName || (trade.buyerType === 'civilian_market' ? 'Ziviler Markt' : '-')),
     resourceLabel: sectorResourceLabel(trade.resourceType)
   }));
 }
@@ -4266,12 +4275,21 @@ export function executeCorporateResourceTrade(db, state, input = {}) {
       );
     }
     applyCorporateTradeMarketImpact(db, seller?.id || '', buyer?.id || '', totalPrice, safeNumber(input.expectedRoi, 0, -1, 1), createdAt);
+    const eventType = !seller
+      ? 'corporate_resource_procurement'
+      : (buyer ? 'corporate_resource_trade' : 'corporate_resource_sale');
+    const eventTitle = !seller
+      ? 'Privater Marktbezug'
+      : (buyer ? 'Holding-Ressourcenhandel' : 'Ziviler Ressourcenverkauf');
+    const eventDescription = seller && buyer
+      ? `${buyer.name} kauft ${round2(quantity)} ${sectorResourceLabel(resourceType)} von ${seller.name}.`
+      : (seller
+        ? `${seller.name} verkauft ${round2(quantity)} ${sectorResourceLabel(resourceType)} an den zivilen Markt.`
+        : `${buyer?.name || 'Eine Holding'} beschafft ${round2(quantity)} ${sectorResourceLabel(resourceType)} am zivilen Markt.`);
     insertMarketEvent(db, {
-      eventType: !seller ? 'corporate_resource_procurement' : 'corporate_resource_trade',
-      title: !seller ? 'Privater Marktbezug' : 'Holding-Ressourcenhandel',
-      description: seller && buyer
-        ? `${buyer.name} kauft ${round2(quantity)} ${sectorResourceLabel(resourceType)} von ${seller.name}.`
-        : `${buyer?.name || 'Eine Holding'} beschafft ${round2(quantity)} ${sectorResourceLabel(resourceType)} am zivilen Markt.`,
+      eventType,
+      title: eventTitle,
+      description: eventDescription,
       impact: Math.min(0.018, totalPrice / 250000),
       startedAt: createdAt
     });
@@ -4286,6 +4304,199 @@ export function executeCorporateResourceTrade(db, state, input = {}) {
       createdAt
     };
   })();
+}
+
+export function sellCorporateInventoryToCivilianMarket(db, state, now = Date.now()) {
+  if (!state || !canRunCadence(db, 'last_corporate_civilian_sale_tick', CORPORATE_CIVILIAN_SALE_TICK_MS, now)) {
+    return { holdings: 0, trades: 0, totalValue: 0 };
+  }
+  const tickStartedAt = Date.now();
+  const recordedAt = new Date(now).toISOString();
+  const companies = db.prepare(`
+    SELECT id, name, sector_id AS sectorId, resource_key AS resourceKey,
+      market_status AS marketStatus, is_embargoed AS isEmbargoed,
+      corporate_resources_json AS corporateResourcesJson
+    FROM market_companies
+    WHERE id LIKE 'sector_holding_%'
+      AND COALESCE(acquired_by_company_id, '') = ''
+  `).all();
+  const sectorStateMap = new Map(db.prepare(`
+    SELECT sector_id AS sectorId, is_embargoed AS isEmbargoed, control_status AS controlStatus
+    FROM sector_economy_state
+  `).all().map((row) => [String(row.sectorId || '').trim(), row]));
+  const demandMap = new Map(db.prepare(`
+    SELECT sector_id AS sectorId, resource_type AS resourceType,
+      demand_score AS demandScore, supply_score AS supplyScore
+    FROM sector_resource_demand
+    WHERE resource_type IN (${RESOURCE_KEYS.map(() => '?').join(', ')})
+  `).all(...RESOURCE_KEYS).map((row) => [`${row.sectorId}::${row.resourceType}`, {
+    demandScore: safeNumber(row.demandScore, 1, 0, 10),
+    supplyScore: safeNumber(row.supplyScore, 1, 0, 10)
+  }]));
+  const priceRows = getAcpPriceRows(db);
+  const priceMap = new Map(priceRows.map((row) => [`${row.sectorId}::${row.resourceKey}`, {
+    currentPrice: safeNumber(row.currentPrice, RESOURCE_MARKET_CONFIG[row.resourceKey]?.basePrice || 1, 1, 1e9),
+    basePrice: safeNumber(row.basePrice, RESOURCE_MARKET_CONFIG[row.resourceKey]?.basePrice || 1, 1, 1e9),
+    demandScore: safeNumber(row.demandScore, 1, 0, 10),
+    supplyScore: safeNumber(row.supplyScore, 1, 0, 10),
+    speculationScore: safeNumber(row.speculationScore, 0, 0, 2)
+  }]));
+  const acpMap = RESOURCE_KEYS.reduce((accumulator, resourceKey) => {
+    const rows = priceRows.filter((row) => row.resourceKey === resourceKey);
+    if (!rows.length) {
+      accumulator[resourceKey] = {
+        currentPrice: RESOURCE_MARKET_CONFIG[resourceKey]?.basePrice || 1,
+        basePrice: RESOURCE_MARKET_CONFIG[resourceKey]?.basePrice || 1
+      };
+      return accumulator;
+    }
+    const currentTotal = rows.reduce((sum, row) => sum + safeNumber(row.currentPrice, 0, 0, 1e9), 0);
+    const baseTotal = rows.reduce((sum, row) => sum + safeNumber(row.basePrice, 0, 0, 1e9), 0);
+    accumulator[resourceKey] = {
+      currentPrice: round2(currentTotal / rows.length),
+      basePrice: round2(baseTotal / rows.length)
+    };
+    return accumulator;
+  }, {});
+  const upsertPrice = db.prepare(`
+    INSERT INTO sector_resource_prices (
+      sector_id, resource_type, base_price, current_price, previous_price,
+      demand_score, supply_score, speculation_score, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(sector_id, resource_type) DO UPDATE SET
+      previous_price = sector_resource_prices.current_price,
+      current_price = excluded.current_price,
+      demand_score = excluded.demand_score,
+      supply_score = excluded.supply_score,
+      speculation_score = excluded.speculation_score,
+      updated_at = excluded.updated_at
+  `);
+  const updateDemand = db.prepare(`
+    UPDATE sector_resource_demand
+    SET demand_score = ?, supply_score = ?, updated_at = ?
+    WHERE sector_id = ? AND resource_type = ?
+  `);
+  let tradeCount = 0;
+  let totalValue = 0;
+  const soldCompanies = new Set();
+  companies.forEach((company) => {
+    if (normalizeMarketStatus(company.marketStatus) !== 'tradeable') return;
+    const sectorState = sectorStateMap.get(String(company.sectorId || '').trim()) || {};
+    if (Number(company.isEmbargoed || sectorState.isEmbargoed || 0)) return;
+    if (String(sectorState.controlStatus || '').trim() === 'OPFOR') return;
+    const resources = sanitizeResourceBag(company.corporateResourcesJson);
+    RESOURCE_KEYS.forEach((resourceType) => {
+      const inventory = safeNumber(resources[resourceType], 0, 0, 1e9);
+      if (!(inventory > 0)) return;
+      const demandKey = `${company.sectorId}::${resourceType}`;
+      const demandRow = demandMap.get(demandKey);
+      if (!demandRow) return;
+      const demandScore = safeNumber(demandRow.demandScore, 1, 0, 10);
+      const supplyScore = safeNumber(demandRow.supplyScore, 1, 0, 10);
+      if (!(demandScore > supplyScore)) return;
+      const demandGap = Math.max(0, demandScore - supplyScore);
+      const sellRatio = clamp(
+        CORPORATE_CIVILIAN_SALE_MIN_RATIO + demandGap * 0.012,
+        CORPORATE_CIVILIAN_SALE_MIN_RATIO,
+        CORPORATE_CIVILIAN_SALE_MAX_RATIO
+      );
+      const inventoryCap = Math.max(1, Math.floor(inventory * sellRatio));
+      const demandCap = Math.max(2, Math.min(
+        CORPORATE_CIVILIAN_SALE_HARD_CAP,
+        Math.floor(demandGap * 60 + demandScore * 8)
+      ));
+      const quantity = round2(Math.min(inventoryCap, demandCap, inventory, CORPORATE_CIVILIAN_SALE_HARD_CAP));
+      if (!(quantity > 0)) return;
+      const priceRow = priceMap.get(demandKey) || {};
+      const acpPrice = acpMap[resourceType] || {};
+      const basePrice = round2(Math.max(
+        1,
+        safeNumber(priceRow.basePrice, 0, 0, 1e9),
+        safeNumber(acpPrice.basePrice, 0, 0, 1e9),
+        safeNumber(RESOURCE_MARKET_CONFIG[resourceType]?.basePrice, 1, 1, 1e9)
+      ));
+      const marketPrice = round2(Math.max(
+        basePrice,
+        safeNumber(priceRow.currentPrice, basePrice, 1, 1e9),
+        safeNumber(acpPrice.currentPrice, basePrice, 1, 1e9)
+      ));
+      const dynamicUnitPrice = getCorporateTradeUnitPrice(
+        db,
+        state,
+        {
+          sectorId: company.sectorId,
+          corporateResourcesJson: company.corporateResourcesJson
+        },
+        null,
+        resourceType,
+        quantity,
+        { sectorId: company.sectorId }
+      );
+      const unitPrice = round2(Math.max(basePrice, marketPrice, dynamicUnitPrice));
+      const trade = executeCorporateResourceTrade(db, state, {
+        sellerCompanyId: company.id,
+        buyerType: 'civilian_market',
+        resourceType,
+        quantity,
+        unitPrice,
+        createdAt: recordedAt,
+        reason: `Automatischer Verkauf an zivilen Markt (${sectorResourceLabel(resourceType)})`
+      });
+      const supplyLift = Math.min(0.18, quantity / 3200);
+      const demandRelief = Math.min(0.12, quantity / 5400);
+      const nextSupplyScore = round2(clamp(supplyScore + supplyLift, 0.15, 10));
+      const nextDemandScore = round2(clamp(Math.max(0.15, demandScore - demandRelief), 0.15, 10));
+      const nextPrice = round2(Math.max(
+        basePrice,
+        marketPrice * (1 - Math.min(0.025, quantity / 18000))
+      ));
+      const nextSpeculation = round2(clamp(
+        safeNumber(priceRow.speculationScore, 0, 0, 2) - Math.min(0.08, quantity / 8000),
+        0,
+        2
+      ));
+      updateDemand.run(nextDemandScore, nextSupplyScore, recordedAt, company.sectorId, resourceType);
+      upsertPrice.run(
+        company.sectorId,
+        resourceType,
+        basePrice,
+        nextPrice,
+        marketPrice,
+        nextDemandScore,
+        nextSupplyScore,
+        nextSpeculation,
+        recordedAt
+      );
+      demandMap.set(demandKey, { demandScore: nextDemandScore, supplyScore: nextSupplyScore });
+      priceMap.set(demandKey, {
+        currentPrice: nextPrice,
+        basePrice,
+        demandScore: nextDemandScore,
+        supplyScore: nextSupplyScore,
+        speculationScore: nextSpeculation
+      });
+      tradeCount += 1;
+      totalValue = round2(totalValue + safeNumber(trade.totalPrice, 0, 0, 1e9));
+      soldCompanies.add(company.id);
+    });
+  });
+  setRuntimeStateNumber(db, 'last_corporate_civilian_sale_tick', now, recordedAt);
+  const elapsedMs = Date.now() - tickStartedAt;
+  if (tradeCount > 0) {
+    console.log('Corporate civilian inventory sale tick', {
+      holdings: soldCompanies.size,
+      trades: tradeCount,
+      totalValue,
+      elapsedMs
+    });
+  } else {
+    logTimedPhase('sellCorporateInventoryToCivilianMarket', tickStartedAt, { holdingsScanned: companies.length });
+  }
+  return {
+    holdings: soldCompanies.size,
+    trades: tradeCount,
+    totalValue
+  };
 }
 
 function resetLegacyLocalWarehousesInState(state) {
@@ -6943,6 +7154,9 @@ export function runMarketTick(db, inflationRate = 0, now = Date.now(), state = n
     phaseStartedAt = Date.now();
     runCorporateProductionTick(db, state, now);
     logTimedPhase('runMarketTick:runCorporateProductionTick', phaseStartedAt);
+    phaseStartedAt = Date.now();
+    sellCorporateInventoryToCivilianMarket(db, state, now);
+    logTimedPhase('runMarketTick:sellCorporateInventoryToCivilianMarket', phaseStartedAt);
     phaseStartedAt = Date.now();
     runCorporateFinanceTick(db, state, now);
     logTimedPhase('runMarketTick:runCorporateFinanceTick', phaseStartedAt);
