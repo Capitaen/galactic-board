@@ -1458,6 +1458,10 @@ function startFleetManagementFleetDrag(fleetId, event) {
     event?.preventDefault?.();
     return;
   }
+  if (!event?.target?.closest?.('.card-drag-handle')) {
+    event?.preventDefault?.();
+    return;
+  }
   event?.stopPropagation?.();
   draggedFleetManagementFleetId = fleetId;
   getDragSourceElementFromEvent(event)?.classList.add('drag-active');
@@ -1616,15 +1620,15 @@ function handleFleetCategoryReorderDrop(targetCategoryId, event) {
 
 function renderFleetManagementFleetCard(fleet, bucketKey = getFleetOrderBucketKey(fleet)) {
   const editable = canEditFaction(fleet.faction);
-  const dragAttrs = editable
-    ? `draggable="true" ondragstart="startFleetManagementFleetDrag('${fleet.id}', event)" ondragend="endFleetManagementFleetDrag(event)"`
-    : 'draggable="false"';
   const reorderAttrs = editable
     ? `ondragover="allowFleetCardReorder(event)" ondragleave="clearFleetCardReorder(event)" ondrop="handleFleetCardReorderDrop('${fleet.id}', '${bucketKey}', event)"`
     : '';
+  const handleDragAttrs = editable
+    ? `draggable="true" ondragstart="startFleetManagementFleetDrag('${fleet.id}', event)" ondragend="endFleetManagementFleetDrag(event)"`
+    : 'draggable="false"';
   return `
-    <div class="fleet-card" data-focus-key="fleet:${fleet.id}" ${dragAttrs} ${reorderAttrs}>
-      ${editable ? '<div class="card-drag-handle" title="Verband ziehen">::</div>' : ''}
+    <div class="fleet-card" data-focus-key="fleet:${fleet.id}" ${reorderAttrs}>
+      ${editable ? `<div class="card-drag-handle" title="Verband ziehen" ${handleDragAttrs}>::</div>` : ''}
       <h4>${fleet.name}</h4>
       <p><span class="badge ${fleet.faction}">${fleet.faction}</span></p>
       <div class="split-inline">
