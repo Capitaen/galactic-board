@@ -61,8 +61,10 @@ function updatePlanetElement(planet) {
   const display = getPlanetDisplayPosition(planet);
   const isVisible = shouldRenderPlanetOnMap(planet) && isPlanetVisibleInClusterZoom(planet);
   const isSearchHighlighted = activePlanetSearchHighlightId === planet.id;
+  const isCoruscant = normalizePlanetKey(planet.id || planet.name) === 'coruscant';
   entry.point.className = 'planet '
     + ownerClass(planet.owner)
+    + (isCoruscant ? ' coruscant-planet' : '')
     + (isPriorityWorld(planet) ? ' priority-world' : '')
     + (planet.isCoreWorld ? ' core-world' : '')
     + (isSearchHighlighted ? ' search-highlight' : '')

@@ -230,6 +230,7 @@ body {
 .planet.GAR { background:var(--gar); }
 .planet.KUS { background:var(--kus); }
 .planet.HUTT { background:var(--hutt); }
+.planet.coruscant-planet { background:#ff9f1c !important; box-shadow:0 0 12px rgba(255,159,28,.85); }
 .planet.NEUTRAL { background:var(--neutral); }
 .planet:hover { width:18px; height:18px; z-index:7; }
 .planet.core-world:hover { transform:translate(-50%,-50%) scale(1.18); }
