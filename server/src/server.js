@@ -2013,14 +2013,26 @@ function runServerCampaignMaintenance() {
 }
 
 let maintenanceIntervalHandle = null;
+let maintenanceTickInFlight = false;
+let serverShuttingDown = false;
+
+function stopMaintenanceLoop() {
+  if (!maintenanceIntervalHandle) return;
+  clearInterval(maintenanceIntervalHandle);
+  maintenanceIntervalHandle = null;
+}
 
 function ensureMaintenanceLoopStarted() {
   if (maintenanceIntervalHandle) return;
   maintenanceIntervalHandle = setInterval(() => {
+    if (serverShuttingDown || maintenanceTickInFlight) return;
+    maintenanceTickInFlight = true;
     try {
       runServerCampaignMaintenance();
     } catch (error) {
       console.warn('Server maintenance tick failed', error);
+    } finally {
+      maintenanceTickInFlight = false;
     }
   }, 15000);
 }
@@ -2044,8 +2056,29 @@ function scheduleHoldingInfrastructureWarmup() {
   }, 2000);
 }
 
-process.on('SIGINT', () => discordRadioListener.stop());
-process.on('SIGTERM', () => discordRadioListener.stop());
+function handleServerShutdown(signal) {
+  if (serverShuttingDown) return;
+  serverShuttingDown = true;
+  stopMaintenanceLoop();
+  discordRadioListener.stop();
+  try {
+    io.close();
+  } catch (error) {
+    console.warn('Socket shutdown failed', error);
+  }
+  server.close((error) => {
+    if (error) {
+      console.warn(`Server shutdown after ${signal} reported an error`, error);
+      process.exit(1);
+      return;
+    }
+    process.exit(0);
+  });
+  setTimeout(() => process.exit(0), 5000).unref();
+}
+
+process.on('SIGINT', () => handleServerShutdown('SIGINT'));
+process.on('SIGTERM', () => handleServerShutdown('SIGTERM'));
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Galactic Campaign Board server listening on http://0.0.0.0:${PORT}`);

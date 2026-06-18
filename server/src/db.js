@@ -6664,97 +6664,98 @@ function runHoldingSolvencyTick(db, now = Date.now()) {
     WHERE id = ?
   `);
   const transactionStartedAt = Date.now();
-  db.transaction(() => {
-    const decisions = rows.map((company) => {
-      const diagnostics = buildHoldingSolvencyDiagnosticsV2(db, company);
-      const nextRisk = safeNumber(diagnostics.nextRisk, 0, 0, 1);
-      const nextDebt = clamp(safeNumber(company.debtIndex, 0.1, 0, 1) + (nextRisk > 0.62 ? 0.006 : -0.004), 0, 1);
-      const nextConfidence = clamp(safeNumber(company.confidenceIndex, 1, 0, 1) + (nextRisk > 0.65 ? -0.006 : 0.004), 0, 1);
-      const embargoed = Number(company.sectorEmbargoed || company.isEmbargoed || 0) ? 1 : 0;
-      const previousStatus = normalizeMarketStatus(company.marketStatus);
-      let riskSince = safeNumber(company.riskSince, 0, 0, Number.MAX_SAFE_INTEGER);
-      let suspendedSince = safeNumber(company.suspendedSince, 0, 0, Number.MAX_SAFE_INTEGER);
-      let insolventSince = safeNumber(company.insolventSince, 0, 0, Number.MAX_SAFE_INTEGER);
-      if (nextRisk >= 0.8) riskSince = riskSince || now;
-      if (nextRisk < 0.7) {
-        riskSince = 0;
-        suspendedSince = 0;
-      }
-      let nextStatus = previousStatus;
-      let wantsInsolvent = false;
-      let recovered = false;
-      if (embargoed) nextStatus = 'embargo';
-      else if (previousStatus === 'insolvent' || previousStatus === 'takeover') nextStatus = previousStatus;
-      else if (nextRisk > 0.92) {
-        insolventSince = insolventSince || now;
-        suspendedSince = suspendedSince || now;
-        wantsInsolvent = (now - insolventSince) >= (45 * 60 * 1000);
-        nextStatus = wantsInsolvent ? 'insolvent' : 'suspended';
-      } else if (nextRisk > 0.8) {
-        suspendedSince = suspendedSince || now;
-        nextStatus = (now - riskSince) >= (20 * 60 * 1000) ? 'suspended' : previousStatus;
-      } else if (previousStatus === 'suspended' && nextRisk < 0.7) {
-        nextStatus = 'tradeable';
-        recovered = true;
-        suspendedSince = 0;
-      } else if (nextRisk < 0.7 && previousStatus !== 'embargo') nextStatus = 'tradeable';
-      if (nextStatus !== 'insolvent' && nextRisk <= 0.92) insolventSince = 0;
-      return { company, nextRisk, nextDebt, nextConfidence, embargoed, nextStatus, wantsInsolvent, recovered, riskSince, suspendedSince, insolventSince };
-    });
-    const bySector = new Map();
-    decisions.forEach((decision) => {
-      if (!bySector.has(decision.company.sectorId)) bySector.set(decision.company.sectorId, []);
-      bySector.get(decision.company.sectorId).push(decision);
-    });
-    bySector.forEach((sectorDecisions, sectorId) => {
-      const total = sectorDecisions.length;
-      const newInsolvent = sectorDecisions.filter((decision) => decision.wantsInsolvent && normalizeMarketStatus(decision.company.marketStatus) !== 'insolvent');
-      if (!total || (newInsolvent.length / total) <= 0.15) return;
-      writeMarketIntegrityLog(db, {
-        issueType: 'mass_insolvency_guard',
-        severity: 'warning',
-        before: { sectorId, proposedNewInsolvent: newInsolvent.length, total },
-        after: { action: 'downgraded_to_suspended' },
-        actionTaken: 'mass_insolvency_guard_applied',
-        createdAt: recordedAt
+  try {
+    db.transaction(() => {
+      const decisions = rows.map((company) => {
+        const diagnostics = buildHoldingSolvencyDiagnosticsV2(db, company);
+        const nextRisk = safeNumber(diagnostics.nextRisk, 0, 0, 1);
+        const nextDebt = clamp(safeNumber(company.debtIndex, 0.1, 0, 1) + (nextRisk > 0.62 ? 0.006 : -0.004), 0, 1);
+        const nextConfidence = clamp(safeNumber(company.confidenceIndex, 1, 0, 1) + (nextRisk > 0.65 ? -0.006 : 0.004), 0, 1);
+        const embargoed = Number(company.sectorEmbargoed || company.isEmbargoed || 0) ? 1 : 0;
+        const previousStatus = normalizeMarketStatus(company.marketStatus);
+        let riskSince = safeNumber(company.riskSince, 0, 0, Number.MAX_SAFE_INTEGER);
+        let suspendedSince = safeNumber(company.suspendedSince, 0, 0, Number.MAX_SAFE_INTEGER);
+        let insolventSince = safeNumber(company.insolventSince, 0, 0, Number.MAX_SAFE_INTEGER);
+        if (nextRisk >= 0.8) riskSince = riskSince || now;
+        if (nextRisk < 0.7) {
+          riskSince = 0;
+          suspendedSince = 0;
+        }
+        let nextStatus = previousStatus;
+        let wantsInsolvent = false;
+        let recovered = false;
+        if (embargoed) nextStatus = 'embargo';
+        else if (previousStatus === 'insolvent' || previousStatus === 'takeover') nextStatus = previousStatus;
+        else if (nextRisk > 0.92) {
+          insolventSince = insolventSince || now;
+          suspendedSince = suspendedSince || now;
+          wantsInsolvent = (now - insolventSince) >= (45 * 60 * 1000);
+          nextStatus = wantsInsolvent ? 'insolvent' : 'suspended';
+        } else if (nextRisk > 0.8) {
+          suspendedSince = suspendedSince || now;
+          nextStatus = (now - riskSince) >= (20 * 60 * 1000) ? 'suspended' : previousStatus;
+        } else if (previousStatus === 'suspended' && nextRisk < 0.7) {
+          nextStatus = 'tradeable';
+          recovered = true;
+          suspendedSince = 0;
+        } else if (nextRisk < 0.7 && previousStatus !== 'embargo') nextStatus = 'tradeable';
+        if (nextStatus !== 'insolvent' && nextRisk <= 0.92) insolventSince = 0;
+        return { company, nextRisk, nextDebt, nextConfidence, embargoed, nextStatus, wantsInsolvent, recovered, riskSince, suspendedSince, insolventSince };
       });
-      insertMarketEvent(db, {
-        eventType: 'mass_insolvency_guard',
-        title: 'Automatische Insolvenzwelle ausgesetzt',
-        description: 'Galaktische Boersenaufsicht setzt automatische Insolvenzwelle aus.',
-        impact: -0.01,
-        startedAt: recordedAt
+      const bySector = new Map();
+      decisions.forEach((decision) => {
+        if (!bySector.has(decision.company.sectorId)) bySector.set(decision.company.sectorId, []);
+        bySector.get(decision.company.sectorId).push(decision);
       });
-      newInsolvent.forEach((decision) => {
-        decision.nextStatus = 'suspended';
-        decision.wantsInsolvent = false;
-        decision.suspendedSince = decision.suspendedSince || now;
-        decision.insolventSince = 0;
-      });
-    });
-    decisions.forEach((decision) => {
-      updateRisk.run(round2(decision.nextRisk), round2(decision.nextDebt), round2(decision.nextConfidence), decision.nextStatus, decision.embargoed, decision.riskSince || null, decision.suspendedSince || null, decision.insolventSince || null, recordedAt, decision.company.id);
-      if (decision.nextStatus === 'insolvent' && normalizeMarketStatus(decision.company.marketStatus) !== 'insolvent') {
+      bySector.forEach((sectorDecisions, sectorId) => {
+        const total = sectorDecisions.length;
+        const newInsolvent = sectorDecisions.filter((decision) => decision.wantsInsolvent && normalizeMarketStatus(decision.company.marketStatus) !== 'insolvent');
+        if (!total || (newInsolvent.length / total) <= 0.15) return;
+        writeMarketIntegrityLog(db, {
+          issueType: 'mass_insolvency_guard',
+          severity: 'warning',
+          before: { sectorId, proposedNewInsolvent: newInsolvent.length, total },
+          after: { action: 'downgraded_to_suspended' },
+          actionTaken: 'mass_insolvency_guard_applied',
+          createdAt: recordedAt
+        });
         insertMarketEvent(db, {
-          eventType: 'holding_bankruptcy',
-          title: 'Holding-Insolvenz',
-          description: `${decision.company.name} meldet nach anhaltender Schwaeche im Sektor ${decision.company.sector} Insolvenz an; Handel wird ausgesetzt.`,
-          impact: -0.12,
+          eventType: 'mass_insolvency_guard',
+          title: 'Automatische Insolvenzwelle ausgesetzt',
+          description: 'Galaktische Boersenaufsicht setzt automatische Insolvenzwelle aus.',
+          impact: -0.01,
           startedAt: recordedAt
         });
-      }
-      if (decision.recovered && normalizeMarketStatus(decision.company.marketStatus) === 'suspended') {
-        insertMarketEvent(db, {
-          eventType: 'holding_recovery',
-          title: 'Handel wieder aufgenommen',
-          description: `${decision.company.name}: Handel wieder aufgenommen nach Stabilisierung.`,
-          impact: 0.03,
-          startedAt: recordedAt
+        newInsolvent.forEach((decision) => {
+          decision.nextStatus = 'suspended';
+          decision.wantsInsolvent = false;
+          decision.suspendedSince = decision.suspendedSince || now;
+          decision.insolventSince = 0;
         });
-      }
-    });
-    const takeoverBySector = new Map();
-    db.prepare(`
+      });
+      decisions.forEach((decision) => {
+        updateRisk.run(round2(decision.nextRisk), round2(decision.nextDebt), round2(decision.nextConfidence), decision.nextStatus, decision.embargoed, decision.riskSince || null, decision.suspendedSince || null, decision.insolventSince || null, recordedAt, decision.company.id);
+        if (decision.nextStatus === 'insolvent' && normalizeMarketStatus(decision.company.marketStatus) !== 'insolvent') {
+          insertMarketEvent(db, {
+            eventType: 'holding_bankruptcy',
+            title: 'Holding-Insolvenz',
+            description: `${decision.company.name} meldet nach anhaltender Schwaeche im Sektor ${decision.company.sector} Insolvenz an; Handel wird ausgesetzt.`,
+            impact: -0.12,
+            startedAt: recordedAt
+          });
+        }
+        if (decision.recovered && normalizeMarketStatus(decision.company.marketStatus) === 'suspended') {
+          insertMarketEvent(db, {
+            eventType: 'holding_recovery',
+            title: 'Handel wieder aufgenommen',
+            description: `${decision.company.name}: Handel wieder aufgenommen nach Stabilisierung.`,
+            impact: 0.03,
+            startedAt: recordedAt
+          });
+        }
+      });
+      const takeoverBySector = new Map();
+      db.prepare(`
       SELECT id, name, sector_id AS sectorId, resource_refs_json AS resourceRefsJson,
         current_price AS currentPrice, base_price AS basePrice, bankruptcy_risk AS bankruptcyRisk,
         market_status AS marketStatus, private_asset_value AS privateAssetValue, corporate_cash AS corporateCash
@@ -6797,8 +6798,15 @@ function runHoldingSolvencyTick(db, now = Date.now()) {
         startedAt: recordedAt
       });
     });
-    setRuntimeStateNumber(db, 'last_solvency_tick', now, recordedAt);
-  })();
+      setRuntimeStateNumber(db, 'last_solvency_tick', now, recordedAt);
+    })();
+  } catch (error) {
+    if (error?.code === 'SQLITE_BUSY') {
+      console.warn('runHoldingSolvencyTick skipped because the database is busy.');
+      return { ran: false, reason: 'busy' };
+    }
+    throw error;
+  }
   logTimedPhase('runHoldingSolvencyTick:transaction', transactionStartedAt, { companyCount: rows.length });
   logTimedPhase('runHoldingSolvencyTick:total', totalStartedAt, { companyCount: rows.length });
   return { ran: true, recordedAt };
