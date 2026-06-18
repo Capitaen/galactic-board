@@ -27,6 +27,8 @@ function renderFleetManagementView() {
     });
   const queryValue = fleetManagementSearchQuery || document.getElementById('fleetMgmtSearch')?.value || '';
   const manifestFleet = activeFleetManifestFilterFleetId ? state.fleets.find((fleet) => fleet.id === activeFleetManifestFilterFleetId) : null;
+  const manifestQueryValue = fleetManifestSearchQuery || document.getElementById('fleetManifestSearch')?.value || '';
+  const normalizedManifestQuery = normalizeSearchText(manifestQueryValue);
   const groupedFleetMap = new Map(visibleCategories.map((category) => [category.id, []]));
   visibleFleets.forEach((fleet) => {
     if (fleet.categoryId && groupedFleetMap.has(fleet.categoryId)) groupedFleetMap.get(fleet.categoryId).push(fleet);
@@ -43,6 +45,13 @@ function renderFleetManagementView() {
     if (!visibleFactions.has(ship.faction)) return false;
     if (manifestFleet) return ship.assignedFleetId === manifestFleet.id;
     return true;
+  }).filter((ship) => {
+    if (!normalizedManifestQuery) return true;
+    const classLabel = getShipClassMeta(ship.classId)?.displayName || ship.classId || '';
+    const fleetName = state.fleets.find((fleet) => fleet.id === ship.assignedFleetId)?.name || '';
+    const location = getShipDisplayLocation(ship);
+    const haystack = normalizeSearchText([ship.name, classLabel, ship.commander, fleetName, location, ship.status].join(' '));
+    return haystack.includes(normalizedManifestQuery);
   });
   workspacePanel.innerHTML = `
     <div class="workspace-head">
@@ -119,7 +128,10 @@ function renderFleetManagementView() {
     </div>
     <div class="workspace-section" id="fleetManagementShipsSection">
       <h3>Schiffe${manifestFleet ? ` • Manifest ${manifestFleet.name}` : ''}</h3>
-      ${manifestFleet ? '<div class="toolbar-row"><button class="mini-btn" onclick="clearFleetManifestFilter()">Manifest-Filter schließen</button></div>' : ''}
+      <div class="toolbar-row">
+        <input id="fleetManifestSearch" type="search" placeholder="Manifest durchsuchen..." value="${escapeLoginManagerText(manifestQueryValue)}" oninput="setFleetManifestSearchQuery(this.value)" autocomplete="off">
+        ${manifestFleet ? '<button class="mini-btn" onclick="clearFleetManifestFilter()">Manifest-Filter schließen</button>' : ''}
+      </div>
       <div class="workspace-card">
         <table class="data-table">
           <thead>
@@ -134,7 +146,7 @@ function renderFleetManagementView() {
             </tr>
           </thead>
           <tbody>
-            ${ships.map((ship) => `
+            ${ships.length ? ships.map((ship) => `
               ${(() => {
                 const station = isStationClass(ship.classId);
                 const canAssignStationPlanet = station && isAdminRole();
@@ -169,7 +181,7 @@ function renderFleetManagementView() {
               </tr>
             `;
               })()}
-            `).join('')}
+            `).join('') : '<tr><td colspan="7"><div class="muted-box">Keine Schiffe für diesen Manifest-Filter gefunden.</div></td></tr>'}
           </tbody>
         </table>
       </div>
@@ -217,6 +229,11 @@ function renderFleetManagementView() {
     const target = workspacePanel.querySelector(`[data-focus-key="${activeFleetManagementHighlightKey}"]`);
     if (target) target.classList.add(target.matches('tr') ? 'focus-highlight-row' : 'focus-highlight');
   }
+}
+
+function setFleetManifestSearchQuery(value) {
+  fleetManifestSearchQuery = value || '';
+  renderFleetManagementView();
 }
 
 function createLoginManagerUser(role = '') {

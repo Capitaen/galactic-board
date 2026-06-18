@@ -32,6 +32,9 @@ function renderShipyardView() {
     || (role === 'Republic Navy / GAR' && faction === 'GAR' && canCoordinate4thFleet())
     || (role === 'Eventleiter / KUS' && faction === 'KUS')
   );
+  const canWriteShipyardLog = faction === 'GAR' && canCoordinate4thFleet();
+  const shipyardLogs = getShipyardLogs(faction);
+  const defaultShipyardLogWhen = new Date().toISOString().slice(0, 16);
   const resourceSummary = RESOURCE_KEYS.map((key) => `<div class="stat-card"><strong>${RESOURCE_LABELS[key]}</strong><span>${formatResourceAmount(pool[key])}</span></div>`).join('');
   const buildJobs = state.buildJobs.filter((job) => job.faction === faction && job.jobType !== 'mine' && job.status === 'building');
   const readyShips = state.ships.filter((ship) => ship.faction === faction && ship.status === 'ready');
@@ -109,8 +112,48 @@ function renderShipyardView() {
             <h4>${job.shipName}</h4>
             <p class="project-meta">${getShipClassMeta(job.classId)?.displayName || job.classId} • ${getBuildJobLocationName(job)}</p>
             ${getBuildJobProgressBar(job)}
+            ${canCancelBuildJob(job) ? '<button class="mini-btn danger" onclick="cancelBuildJob(\'' + job.id + '\')">Bau abbrechen (90% Rueckgabe)</button>' : ''}
           </div>
         `).join('') : '<div class="muted-box">Keine aktiven Bauaufträge.</div>'}
+      </div>
+    </div>
+    <div class="workspace-section workspace-columns">
+      <div class="workspace-card">
+        <h3>Schiffbau-Log</h3>
+        ${canWriteShipyardLog ? `
+          <div class="form-row">
+            <label>Wann</label>
+            <input id="shipyardLogWhen" type="datetime-local" value="${defaultShipyardLogWhen}">
+          </div>
+          <div class="form-row">
+            <label>Wo</label>
+            <input id="shipyardLogWhere" value="${escapeHtml(selectedLocationPlanet?.name || '')}" placeholder="z.B. Kuat">
+          </div>
+          <div class="form-row">
+            <label>Wie</label>
+            <input id="shipyardLogHow" placeholder="z.B. Neubau, Umbau, Reparatur">
+          </div>
+          <div class="form-row">
+            <label>Was</label>
+            <input id="shipyardLogWhat" placeholder="Kurzer Eintrag zum Vorgang">
+          </div>
+          <div class="form-row">
+            <label>Notiz</label>
+            <textarea id="shipyardLogDetails" placeholder="Optionaler Zusatz"></textarea>
+          </div>
+          <button class="primary" onclick="saveShipyardLogEntry()">Log speichern</button>
+        ` : `<div class="muted-box">${faction === 'GAR' ? 'Dieses Log kann nur von der 4th Flottenkoordination gepflegt werden.' : 'Fuer diese Fraktion ist aktuell kein manuelles Schiffbau-Log vorgesehen.'}</div>`}
+      </div>
+      <div class="workspace-card">
+        <h3>Letzte Einträge</h3>
+        ${shipyardLogs.length ? shipyardLogs.map((entry) => `
+          <div class="project-card">
+            <h4>${escapeHtml(entry.subject || 'Schiffbau-Eintrag')}</h4>
+            <p class="project-meta">${escapeHtml(entry.location || '—')} • ${escapeHtml(entry.method || '—')}</p>
+            <p>${escapeHtml(entry.details || 'Keine Zusatznotiz.')}</p>
+            <small>${formatMarketDateTime(entry.eventAt || entry.createdAt)}${entry.author ? ` • ${escapeHtml(entry.author)}` : ''}</small>
+          </div>
+        `).join('') : '<div class="muted-box">Noch keine Schiffbau-Logs vorhanden.</div>'}
       </div>
     </div>
     <div class="workspace-section">
@@ -264,6 +307,7 @@ function renderBuildProjectsView() {
                 ${job.jobType === 'mine' ? `<p class="project-meta">Slot ${Number(job.targetSlotIndex) + 1} • ${getMineProjectMeta(job.buildingKey || job.resourceKey)?.label || 'Infrastruktur'}</p>` : ''}
                 ${getBuildJobProgressBar(job)}
                 ${job.status !== 'building' && job.completedAt ? `<p class="project-meta">Abgeschlossen: ${formatMarketDateTime(job.completedAt)}</p>` : ''}
+                ${canCancelBuildJob(job) ? `<button class="mini-btn danger" onclick="cancelBuildJob('${job.id}')">Bau abbrechen (90% Rueckgabe)</button>` : ''}
               </div>
             `).join('')}
           </div>

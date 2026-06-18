@@ -711,6 +711,7 @@ let fleetManagementSearchQuery = '';
 let activeFleetManagementHighlightTimer = 0;
 let activeFleetManagementHighlightKey = '';
 let pendingFleetManifestHighlightShipId = '';
+let fleetManifestSearchQuery = '';
 let fleetManagementSearchResultsState = [];
 let fleetManagementSearchActiveIndex = -1;
 let activeFleetManifestFilterFleetId = '';

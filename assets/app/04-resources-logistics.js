@@ -1142,23 +1142,121 @@ function createReadyShipFromBuild(data = {}) {
   return ship;
 }
 
+function recordBuildProjectActivity(job, title, details = '', createdAt = Date.now()) {
+  state.meta = state.meta || {};
+  state.meta.buildProjectActivity = Array.isArray(state.meta.buildProjectActivity) ? state.meta.buildProjectActivity : [];
+  state.meta.buildProjectActivity.unshift({
+    id: `activity_${Math.random().toString(36).slice(2, 10)}`,
+    createdAt,
+    faction: job.faction || 'GAR',
+    jobType: job.jobType || 'ship',
+    title,
+    details,
+    location: getBuildJobLocationName(job)
+  });
+  state.meta.buildProjectActivity = state.meta.buildProjectActivity.slice(0, 80);
+}
+
+function ensureShipyardLogStore() {
+  state.meta = state.meta || {};
+  state.meta.shipyardLogs = Array.isArray(state.meta.shipyardLogs) ? state.meta.shipyardLogs : [];
+  return state.meta.shipyardLogs;
+}
+
+function createShipyardLogEntry(data = {}) {
+  return {
+    id: data.id || `shipyardlog_${Math.random().toString(36).slice(2, 10)}`,
+    faction: data.faction || 'GAR',
+    eventAt: data.eventAt || new Date().toISOString(),
+    location: String(data.location || '').trim(),
+    method: String(data.method || '').trim(),
+    subject: String(data.subject || '').trim(),
+    details: String(data.details || '').trim(),
+    createdAt: data.createdAt || Date.now(),
+    author: String(data.author || '').trim()
+  };
+}
+
+function getShipyardLogs(faction = 'GAR') {
+  return ensureShipyardLogStore()
+    .filter((entry) => (entry.faction || 'GAR') === faction)
+    .sort((a, b) => Date.parse(b.eventAt || b.createdAt || 0) - Date.parse(a.eventAt || a.createdAt || 0))
+    .slice(0, 40);
+}
+
+function getBuildJobCost(job) {
+  if (!job) return {};
+  if (job.jobType === 'mine') return getMineProjectMeta(job.buildingKey || job.resourceKey)?.cost || {};
+  return getShipClassMeta(job.classId)?.cost || {};
+}
+
+function getBuildJobRefund(job, ratio = 0.9) {
+  const cost = getBuildJobCost(job);
+  return RESOURCE_KEYS.reduce((refund, resourceKey) => {
+    const value = Number(cost?.[resourceKey] || 0);
+    refund[resourceKey] = value > 0 ? Math.round(value * ratio) : 0;
+    return refund;
+  }, {});
+}
+
+function refundShipBuildCostToGar(job, refund) {
+  const planet = planetIndex.get(job.buildLocationPlanetId);
+  const sectorInfo = planet ? getOperationalSectorInfoForPlanet(planet) : null;
+  STORAGE_RESOURCE_KEYS.forEach((resourceKey) => {
+    const amount = Number(refund?.[resourceKey] || 0);
+    if (amount <= 0) return;
+    const stored = sectorInfo ? addStockToSectorWarehouses(sectorInfo.id, resourceKey, amount) : 0;
+    const remaining = amount - stored;
+    if (remaining > 0) getFactionResourcePool('GAR')[resourceKey] = Number(getFactionResourcePool('GAR')[resourceKey] || 0) + remaining;
+  });
+  if (Number(refund?.credits || 0) > 0) getFactionResourcePool('GAR').credits = Number(getFactionResourcePool('GAR').credits || 0) + Number(refund.credits || 0);
+}
+
+function canCancelBuildJob(job) {
+  if (!job || job.status !== 'building') return false;
+  const role = currentRole();
+  if (role === 'Admin') return true;
+  if (role === 'Senat') return (job.faction || 'GAR') === 'GAR' && job.jobType === 'mine';
+  if (role === 'Eventleiter / KUS') return (job.faction || 'GAR') === 'KUS';
+  if (role === 'Republic Navy / GAR') return (job.faction || 'GAR') === 'GAR' && job.jobType !== 'mine' && canCoordinate4thFleet();
+  return false;
+}
+
+function cancelBuildJob(jobId) {
+  const job = state.buildJobs.find((entry) => entry.id === jobId);
+  if (!job || job.status !== 'building') return;
+  if (!canCancelBuildJob(job)) {
+    setStatus('Dieser Bauauftrag darf mit deiner aktuellen Rolle nicht abgebrochen werden.');
+    return;
+  }
+  const refund = getBuildJobRefund(job, 0.9);
+  if ((job.faction || 'GAR') === 'GAR') {
+    if (job.jobType === 'mine') addFactionResources('GAR', refund);
+    else refundShipBuildCostToGar(job, refund);
+  } else if ((job.faction || 'GAR') === 'KUS') {
+    addFactionResources('KUS', refund);
+  }
+  job.status = 'cancelled';
+  job.completedAt = Date.now();
+  const refundLabel = RESOURCE_KEYS
+    .filter((resourceKey) => Number(refund[resourceKey] || 0) > 0)
+    .map((resourceKey) => `${RESOURCE_LABELS[resourceKey]} ${formatResourceAmount(refund[resourceKey])}`)
+    .join(' • ');
+  recordBuildProjectActivity(
+    job,
+    'Bau abgebrochen',
+    `${getBuildJobDisplayName(job)} wurde abgebrochen. Rückerstattung: ${refundLabel || 'Keine Ressourcen'}.`
+  );
+  saveLocal();
+  playAudioCue(datapadDeleteAudio);
+  if (activeMainTab === 'shipyard') renderShipyardView();
+  if (activeMainTab === 'buildProjects') renderBuildProjectsView();
+  setStatus(`${getBuildJobDisplayName(job)} abgebrochen. 90% der Ressourcen wurden zurückerstattet.`);
+}
+
 function processBuildJobs(now = Date.now()) {
   let changed = false;
   const retentionMs = 48 * 60 * 60 * 1000;
-  state.meta = state.meta || {};
-  state.meta.buildProjectActivity = Array.isArray(state.meta.buildProjectActivity) ? state.meta.buildProjectActivity : [];
-  const logBuildActivity = (job, title, details = '') => {
-    state.meta.buildProjectActivity.unshift({
-      id: `activity_${Math.random().toString(36).slice(2, 10)}`,
-      createdAt: now,
-      faction: job.faction || 'GAR',
-      jobType: job.jobType || 'ship',
-      title,
-      details,
-      location: getBuildJobLocationName(job)
-    });
-    state.meta.buildProjectActivity = state.meta.buildProjectActivity.slice(0, 80);
-  };
   state.buildJobs.forEach((job) => {
     if (job.status !== 'building' || now < job.finishesAt) return;
     if (job.jobType === 'transport') {
@@ -1171,7 +1269,7 @@ function processBuildJobs(now = Date.now()) {
       }
       job.status = 'completed';
       job.completedAt = now;
-      logBuildActivity(job, 'Transport abgeschlossen', `${RESOURCE_LABELS[job.resourceKey] || job.resourceKey}: ${formatResourceAmount(job.amount)} nach ${getSectorDisplayName(job.targetSectorId)}`);
+      recordBuildProjectActivity(job, 'Transport abgeschlossen', `${RESOURCE_LABELS[job.resourceKey] || job.resourceKey}: ${formatResourceAmount(job.amount)} nach ${getSectorDisplayName(job.targetSectorId)}`, now);
       changed = true;
       return;
     }
@@ -1194,7 +1292,7 @@ function processBuildJobs(now = Date.now()) {
       syncWarehouseStoreForPlanet(job.buildLocationPlanetId);
       job.status = 'completed';
       job.completedAt = now;
-      logBuildActivity(job, 'Bauprojekt abgeschlossen', `${getMineProjectMeta(buildingKey)?.label || buildingKey} auf ${getBuildJobLocationName(job)}`);
+      recordBuildProjectActivity(job, 'Bauprojekt abgeschlossen', `${getMineProjectMeta(buildingKey)?.label || buildingKey} auf ${getBuildJobLocationName(job)}`, now);
       changed = true;
       return;
     }
@@ -1216,7 +1314,7 @@ function processBuildJobs(now = Date.now()) {
     job.producedShipId = ship.id;
     job.status = 'ready';
     job.completedAt = now;
-    logBuildActivity(job, 'Schiff fertiggestellt', `${job.shipName || meta.displayName} in ${getBuildJobLocationName(job)}`);
+    recordBuildProjectActivity(job, 'Schiff fertiggestellt', `${job.shipName || meta.displayName} in ${getBuildJobLocationName(job)}`, now);
     changed = true;
   });
   const beforeLength = state.buildJobs.length;
@@ -1378,6 +1476,36 @@ function startMineBuildProject() {
   renderBuildProjectsView();
   if (activeMainTab === 'shipyard') renderShipyardView();
   setStatus(`Infrastrukturprojekt gestartet: ${project.label} auf ${planet.name} (Slot ${slotIndex + 1})`);
+}
+
+function saveShipyardLogEntry() {
+  const faction = getActiveShipyardFaction();
+  if (faction !== 'GAR' || !canCoordinate4thFleet()) {
+    setStatus('Schiffbau-Logs fuer GAR duerfen nur von der 4th Flottenkoordination gepflegt werden.');
+    return;
+  }
+  const eventAtRaw = document.getElementById('shipyardLogWhen')?.value || '';
+  const location = document.getElementById('shipyardLogWhere')?.value.trim() || '';
+  const method = document.getElementById('shipyardLogHow')?.value.trim() || '';
+  const subject = document.getElementById('shipyardLogWhat')?.value.trim() || '';
+  const details = document.getElementById('shipyardLogDetails')?.value.trim() || '';
+  if (!eventAtRaw || !location || !method || !subject) {
+    setStatus('Bitte im Schiffbau-Log mindestens Wann, Wo, Wie und Was ausfuellen.');
+    return;
+  }
+  ensureShipyardLogStore().unshift(createShipyardLogEntry({
+    faction,
+    eventAt: new Date(eventAtRaw).toISOString(),
+    location,
+    method,
+    subject,
+    details,
+    author: currentAuthenticatedUsername || currentAssignedRole()
+  }));
+  ensureShipyardLogStore().splice(40);
+  saveLocal();
+  renderShipyardView();
+  setStatus('Schiffbau-Log gespeichert.');
 }
 
 function startWarehouseBuildProject() {

@@ -1396,6 +1396,7 @@ function openFleetManifestInManagement(fleetId) {
 
 function clearFleetManifestFilter() {
   activeFleetManifestFilterFleetId = '';
+  fleetManifestSearchQuery = '';
   renderFleetManagementView();
 }
 
