@@ -4087,9 +4087,34 @@ function areNeighborSectors(state, leftSectorId, rightSectorId) {
     || (neighbors.get(rightSectorId) || []).includes(leftSectorId);
 }
 
+function getSectorTradeDistanceHops(state, leftSectorId, rightSectorId) {
+  if (!state || !leftSectorId || !rightSectorId) return 5;
+  if (leftSectorId === rightSectorId) return 0;
+  const { sectors } = getSectorMaps(state);
+  const neighbors = buildNeighborMap(sectors, 5);
+  const queue = [{ id: leftSectorId, hops: 0 }];
+  const visited = new Set([leftSectorId]);
+  while (queue.length) {
+    const current = queue.shift();
+    const nextHops = current.hops + 1;
+    for (const neighborId of (neighbors.get(current.id) || [])) {
+      if (neighborId === rightSectorId) return nextHops;
+      if (visited.has(neighborId)) continue;
+      visited.add(neighborId);
+      queue.push({ id: neighborId, hops: nextHops });
+    }
+  }
+  return 5;
+}
+
 function getCorporateTradeDistanceModifier(state, sellerSectorId, buyerSectorId) {
   if (!sellerSectorId || !buyerSectorId || sellerSectorId === buyerSectorId) return 1;
-  return areNeighborSectors(state, sellerSectorId, buyerSectorId) ? 1.04 : 1.1;
+  const hops = getSectorTradeDistanceHops(state, sellerSectorId, buyerSectorId);
+  if (hops <= 1) return 1.06;
+  if (hops === 2) return 1.14;
+  if (hops === 3) return 1.24;
+  if (hops === 4) return 1.36;
+  return 1.52;
 }
 
 function getCorporateTradeUnitPrice(db, state, seller, buyer, resourceType, quantity, options = {}) {
@@ -4386,6 +4411,7 @@ export function sellCorporateInventoryToCivilianMarket(db, state, now = Date.now
     if (String(sectorState.controlStatus || '').trim() === 'OPFOR') return;
     const resources = sanitizeResourceBag(company.corporateResourcesJson);
     RESOURCE_KEYS.forEach((resourceType) => {
+      if (resourceType !== String(company.resourceKey || '').trim()) return;
       const inventory = safeNumber(resources[resourceType], 0, 0, 1e9);
       if (!(inventory > 0)) return;
       const demandKey = `${company.sectorId}::${resourceType}`;

@@ -30,6 +30,12 @@ function formatMarketDateTime(value) {
   });
 }
 
+function scrollEconomyEventsToTop() {
+  document.getElementById('economyEventsFeed')?.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+window.scrollEconomyEventsToTop = scrollEconomyEventsToTop;
+
 const MARKET_RANGE_OPTIONS = {
   today: { label: 'Heute', ms: 24 * 60 * 60 * 1000 },
   week: { label: '1 Woche', ms: 7 * 24 * 60 * 60 * 1000 },
@@ -1404,8 +1410,16 @@ function renderEconomyView() {
         </table>
       </div>
       <div class="workspace-card">
-        <h3>Letzte galaktische Ereignisse</h3>
-        ${(economyViewState.events || []).map((event) => `<div class="project-card"><h4>${escapeLoginManagerText(event.title)}</h4><p>${escapeLoginManagerText(event.description)}</p><small>${new Date(event.startedAt).toLocaleString('de-DE')}</small></div>`).join('') || '<div class="muted-box">Noch keine Wirtschaftsereignisse.</div>'}
+        <div class="workspace-head compact">
+          <div>
+            <h3>Letzte galaktische Ereignisse</h3>
+            <p>Neueste Meldungen aus Handel, Produktion und Börse.</p>
+          </div>
+          <button class="mini-btn" type="button" onclick="scrollEconomyEventsToTop()">Neueste Ereignisse</button>
+        </div>
+        <div class="events-feed" id="economyEventsFeed">
+          ${(economyViewState.events || []).map((event) => `<div class="project-card"><h4>${escapeLoginManagerText(event.title)}</h4><p>${escapeLoginManagerText(event.description)}</p><small>${new Date(event.startedAt).toLocaleString('de-DE')}</small></div>`).join('') || '<div class="muted-box">Noch keine Wirtschaftsereignisse.</div>'}
+        </div>
       </div>
     </div>
     <div class="workspace-section workspace-columns">
