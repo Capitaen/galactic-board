@@ -1458,7 +1458,7 @@ function startFleetManagementFleetDrag(fleetId, event) {
     event?.preventDefault?.();
     return;
   }
-  if (!event?.target?.closest?.('.card-drag-handle')) {
+  if (event?.target?.closest?.('input, select, textarea, button, option, label')) {
     event?.preventDefault?.();
     return;
   }
@@ -1482,7 +1482,7 @@ function startFleetCategoryDrag(categoryId, event) {
     event?.preventDefault?.();
     return;
   }
-  if (!event?.target?.closest?.('.card-drag-handle')) {
+  if (event?.target?.closest?.('input, select, textarea, button, option, label')) {
     event?.preventDefault?.();
     return;
   }
@@ -1623,12 +1623,12 @@ function renderFleetManagementFleetCard(fleet, bucketKey = getFleetOrderBucketKe
   const reorderAttrs = editable
     ? `ondragover="allowFleetCardReorder(event)" ondragleave="clearFleetCardReorder(event)" ondrop="handleFleetCardReorderDrop('${fleet.id}', '${bucketKey}', event)"`
     : '';
-  const handleDragAttrs = editable
+  const cardDragAttrs = editable
     ? `draggable="true" ondragstart="startFleetManagementFleetDrag('${fleet.id}', event)" ondragend="endFleetManagementFleetDrag(event)"`
     : 'draggable="false"';
   return `
-    <div class="fleet-card" data-focus-key="fleet:${fleet.id}" ${reorderAttrs}>
-      ${editable ? `<div class="card-drag-handle" title="Verband ziehen" ${handleDragAttrs}>::</div>` : ''}
+    <div class="fleet-card" data-focus-key="fleet:${fleet.id}" ${reorderAttrs} ${cardDragAttrs}>
+      ${editable ? '<div class="card-drag-handle" title="Verband ziehen">::</div>' : ''}
       <h4>${fleet.name}</h4>
       <p><span class="badge ${fleet.faction}">${fleet.faction}</span></p>
       <div class="split-inline">

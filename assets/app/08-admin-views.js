@@ -233,7 +233,18 @@ function renderFleetManagementView() {
 
 function setFleetManifestSearchQuery(value) {
   fleetManifestSearchQuery = value || '';
+  const input = document.getElementById('fleetManifestSearch');
+  const selectionStart = input?.selectionStart ?? null;
+  const selectionEnd = input?.selectionEnd ?? null;
   renderFleetManagementView();
+  requestAnimationFrame(() => {
+    const nextInput = document.getElementById('fleetManifestSearch');
+    if (!nextInput) return;
+    nextInput.focus({ preventScroll: true });
+    const start = Number.isInteger(selectionStart) ? selectionStart : nextInput.value.length;
+    const end = Number.isInteger(selectionEnd) ? selectionEnd : start;
+    if (typeof nextInput.setSelectionRange === 'function') nextInput.setSelectionRange(start, end);
+  });
 }
 
 function createLoginManagerUser(role = '') {

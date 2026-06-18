@@ -37,6 +37,13 @@ function renderShipyardView() {
   const defaultShipyardLogWhen = new Date().toISOString().slice(0, 16);
   const resourceSummary = RESOURCE_KEYS.map((key) => `<div class="stat-card"><strong>${RESOURCE_LABELS[key]}</strong><span>${formatResourceAmount(pool[key])}</span></div>`).join('');
   const buildJobs = state.buildJobs.filter((job) => job.faction === faction && job.jobType !== 'mine' && job.status === 'building');
+  const visibleBuildJobs = state.buildJobs
+    .filter((job) => job.faction === faction && job.jobType !== 'mine')
+    .sort((a, b) => Number(a.finishesAt || 0) - Number(b.finishesAt || 0))
+    .filter((job) => job.status === 'building' || (job.completedAt && (Date.now() - Number(job.completedAt || 0)) < (48 * 60 * 60 * 1000)));
+  const shipyardActivity = (Array.isArray(state.meta?.buildProjectActivity) ? state.meta.buildProjectActivity : [])
+    .filter((entry) => (entry.faction || 'GAR') === faction && entry.jobType !== 'mine')
+    .slice(0, 18);
   const readyShips = state.ships.filter((ship) => ship.faction === faction && ship.status === 'ready');
   workspacePanel.innerHTML = `
     <div class="workspace-head">
@@ -119,7 +126,7 @@ function renderShipyardView() {
     </div>
     <div class="workspace-section workspace-columns">
       <div class="workspace-card">
-        <h3>Schiffbau-Log</h3>
+        <h3>Manuelles Schiffbau-Log</h3>
         ${canWriteShipyardLog ? `
           <div class="form-row">
             <label>Wann</label>
@@ -154,6 +161,35 @@ function renderShipyardView() {
             <small>${formatMarketDateTime(entry.eventAt || entry.createdAt)}${entry.author ? ` • ${escapeHtml(entry.author)}` : ''}</small>
           </div>
         `).join('') : '<div class="muted-box">Noch keine Schiffbau-Logs vorhanden.</div>'}
+      </div>
+    </div>
+    <div class="workspace-section workspace-columns">
+      <div class="workspace-card">
+        <h3>Projektübersicht</h3>
+        ${visibleBuildJobs.length ? `
+          <div class="project-grid">
+            ${visibleBuildJobs.map((job) => `
+              <div class="project-card">
+                <h4>${getBuildJobDisplayName(job)}</h4>
+                <p class="project-meta">${getBuildJobTypeLabel(job)} • ${getBuildJobLocationName(job)} • ${job.faction || 'GAR'}</p>
+                ${getBuildJobProgressBar(job)}
+                ${job.status !== 'building' && job.completedAt ? `<p class="project-meta">Abgeschlossen: ${formatMarketDateTime(job.completedAt)}</p>` : ''}
+                ${canCancelBuildJob(job) ? `<button class="mini-btn danger" onclick="cancelBuildJob('${job.id}')">Bau abbrechen (90% Rueckgabe)</button>` : ''}
+              </div>
+            `).join('')}
+          </div>
+        ` : '<div class="muted-box">Keine Schiffbauprojekte vorhanden.</div>'}
+      </div>
+      <div class="workspace-card">
+        <h3>Aktivitätsliste</h3>
+        ${shipyardActivity.length ? shipyardActivity.map((entry) => `
+          <div class="project-card">
+            <h4>${escapeHtml(entry.title || 'Aktivität')}</h4>
+            <p class="project-meta">${escapeHtml(entry.location || '—')} • ${escapeHtml(entry.faction || faction)}</p>
+            <p>${escapeHtml(entry.details || 'Keine Zusatzdetails.')}</p>
+            <small>${formatMarketDateTime(entry.createdAt)}</small>
+          </div>
+        `).join('') : '<div class="muted-box">Noch keine abgeschlossenen Aktivitäten geloggt.</div>'}
       </div>
     </div>
     <div class="workspace-section">

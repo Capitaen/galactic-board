@@ -500,6 +500,16 @@ function renderAdminControlModal() {
   adminControlModalContent.querySelector('#adminControlPlanetSearch')?.addEventListener('input', (event) => {
     adminControlPlanetSearchQuery = event.target.value || '';
     renderAdminControlModal();
+    const selectionStart = event.target.selectionStart ?? null;
+    const selectionEnd = event.target.selectionEnd ?? null;
+    requestAnimationFrame(() => {
+      const input = document.getElementById('adminControlPlanetSearch');
+      if (!input) return;
+      input.focus({ preventScroll: true });
+      const start = Number.isInteger(selectionStart) ? selectionStart : input.value.length;
+      const end = Number.isInteger(selectionEnd) ? selectionEnd : start;
+      if (typeof input.setSelectionRange === 'function') input.setSelectionRange(start, end);
+    });
   });
   adminControlModalContent.querySelector('#adminControlPlanetSelect')?.addEventListener('change', (event) => {
     selectedAdminControlPlanetId = event.target.value || '';
