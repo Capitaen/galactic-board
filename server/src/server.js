@@ -95,6 +95,13 @@ const CIVILIAN_CREDIT_YIELDS = {
   civilian_baradium: { resource: 'baradium', credits: 240 },
   civilian_kavamSalz: { resource: 'kavamSalz', credits: 180 }
 };
+const RESOURCE_BASE_PRICES = {
+  quadraniumErz: 420,
+  agrinium: 560,
+  tibannaGas: 480,
+  baradium: 450,
+  kavamSalz: 360
+};
 const CIVILIAN_INFRASTRUCTURE_BONUSES = {
   civil_trade_center: { quadraniumErz: 0.03, agrinium: 0.03, tibannaGas: 0.03, baradium: 0.03, kavamSalz: 0.03 },
   civil_industrial_complex: { quadraniumErz: 0.06, baradium: 0.04 },
@@ -653,11 +660,21 @@ function applyStateInfrastructureHoldingEffects(state, ticks = 1, now = Date.now
   if (!effectiveTicks) return;
   const companyRows = db.prepare(`
     SELECT id, sector, resource_key AS resourceKey, corporate_cash AS corporateCash,
+      current_price AS currentPrice, base_price AS basePrice,
       state_contract_output_json AS stateContractOutputJson
     FROM market_companies
     WHERE id LIKE 'sector_holding_%' AND acquired_by_company_id IS NULL
   `).all();
   const companyMap = new Map(companyRows.map((company) => [`${String(company.sector || '').trim()}::${company.resourceKey}`, company]));
+  const sectorStateMap = new Map(db.prepare(`
+    SELECT sector_name AS sectorName, is_embargoed AS isEmbargoed, control_status AS controlStatus
+    FROM sector_economy_state
+  `).all().map((row) => [String(row.sectorName || '').trim(), row]));
+  const demandMap = new Map(db.prepare(`
+    SELECT sector_name AS sectorName, resource_type AS resourceType,
+      market_multiplier AS marketMultiplier, import_dependency AS importDependency
+    FROM sector_resource_demand
+  `).all().map((row) => [`${String(row.sectorName || '').trim()}::${String(row.resourceType || '').trim()}`, row]));
   const aggregates = new Map();
   for (const planet of Array.isArray(state?.planets) ? state.planets : []) {
     if (planet?.owner !== 'GAR') continue;
@@ -686,13 +703,37 @@ function applyStateInfrastructureHoldingEffects(state, ticks = 1, now = Date.now
       const entry = aggregates.get(company.id);
       const boostedAmount = 1 * (1 + Math.min(MAX_CIVILIAN_PRODUCTION_BONUS, bonuses[resourceKey] || 0));
       if (CIVILIAN_CREDIT_YIELDS[slot]) {
-        const civilianRevenue = calculateCivilianMineYield(db, sectorName, resourceKey, boostedAmount, state, { additionalMultiplier: 1 });
+        const sectorState = sectorStateMap.get(sectorName) || {};
+        if (Number(sectorState.isEmbargoed || 0) || String(sectorState.controlStatus || '').trim() === 'OPFOR') continue;
+        const demandRow = demandMap.get(`${sectorName}::${resourceKey}`) || {};
+        const basePrice = Number(RESOURCE_BASE_PRICES[resourceKey] || 250);
+        const currentPrice = Number(company.currentPrice || company.basePrice || basePrice);
+        const companyBasePrice = Number(company.basePrice || basePrice);
+        const marketConditionMultiplier = companyBasePrice
+          ? Math.max(0.85, Math.min(1.25, currentPrice / companyBasePrice))
+          : 1;
+        const sectorDemandMultiplier = Math.max(
+          0.7,
+          Math.min(
+            1.45,
+            0.82
+              + Number(demandRow.marketMultiplier || 1) * 0.22
+              + Number(demandRow.importDependency || 0) * 0.05
+          )
+        );
+        const civilianRevenue = Math.round(
+          boostedAmount
+            * basePrice
+            * sectorDemandMultiplier
+            * marketConditionMultiplier
+            * 100
+        ) / 100;
         entry.revenuePerHour += civilianRevenue * STATE_CIVILIAN_HOLDING_REVENUE_SHARE;
         entry.stateContractScore += STATE_SLOT_STOCK_IMPACT_FACTOR;
         entry.output.credits += civilianRevenue;
       } else if (INFRASTRUCTURE_PRODUCTION_RESOURCES[slot]) {
         const quantity = boostedAmount;
-        const basePrice = Number({ quadraniumErz: 420, agrinium: 560, tibannaGas: 480, baradium: 450, kavamSalz: 360 }[resourceKey] || 250);
+        const basePrice = Number(RESOURCE_BASE_PRICES[resourceKey] || 250);
         entry.revenuePerHour += quantity * basePrice * STATE_MILITARY_HOLDING_REVENUE_SHARE;
         entry.stateContractScore += STATE_SLOT_STOCK_IMPACT_FACTOR * 0.9;
         entry.output[resourceKey] += quantity;
