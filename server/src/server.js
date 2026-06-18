@@ -78,6 +78,9 @@ const discordRadioListener = createDiscordRadioListener({
 const sessions = new Map();
 const COOKIE_NAME = 'gcb_session';
 const PORT = Number(process.env.PORT || 443);
+const SERVER_RELOAD_STATE_PATH = path.join(process.env.TEMP || process.env.TMP || projectRoot, 'galactic-server-reload-state.json');
+const SERVER_RELOAD_LOG_PATH = path.join(process.env.TEMP || process.env.TMP || projectRoot, 'galactic-server-reload.log');
+const SERVER_RELOAD_SCRIPT_PATH = path.join(process.env.TEMP || process.env.TMP || projectRoot, 'galactic-server-reload.ps1');
 const RAW_RESOURCE_KEYS = ['quadraniumErz', 'agrinium', 'tibannaGas', 'baradium', 'kavamSalz'];
 const RESOURCE_KEYS = [...RAW_RESOURCE_KEYS, 'credits'];
 let holdingInfrastructureWarmupStarted = false;
@@ -938,6 +941,13 @@ function requireLoginManager(req, res, next) {
   next();
 }
 
+function requireGlobalAdmin(req, res, next) {
+  if (!req.user || req.user.role !== 'Admin') {
+    return res.status(403).json({ error: 'Nur globale Admins dürfen den Server-Reload auslösen.' });
+  }
+  next();
+}
+
 function requireRadioPermissionManager(req, res, next) {
   if (!req.user || !canManageRadioPermissions(req.user.role)) {
     return res.status(403).json({ error: 'Forbidden' });
@@ -969,6 +979,144 @@ function requireSectorEmbargoManager(req, res, next) {
     return res.status(403).json({ error: 'Nur globale Admins dürfen Sektor-Embargos setzen.' });
   }
   next();
+}
+
+function readServerReloadState() {
+  try {
+    if (!fs.existsSync(SERVER_RELOAD_STATE_PATH)) {
+      return {
+        status: 'idle',
+        requestedBy: '',
+        startedAt: '',
+        finishedAt: '',
+        updatedAt: '',
+        message: 'Kein Reload ausgeführt.'
+      };
+    }
+    const raw = fs.readFileSync(SERVER_RELOAD_STATE_PATH, 'utf8');
+    const parsed = JSON.parse(raw);
+    return {
+      status: String(parsed?.status || 'idle'),
+      requestedBy: String(parsed?.requestedBy || ''),
+      startedAt: String(parsed?.startedAt || ''),
+      finishedAt: String(parsed?.finishedAt || ''),
+      updatedAt: String(parsed?.updatedAt || ''),
+      message: String(parsed?.message || '')
+    };
+  } catch {
+    return {
+      status: 'error',
+      requestedBy: '',
+      startedAt: '',
+      finishedAt: '',
+      updatedAt: '',
+      message: 'Reload-Status konnte nicht gelesen werden.'
+    };
+  }
+}
+
+function writeServerReloadState(nextState = {}) {
+  const base = readServerReloadState();
+  const merged = {
+    ...base,
+    ...nextState,
+    updatedAt: new Date().toISOString()
+  };
+  fs.writeFileSync(SERVER_RELOAD_STATE_PATH, JSON.stringify(merged, null, 2), 'utf8');
+  return merged;
+}
+
+function readServerReloadLogTail(maxLines = 80) {
+  try {
+    if (!fs.existsSync(SERVER_RELOAD_LOG_PATH)) return '';
+    const lines = fs.readFileSync(SERVER_RELOAD_LOG_PATH, 'utf8').split(/\r?\n/);
+    return lines.slice(-maxLines).join('\n').trim();
+  } catch {
+    return '';
+  }
+}
+
+function getServerReloadStatusPayload() {
+  return {
+    ...readServerReloadState(),
+    logTail: readServerReloadLogTail(),
+    commands: [
+      'cd C:\\Users\\Administrator\\galactic-board',
+      'git pull',
+      'pm2 restart galactic',
+      'pm2 save'
+    ]
+  };
+}
+
+function toPowerShellString(value) {
+  return `'${String(value || '').replace(/'/g, "''")}'`;
+}
+
+async function queueServerReloadJob(requestedBy) {
+  const { spawn } = await import('node:child_process');
+  const queuedState = writeServerReloadState({
+    status: 'queued',
+    requestedBy: String(requestedBy || ''),
+    startedAt: '',
+    finishedAt: '',
+    message: 'Reload wurde in die Hintergrund-Queue gelegt.'
+  });
+  const script = `
+$ErrorActionPreference = 'Stop'
+$statusPath = ${toPowerShellString(SERVER_RELOAD_STATE_PATH)}
+$logPath = ${toPowerShellString(SERVER_RELOAD_LOG_PATH)}
+$workDir = ${toPowerShellString(projectRoot)}
+$requestedBy = ${toPowerShellString(String(requestedBy || ''))}
+function Write-State([string]$status, [string]$message, [string]$startedAt, [string]$finishedAt) {
+  $payload = @{
+    status = $status
+    requestedBy = $requestedBy
+    startedAt = $startedAt
+    finishedAt = $finishedAt
+    updatedAt = (Get-Date).ToString('o')
+    message = $message
+  } | ConvertTo-Json -Depth 4
+  Set-Content -Path $statusPath -Value $payload -Encoding UTF8
+}
+function Append-Log([string]$text) {
+  Add-Content -Path $logPath -Value $text -Encoding UTF8
+}
+Start-Sleep -Milliseconds 750
+$startedAt = (Get-Date).ToString('o')
+Set-Content -Path $logPath -Value '' -Encoding UTF8
+Write-State 'running' 'Server-Reload läuft.' $startedAt ''
+try {
+  Set-Location $workDir
+  Append-Log '>>> git pull'
+  & git pull 2>&1 | ForEach-Object { Append-Log ([string]$_) }
+  Append-Log '>>> pm2 restart galactic'
+  & pm2 restart galactic 2>&1 | ForEach-Object { Append-Log ([string]$_) }
+  Append-Log '>>> pm2 save'
+  & pm2 save 2>&1 | ForEach-Object { Append-Log ([string]$_) }
+  $finishedAt = (Get-Date).ToString('o')
+  Write-State 'success' 'Server-Reload abgeschlossen.' $startedAt $finishedAt
+} catch {
+  Append-Log ('ERROR: ' + $_.Exception.Message)
+  $finishedAt = (Get-Date).ToString('o')
+  Write-State 'error' ($_.Exception.Message) $startedAt $finishedAt
+}
+`.trim();
+  fs.writeFileSync(SERVER_RELOAD_SCRIPT_PATH, script, 'utf8');
+  const child = spawn('powershell.exe', [
+    '-NoProfile',
+    '-ExecutionPolicy',
+    'Bypass',
+    '-File',
+    SERVER_RELOAD_SCRIPT_PATH
+  ], {
+    cwd: projectRoot,
+    detached: true,
+    stdio: 'ignore',
+    windowsHide: true
+  });
+  child.unref();
+  return queuedState;
 }
 
 function hasPersonalMarketPortfolio(user) {
@@ -1810,6 +1958,44 @@ app.delete('/api/admin/users/:id', requireAuth, requireLoginManager, (req, res) 
 
   deleteUser(db, userId);
   res.json({ ok: true, users: listUsersForActor(req.user) });
+});
+
+app.get('/api/admin/server-reload-status', requireAuth, requireGlobalAdmin, (req, res) => {
+  res.json({ ok: true, ...getServerReloadStatusPayload() });
+});
+
+app.post('/api/admin/server-reload', requireAuth, requireGlobalAdmin, async (req, res) => {
+  try {
+    const currentState = readServerReloadState();
+    if (currentState.status === 'queued' || currentState.status === 'running') {
+      return res.status(409).json({
+        ok: false,
+        error: 'Ein Server-Reload läuft bereits.',
+        ...getServerReloadStatusPayload()
+      });
+    }
+    const actorName = String(req.user?.username || req.user?.id || 'admin').trim() || 'admin';
+    await queueServerReloadJob(actorName);
+    writeAuditLog(db, {
+      actorUserId: req.user?.id || '',
+      actorUsername: actorName,
+      action: 'admin.server_reload',
+      entityType: 'server',
+      entityId: 'galactic',
+      summary: `${actorName} hat einen Server-Reload angestoßen.`
+    });
+    res.json({
+      ok: true,
+      message: 'Server-Reload wurde gestartet.',
+      ...getServerReloadStatusPayload()
+    });
+  } catch (error) {
+    res.status(500).json({
+      ok: false,
+      error: error?.message || 'Server-Reload konnte nicht gestartet werden.',
+      ...getServerReloadStatusPayload()
+    });
+  }
 });
 
 app.get('/api/admin/radio-command-center', requireAuth, requireRadioPermissionManager, (req, res) => {

@@ -252,6 +252,126 @@ function createLoginManagerUser(role = '') {
   renderLoginManagerView();
 }
 
+let serverReloadAdminState = {
+  status: 'idle',
+  requestedBy: '',
+  startedAt: '',
+  finishedAt: '',
+  updatedAt: '',
+  message: '',
+  logTail: '',
+  commands: [],
+  loading: false
+};
+let serverReloadPollTimer = 0;
+
+function canManageServerReload() {
+  return LOGIN_ROLE_DEFINITIONS[currentAssignedRole()]?.level === 'global';
+}
+
+function clearServerReloadPollTimer() {
+  if (serverReloadPollTimer) {
+    window.clearTimeout(serverReloadPollTimer);
+    serverReloadPollTimer = 0;
+  }
+}
+
+function scheduleServerReloadPoll() {
+  clearServerReloadPollTimer();
+  if (!canManageServerReload()) return;
+  if (!['queued', 'running'].includes(serverReloadAdminState.status)) return;
+  serverReloadPollTimer = window.setTimeout(() => {
+    fetchServerReloadStatus({ silent: true });
+  }, 2500);
+}
+
+async function fetchServerReloadStatus(options = {}) {
+  if (!canManageServerReload()) return;
+  const { silent = false } = options;
+  if (!silent) {
+    serverReloadAdminState = {
+      ...serverReloadAdminState,
+      loading: true
+    };
+    if (activeMainTab === 'loginManager') renderLoginManagerView();
+  }
+  try {
+    const response = await fetch('/api/admin/server-reload-status', {
+      credentials: 'include'
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || 'Server-Reload-Status konnte nicht geladen werden.');
+    serverReloadAdminState = {
+      status: payload.status || 'idle',
+      requestedBy: payload.requestedBy || '',
+      startedAt: payload.startedAt || '',
+      finishedAt: payload.finishedAt || '',
+      updatedAt: payload.updatedAt || '',
+      message: payload.message || '',
+      logTail: payload.logTail || '',
+      commands: Array.isArray(payload.commands) ? payload.commands : [],
+      loading: false
+    };
+    scheduleServerReloadPoll();
+    if (activeMainTab === 'loginManager') renderLoginManagerView();
+  } catch (error) {
+    serverReloadAdminState = {
+      ...serverReloadAdminState,
+      loading: false,
+      status: 'error',
+      message: error.message || 'Server-Reload-Status konnte nicht geladen werden.'
+    };
+    clearServerReloadPollTimer();
+    if (activeMainTab === 'loginManager') renderLoginManagerView();
+    if (!silent) setStatus(`Server-Reload-Status fehlgeschlagen: ${error.message}`);
+  }
+}
+
+async function triggerServerReload() {
+  if (!canManageServerReload()) return;
+  if (serverReloadAdminState.status === 'queued' || serverReloadAdminState.status === 'running') {
+    setStatus('Es läuft bereits ein Server-Reload.');
+    return;
+  }
+  serverReloadAdminState = {
+    ...serverReloadAdminState,
+    loading: true
+  };
+  if (activeMainTab === 'loginManager') renderLoginManagerView();
+  try {
+    const response = await fetch('/api/admin/server-reload', {
+      method: 'POST',
+      credentials: 'include'
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || 'Server-Reload konnte nicht gestartet werden.');
+    serverReloadAdminState = {
+      status: payload.status || 'queued',
+      requestedBy: payload.requestedBy || '',
+      startedAt: payload.startedAt || '',
+      finishedAt: payload.finishedAt || '',
+      updatedAt: payload.updatedAt || '',
+      message: payload.message || 'Server-Reload wurde gestartet.',
+      logTail: payload.logTail || '',
+      commands: Array.isArray(payload.commands) ? payload.commands : [],
+      loading: false
+    };
+    scheduleServerReloadPoll();
+    renderLoginManagerView();
+    setStatus('Server-Reload angestoßen. Status wird aktualisiert.');
+  } catch (error) {
+    serverReloadAdminState = {
+      ...serverReloadAdminState,
+      loading: false,
+      status: 'error',
+      message: error.message || 'Server-Reload konnte nicht gestartet werden.'
+    };
+    clearServerReloadPollTimer();
+    renderLoginManagerView();
+    setStatus(`Server-Reload fehlgeschlagen: ${error.message}`);
+  }
+}
+
 async function saveLoginManagerUser(id) {
   if (!canManageLogins()) return;
   const user = state.authUsers.find((entry) => entry.id === id);
@@ -323,13 +443,55 @@ async function deleteLoginManagerUser(id) {
 
 function renderLoginManagerView() {
   if (!canManageLogins()) {
+    clearServerReloadPollTimer();
     setMainTab('map');
     return;
   }
   const actorDefinition = LOGIN_ROLE_DEFINITIONS[currentAssignedRole()];
+  if (canManageServerReload()) scheduleServerReloadPoll();
+  else clearServerReloadPollTimer();
   const visibleFactions = actorDefinition.level === 'global'
     ? LOGIN_FACTIONS
     : LOGIN_FACTIONS.filter((faction) => faction.id === actorDefinition.faction);
+  const serverReloadStatusLabel = ({
+    idle: 'Bereit',
+    queued: 'In Warteschlange',
+    running: 'Läuft',
+    success: 'Erfolgreich',
+    error: 'Fehler'
+  })[serverReloadAdminState.status] || serverReloadAdminState.status || 'Unbekannt';
+  const serverReloadMeta = [
+    serverReloadAdminState.requestedBy ? `Ausgelöst von: ${escapeLoginManagerText(serverReloadAdminState.requestedBy)}` : '',
+    serverReloadAdminState.startedAt ? `Start: ${new Date(serverReloadAdminState.startedAt).toLocaleString('de-DE')}` : '',
+    serverReloadAdminState.finishedAt ? `Ende: ${new Date(serverReloadAdminState.finishedAt).toLocaleString('de-DE')}` : ''
+  ].filter(Boolean).join(' • ');
+  const serverReloadPanel = actorDefinition.level === 'global' ? `
+    <div class="workspace-section">
+      <div class="workspace-card">
+        <div class="workspace-head compact">
+          <div>
+            <h3>Server Reload</h3>
+            <p>Führt fest verdrahtet <code>git pull</code>, <code>pm2 restart galactic</code> und <code>pm2 save</code> aus. Kein freies Kommandoeingabefeld.</p>
+          </div>
+          <div class="toolbar-row end">
+            <button class="mini-btn" onclick="fetchServerReloadStatus()" ${serverReloadAdminState.loading ? 'disabled' : ''}>Status laden</button>
+            <button class="mini-btn primary" onclick="triggerServerReload()" ${serverReloadAdminState.loading || ['queued', 'running'].includes(serverReloadAdminState.status) ? 'disabled' : ''}>Reload starten</button>
+          </div>
+        </div>
+        <div class="server-reload-meta">
+          <span class="server-reload-badge ${serverReloadAdminState.status || 'idle'}">${serverReloadStatusLabel}</span>
+          <span>${escapeLoginManagerText(serverReloadAdminState.message || 'Kein Reload ausgeführt.')}</span>
+        </div>
+        ${serverReloadMeta ? `<div class="muted" style="margin:8px 0 10px">${serverReloadMeta}</div>` : ''}
+        <div class="muted-box" style="margin-bottom:10px">
+          ${serverReloadAdminState.commands.length
+            ? serverReloadAdminState.commands.map((command) => `<div><code>${escapeLoginManagerText(command)}</code></div>`).join('')
+            : '<span>Noch keine Befehlsfolge geladen.</span>'}
+        </div>
+        <pre class="server-reload-console">${escapeLoginManagerText(serverReloadAdminState.logTail || 'Noch keine Konsolenausgabe verfügbar.')}</pre>
+      </div>
+    </div>
+  ` : '';
   const manageableRoles = getManageableLoginRoles();
   const renderUserRows = (users) => users.length ? users.map((user) => {
     const userDefinition = LOGIN_ROLE_DEFINITIONS[user.role];
@@ -396,6 +558,7 @@ function renderLoginManagerView() {
         <p>Logins sind nach Fraktionen geordnet. Fraktions-Admins verwalten die Admins und Mitglieder ihrer eigenen Fraktion.</p>
       </div>
     </div>
+    ${serverReloadPanel}
     <div class="workspace-section login-faction-grid">
       ${visibleFactions.map(renderFactionSection).join('')}
       ${actorDefinition.level === 'global' ? `
@@ -412,6 +575,9 @@ function renderLoginManagerView() {
       ` : ''}
     </div>
   `;
+  if (actorDefinition.level === 'global' && !serverReloadAdminState.loading && !serverReloadAdminState.updatedAt) {
+    fetchServerReloadStatus({ silent: true });
+  }
 }
 
 function escapeRadioCommandText(value) {
