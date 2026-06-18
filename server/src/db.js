@@ -21,16 +21,18 @@ const MARKET_SUMMARY_SNAPSHOT_TICK_MS = 2 * 60 * 1000;
 const ACP_HISTORY_SNAPSHOT_TICK_MS = 5 * 60 * 1000;
 const CORPORATE_BUILD_TICK_MS = 30 * 60 * 1000;
 const CORPORATE_PRODUCTION_TICK_MS = 15 * 60 * 1000;
-const CORPORATE_CIVILIAN_SALE_TICK_MS = 15 * 60 * 1000;
+const CORPORATE_CIVILIAN_SALE_TICK_MS = 60 * 1000;
 const CORPORATE_FINANCE_TICK_MS = 15 * 60 * 1000;
 const CORPORATE_BUILD_DURATION_MS = 10 * 60 * 60 * 1000;
 const CORPORATE_BUILD_TICK_TIME_BUDGET_MS = 750;
 const CORPORATE_BUILD_TICK_COMPANY_LIMIT = 4;
 const CORPORATE_BUILD_TICK_START_LIMIT = 2;
 const CORPORATE_BUILD_SELLER_SCAN_LIMIT = 6;
-const CORPORATE_CIVILIAN_SALE_MIN_RATIO = 0.01;
-const CORPORATE_CIVILIAN_SALE_MAX_RATIO = 0.05;
-const CORPORATE_CIVILIAN_SALE_HARD_CAP = 180;
+const CORPORATE_CIVILIAN_SALE_MIN_RATIO = 0.0035;
+const CORPORATE_CIVILIAN_SALE_MAX_RATIO = 0.02;
+const CORPORATE_CIVILIAN_SALE_HARD_CAP = 90;
+const CORPORATE_CIVILIAN_SALE_COMPANY_BATCH = 30;
+const CORPORATE_CIVILIAN_SALE_MAX_TRADES_PER_TICK = 36;
 const CORPORATE_MAX_ACTIVE_PROJECTS = 5;
 const CORPORATE_MAX_COMPLETED_48H = 5;
 const CORPORATE_COMPLETION_WINDOW_MS = 48 * 60 * 60 * 1000;
@@ -4429,112 +4431,156 @@ export function sellCorporateInventoryToCivilianMarket(db, state, now = Date.now
   let tradeCount = 0;
   let totalValue = 0;
   const soldCompanies = new Set();
+  const candidates = [];
   companies.forEach((company) => {
     if (normalizeMarketStatus(company.marketStatus) !== 'tradeable') return;
     const sectorState = sectorStateMap.get(String(company.sectorId || '').trim()) || {};
     if (Number(company.isEmbargoed || sectorState.isEmbargoed || 0)) return;
     if (String(sectorState.controlStatus || '').trim() === 'OPFOR') return;
     const resources = sanitizeResourceBag(company.corporateResourcesJson);
-    RESOURCE_KEYS.forEach((resourceType) => {
-      if (resourceType !== String(company.resourceKey || '').trim()) return;
-      const inventory = safeNumber(resources[resourceType], 0, 0, 1e9);
-      if (!(inventory > 0)) return;
-      const demandKey = `${company.sectorId}::${resourceType}`;
-      const demandRow = demandMap.get(demandKey);
-      if (!demandRow) return;
-      const demandScore = safeNumber(demandRow.demandScore, 1, 0, 10);
-      const supplyScore = safeNumber(demandRow.supplyScore, 1, 0, 10);
-      if (!(demandScore > supplyScore)) return;
-      const demandGap = Math.max(0, demandScore - supplyScore);
-      const sellRatio = clamp(
-        CORPORATE_CIVILIAN_SALE_MIN_RATIO + demandGap * 0.012,
-        CORPORATE_CIVILIAN_SALE_MIN_RATIO,
-        CORPORATE_CIVILIAN_SALE_MAX_RATIO
-      );
-      const inventoryCap = Math.max(1, Math.floor(inventory * sellRatio));
-      const demandCap = Math.max(2, Math.min(
-        CORPORATE_CIVILIAN_SALE_HARD_CAP,
-        Math.floor(demandGap * 60 + demandScore * 8)
-      ));
-      const quantity = round2(Math.min(inventoryCap, demandCap, inventory, CORPORATE_CIVILIAN_SALE_HARD_CAP));
-      if (!(quantity > 0)) return;
-      const priceRow = priceMap.get(demandKey) || {};
-      const acpPrice = acpMap[resourceType] || {};
-      const basePrice = round2(Math.max(
-        1,
-        safeNumber(priceRow.basePrice, 0, 0, 1e9),
-        safeNumber(acpPrice.basePrice, 0, 0, 1e9),
-        safeNumber(RESOURCE_MARKET_CONFIG[resourceType]?.basePrice, 1, 1, 1e9)
-      ));
-      const marketPrice = round2(Math.max(
-        basePrice,
-        safeNumber(priceRow.currentPrice, basePrice, 1, 1e9),
-        safeNumber(acpPrice.currentPrice, basePrice, 1, 1e9)
-      ));
-      const dynamicUnitPrice = getCorporateTradeUnitPrice(
-        db,
-        state,
-        {
-          sectorId: company.sectorId,
-          corporateResourcesJson: company.corporateResourcesJson
-        },
-        null,
-        resourceType,
-        quantity,
-        { sectorId: company.sectorId }
-      );
-      const unitPrice = round2(Math.max(basePrice, marketPrice, dynamicUnitPrice));
-      const trade = executeCorporateResourceTrade(db, state, {
-        sellerCompanyId: company.id,
-        buyerType: 'civilian_market',
-        resourceType,
-        quantity,
-        unitPrice,
-        createdAt: recordedAt,
-        reason: `Automatischer Verkauf an zivilen Markt (${sectorResourceLabel(resourceType)})`
-      });
-      const supplyLift = Math.min(0.18, quantity / 3200);
-      const demandRelief = Math.min(0.12, quantity / 5400);
-      const nextSupplyScore = round2(clamp(supplyScore + supplyLift, 0.15, 10));
-      const nextDemandScore = round2(clamp(Math.max(0.15, demandScore - demandRelief), 0.15, 10));
-      const nextPrice = round2(Math.max(
-        basePrice,
-        marketPrice * (1 - Math.min(0.025, quantity / 18000))
-      ));
-      const nextSpeculation = round2(clamp(
-        safeNumber(priceRow.speculationScore, 0, 0, 2) - Math.min(0.08, quantity / 8000),
-        0,
-        2
-      ));
-      updateDemand.run(nextDemandScore, nextSupplyScore, recordedAt, company.sectorId, resourceType);
-      upsertPrice.run(
-        company.sectorId,
-        resourceType,
-        basePrice,
-        nextPrice,
-        marketPrice,
-        nextDemandScore,
-        nextSupplyScore,
-        nextSpeculation,
-        recordedAt
-      );
-      demandMap.set(demandKey, { demandScore: nextDemandScore, supplyScore: nextSupplyScore });
-      priceMap.set(demandKey, {
-        currentPrice: nextPrice,
-        basePrice,
-        demandScore: nextDemandScore,
-        supplyScore: nextSupplyScore,
-        speculationScore: nextSpeculation
-      });
-      tradeCount += 1;
-      totalValue = round2(totalValue + safeNumber(trade.totalPrice, 0, 0, 1e9));
-      soldCompanies.add(company.id);
+    const resourceType = String(company.resourceKey || '').trim();
+    if (!RESOURCE_KEYS.includes(resourceType)) return;
+    const inventory = safeNumber(resources[resourceType], 0, 0, 1e9);
+    if (!(inventory > 0)) return;
+    const demandKey = `${company.sectorId}::${resourceType}`;
+    const demandRow = demandMap.get(demandKey);
+    if (!demandRow) return;
+    const demandScore = safeNumber(demandRow.demandScore, 1, 0, 10);
+    const supplyScore = safeNumber(demandRow.supplyScore, 1, 0, 10);
+    if (!(demandScore > supplyScore)) return;
+    const demandGap = Math.max(0, demandScore - supplyScore);
+    const inventoryFactor = clamp(inventory / 1600, 0.2, 3.5);
+    const activityScore = round2(demandGap * inventoryFactor * (1 + Math.min(0.4, demandScore / 10)));
+    candidates.push({
+      company,
+      resourceType,
+      inventory,
+      demandKey,
+      demandScore,
+      supplyScore,
+      demandGap,
+      activityScore
     });
   });
+  candidates.sort((left, right) => String(left.company.id).localeCompare(String(right.company.id), 'de'));
+  const eligibleCount = candidates.length;
+  const batchSize = Math.max(1, Math.min(CORPORATE_CIVILIAN_SALE_COMPANY_BATCH, eligibleCount));
+  const cursor = eligibleCount > 0 ? (Math.floor(getRuntimeStateNumber(db, 'corporate_civilian_sale_cursor', 0)) % eligibleCount) : 0;
+  const selectedCandidates = [];
+  for (let index = 0; index < batchSize; index += 1) {
+    selectedCandidates.push(candidates[(cursor + index) % eligibleCount]);
+  }
+  selectedCandidates.sort((left, right) => (
+    right.activityScore - left.activityScore
+    || right.demandGap - left.demandGap
+    || right.inventory - left.inventory
+  ));
+  selectedCandidates.forEach((candidate) => {
+    if (tradeCount >= CORPORATE_CIVILIAN_SALE_MAX_TRADES_PER_TICK) return;
+    const { company, resourceType, inventory, demandKey } = candidate;
+    const liveDemandRow = demandMap.get(demandKey);
+    if (!liveDemandRow) return;
+    const demandScore = safeNumber(liveDemandRow.demandScore, candidate.demandScore, 0, 10);
+    const supplyScore = safeNumber(liveDemandRow.supplyScore, candidate.supplyScore, 0, 10);
+    if (!(demandScore > supplyScore)) return;
+    const demandGap = Math.max(0, demandScore - supplyScore);
+    const sellRatio = clamp(
+      CORPORATE_CIVILIAN_SALE_MIN_RATIO + demandGap * 0.0045,
+      CORPORATE_CIVILIAN_SALE_MIN_RATIO,
+      CORPORATE_CIVILIAN_SALE_MAX_RATIO
+    );
+    const inventoryCap = Math.max(1, Math.floor(inventory * sellRatio));
+    const demandCap = Math.max(2, Math.min(
+      CORPORATE_CIVILIAN_SALE_HARD_CAP,
+      Math.floor(demandGap * 18 + demandScore * 4)
+    ));
+    const quantity = round2(Math.min(inventoryCap, demandCap, inventory, CORPORATE_CIVILIAN_SALE_HARD_CAP));
+    if (!(quantity > 0)) return;
+    const priceRow = priceMap.get(demandKey) || {};
+    const acpPrice = acpMap[resourceType] || {};
+    const basePrice = round2(Math.max(
+      1,
+      safeNumber(priceRow.basePrice, 0, 0, 1e9),
+      safeNumber(acpPrice.basePrice, 0, 0, 1e9),
+      safeNumber(RESOURCE_MARKET_CONFIG[resourceType]?.basePrice, 1, 1, 1e9)
+    ));
+    const marketPrice = round2(Math.max(
+      basePrice,
+      safeNumber(priceRow.currentPrice, basePrice, 1, 1e9),
+      safeNumber(acpPrice.currentPrice, basePrice, 1, 1e9)
+    ));
+    const dynamicUnitPrice = getCorporateTradeUnitPrice(
+      db,
+      state,
+      {
+        sectorId: company.sectorId,
+        corporateResourcesJson: company.corporateResourcesJson
+      },
+      null,
+      resourceType,
+      quantity,
+      { sectorId: company.sectorId }
+    );
+    const unitPrice = round2(Math.max(basePrice, marketPrice, dynamicUnitPrice));
+    const trade = executeCorporateResourceTrade(db, state, {
+      sellerCompanyId: company.id,
+      buyerType: 'civilian_market',
+      resourceType,
+      quantity,
+      unitPrice,
+      createdAt: recordedAt,
+      reason: `Automatischer Verkauf an zivilen Markt (${sectorResourceLabel(resourceType)})`
+    });
+    const supplyLift = Math.min(0.09, quantity / 4200);
+    const demandRelief = Math.min(0.07, quantity / 6400);
+    const nextSupplyScore = round2(clamp(supplyScore + supplyLift, 0.15, 10));
+    const nextDemandScore = round2(clamp(Math.max(0.15, demandScore - demandRelief), 0.15, 10));
+    const nextPrice = round2(Math.max(
+      basePrice,
+      marketPrice * (1 - Math.min(0.012, quantity / 22000))
+    ));
+    const nextSpeculation = round2(clamp(
+      safeNumber(priceRow.speculationScore, 0, 0, 2) - Math.min(0.04, quantity / 12000),
+      0,
+      2
+    ));
+    updateDemand.run(nextDemandScore, nextSupplyScore, recordedAt, company.sectorId, resourceType);
+    upsertPrice.run(
+      company.sectorId,
+      resourceType,
+      basePrice,
+      nextPrice,
+      marketPrice,
+      nextDemandScore,
+      nextSupplyScore,
+      nextSpeculation,
+      recordedAt
+    );
+    demandMap.set(demandKey, { demandScore: nextDemandScore, supplyScore: nextSupplyScore });
+    priceMap.set(demandKey, {
+      currentPrice: nextPrice,
+      basePrice,
+      demandScore: nextDemandScore,
+      supplyScore: nextSupplyScore,
+      speculationScore: nextSpeculation
+    });
+    tradeCount += 1;
+    totalValue = round2(totalValue + safeNumber(trade.totalPrice, 0, 0, 1e9));
+    soldCompanies.add(company.id);
+  });
+  if (eligibleCount > 0) {
+    setRuntimeStateNumber(
+      db,
+      'corporate_civilian_sale_cursor',
+      (cursor + batchSize) % Math.max(eligibleCount, 1),
+      recordedAt
+    );
+  }
   setRuntimeStateNumber(db, 'last_corporate_civilian_sale_tick', now, recordedAt);
   const elapsedMs = Date.now() - tickStartedAt;
   if (tradeCount > 0) {
     console.log('Corporate civilian inventory sale tick', {
+      eligibleHoldings: eligibleCount,
       holdings: soldCompanies.size,
       trades: tradeCount,
       totalValue,
