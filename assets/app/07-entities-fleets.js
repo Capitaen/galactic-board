@@ -701,6 +701,7 @@ function openPlanet(id) {
     .join('');
   const resourceOptions = `<option value="">Leer</option><optgroup label="Militärische Infrastruktur">${militaryInfrastructureOptions}</optgroup><optgroup label="Zivile Infrastruktur">${civilianInfrastructureOptions}</optgroup><optgroup label="Wirtschafts- und Entwicklungszentren">${developmentInfrastructureOptions}</optgroup>`;
   const slotUsage = getPlanetSlotUsage(p.id);
+  const slotBreakdown = getPlanetInfrastructureBreakdown(resourceSlots);
   const warehouses = getPlanetWarehouses(p.id).map((warehouse) => ({
     ...warehouse,
     capacity: getWarehouseCapacity(warehouse.level)
@@ -745,6 +746,13 @@ function openPlanet(id) {
         <label>Infrastruktur-Slots</label>
         <div>${renderResourcePills(resourceSlots)}</div>
         <small>${slotUsage.used}/10 Slots belegt</small>
+        <div class="planet-card-chip-group" style="margin-top:8px">
+          <span class="planet-card-chip">Militärisch: ${slotBreakdown.military}</span>
+          <span class="planet-card-chip">Zivil: ${slotBreakdown.civilian}</span>
+          <span class="planet-card-chip">Zentren: ${slotBreakdown.development}</span>
+          <span class="planet-card-chip">Lager: ${slotBreakdown.storage}</span>
+          <span class="planet-card-chip">Frei: ${slotBreakdown.empty}</span>
+        </div>
         <div class="resource-slot-row">
           ${resourceSlotControls}
         </div>
@@ -789,15 +797,10 @@ function openPlanet(id) {
       <div class="planet-card-top">
         <p class="planet-card-kicker">${sanitizePlanetInfoText(p.sector || 'Unbekannter Sektor')}</p>
         <p class="planet-card-control"><span class="planet-card-control-dot ${ownerDotClass}"></span>${getOwnerLabel(p.owner)}-Kontrolle</p>
-        <div class="planet-card-chip-group" style="margin-top:8px">
-          <span class="planet-card-chip">${hyperlaneBadge}</span>
-          <span class="planet-card-chip">${hyperlaneStatus.degree} Hyperraum-Verbindung${hyperlaneStatus.degree === 1 ? '' : 'en'}</span>
-        </div>
       </div>
+      ${cardInfo.image ? `
       <div class="planet-card-hero">
-        ${cardInfo.image
-          ? `<div class="planet-card-image"><img src="${cardInfo.image}" alt="${escapeHtml(p.name)}"></div>`
-          : `<div class="planet-card-image placeholder">Kein Bild gefunden</div>`}
+        <div class="planet-card-image"><img src="${cardInfo.image}" alt="${escapeHtml(p.name)}"></div>
         <div class="planet-card-war">
           <p class="planet-card-war-label">Kontrollstatus</p>
           <div class="planet-card-war-bar">
@@ -806,30 +809,55 @@ function openPlanet(id) {
           <p class="planet-card-war-caption">${controlLabel}</p>
         </div>
       </div>
+      ` : `
+      <div class="planet-card-war">
+        <p class="planet-card-war-label">Kontrollstatus</p>
+        <div class="planet-card-war-bar">
+          <div class="planet-card-war-fill ${ownerDotClass}" style="width:${controlPercent}%"></div>
+        </div>
+        <p class="planet-card-war-caption">${controlLabel}</p>
+      </div>
+      `}
       <div class="planet-card-stats">
         <div class="planet-card-stat"><p class="planet-card-stat-label">Region</p><p class="planet-card-stat-value small">${escapeHtml(getRegionLabel(p.region))}</p></div>
         <div class="planet-card-stat"><p class="planet-card-stat-label">Sektor</p><p class="planet-card-stat-value small">${escapeHtml(sanitizePlanetInfoText(p.sector))}</p></div>
-        <div class="planet-card-stat"><p class="planet-card-stat-label">Versorgungslage</p><p class="planet-card-stat-value small">${escapeHtml(cardInfo.climate)}</p></div>
-        <div class="planet-card-stat"><p class="planet-card-stat-label">Aktive Bevölkerung</p><p class="planet-card-stat-value small">${escapeHtml(cardInfo.population)}</p></div>
-        <div class="planet-card-stat"><p class="planet-card-stat-label">Grundprofil</p><p class="planet-card-stat-value small">${escapeHtml(demographicProfile.basePopulationLabel)}</p></div>
-        <div class="planet-card-stat"><p class="planet-card-stat-label">Hyperraumstatus</p><p class="planet-card-stat-value small">${escapeHtml(cardInfo.strategic)}</p></div>
         <div class="planet-card-stat"><p class="planet-card-stat-label">Raster</p><p class="planet-card-stat-value small">${escapeHtml(sanitizePlanetInfoText(p.grid, '—'))}</p></div>
+        <div class="planet-card-stat"><p class="planet-card-stat-label">Aktive Bevölkerung</p><p class="planet-card-stat-value small">${escapeHtml(cardInfo.population)}</p></div>
+        <div class="planet-card-stat"><p class="planet-card-stat-label">Hyperraumrouten</p><p class="planet-card-stat-value small">${escapeHtml(String(hyperlaneStatus.degree || routeNames.length || 0))}</p></div>
+        <div class="planet-card-stat"><p class="planet-card-stat-label">Hyperraumstatus</p><p class="planet-card-stat-value small">${escapeHtml(cardInfo.strategic)}</p></div>
+        <div class="planet-card-stat"><p class="planet-card-stat-label">Infrastruktur-Slots</p><p class="planet-card-stat-value small">${escapeHtml(`${slotUsage.used}/${slotUsage.total}`)}</p></div>
       </div>
       <div class="planet-card-section">
         <h3>Demografie & Verbrauch</h3>
         <p>${escapeHtml(demographicProfile.summary)}</p>
-        <div class="planet-card-chip-group">
-          <span class="planet-card-chip">Industriearbeiter: ${escapeHtml(formatPopulationEstimate(demographicProfile.industrialWorkers))}</span>
-          <span class="planet-card-chip">Dienste: ${escapeHtml(formatPopulationEstimate(demographicProfile.serviceWorkers))}</span>
-          <span class="planet-card-chip">Logistik: ${escapeHtml(formatPopulationEstimate(demographicProfile.logisticsWorkers))}</span>
-          <span class="planet-card-chip">Forschung: ${escapeHtml(formatPopulationEstimate(demographicProfile.researchWorkers))}</span>
-          ${demographicProfile.constructionWorkers ? `<span class="planet-card-chip">Baustellen-Crews: ${escapeHtml(formatPopulationEstimate(demographicProfile.constructionWorkers))}</span>` : ''}
+        <div class="planet-card-stats" style="margin-top:10px">
+          <div class="planet-card-stat"><p class="planet-card-stat-label">Industrie</p><p class="planet-card-stat-value small">${escapeHtml(formatPopulationEstimate(demographicProfile.industrialWorkers))}</p></div>
+          <div class="planet-card-stat"><p class="planet-card-stat-label">Dienste</p><p class="planet-card-stat-value small">${escapeHtml(formatPopulationEstimate(demographicProfile.serviceWorkers))}</p></div>
+          <div class="planet-card-stat"><p class="planet-card-stat-label">Logistik</p><p class="planet-card-stat-value small">${escapeHtml(formatPopulationEstimate(demographicProfile.logisticsWorkers))}</p></div>
+          <div class="planet-card-stat"><p class="planet-card-stat-label">Forschung</p><p class="planet-card-stat-value small">${escapeHtml(formatPopulationEstimate(demographicProfile.researchWorkers))}</p></div>
+          ${demographicProfile.constructionWorkers ? `<div class="planet-card-stat"><p class="planet-card-stat-label">Baucrews</p><p class="planet-card-stat-value small">${escapeHtml(formatPopulationEstimate(demographicProfile.constructionWorkers))}</p></div>` : ''}
         </div>
-        <div class="planet-card-chip-group" style="margin-top:10px">
-          ${demographicProfile.consumption.map((row) => `<span class="planet-card-chip">${escapeHtml(row.label)}: ${escapeHtml(String(row.demandPerDay))}/Tag (${escapeHtml(row.level)})</span>`).join('')}
+        <div class="planet-card-stats" style="margin-top:10px">
+          ${demographicProfile.consumption.map((row) => `
+            <div class="planet-card-stat">
+              <p class="planet-card-stat-label">${escapeHtml(row.label)}</p>
+              <p class="planet-card-stat-value small">${escapeHtml(String(row.demandPerDay))}/Tag</p>
+              <p class="muted" style="margin-top:6px">${escapeHtml(row.level)}</p>
+            </div>
+          `).join('')}
+        </div>
+        <div class="planet-card-section planet-card-subsection" style="margin-top:12px">
+          <h3>Slot-Verteilung</h3>
+          <div class="planet-card-chip-group">
+            <span class="planet-card-chip">Militärisch: ${slotBreakdown.military}</span>
+            <span class="planet-card-chip">Zivil: ${slotBreakdown.civilian}</span>
+            <span class="planet-card-chip">Zentren: ${slotBreakdown.development}</span>
+            <span class="planet-card-chip">Lager: ${slotBreakdown.storage}</span>
+            <span class="planet-card-chip">Frei: ${slotBreakdown.empty}</span>
+          </div>
+          <div style="margin-top:10px">${renderResourcePills(resourceSlots)}</div>
         </div>
         <p class="muted" style="margin-top:10px">Systemstatus: ${escapeHtml(cardInfo.lorePopulation || PLANET_INFO_PLACEHOLDER)}. Verbrauchswerte reagieren live auf gebaute Infrastruktur und aktive Minen.</p>
-        <p class="muted" style="margin-top:10px">${escapeHtml(demographicProfile.note)}</p>
       </div>
       <div class="planet-card-section">
         <h3>Hyperraumrouten</h3>
@@ -1224,7 +1252,8 @@ function startBuildOrder() {
     buildLocationPlanetId: locationPlanetId,
     startedAt: Date.now(),
     finishesAt: Date.now() + (meta.buildTimeHours * RESOURCE_PRODUCTION_TICK_MS),
-    faction
+    faction,
+    startedBy: currentAuthenticatedUsername || currentAssignedRole()
   }));
   saveLocal();
   playAudioCue(datapadAcceptAudio);

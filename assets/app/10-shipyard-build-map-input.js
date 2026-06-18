@@ -38,9 +38,8 @@ function renderShipyardView() {
   const resourceSummary = RESOURCE_KEYS.map((key) => `<div class="stat-card"><strong>${RESOURCE_LABELS[key]}</strong><span>${formatResourceAmount(pool[key])}</span></div>`).join('');
   const buildJobs = state.buildJobs.filter((job) => job.faction === faction && job.jobType !== 'mine' && job.status === 'building');
   const visibleBuildJobs = state.buildJobs
-    .filter((job) => job.faction === faction && job.jobType !== 'mine')
-    .sort((a, b) => Number(a.finishesAt || 0) - Number(b.finishesAt || 0))
-    .filter((job) => job.status === 'building' || (job.completedAt && (Date.now() - Number(job.completedAt || 0)) < (48 * 60 * 60 * 1000)));
+    .filter((job) => job.faction === faction && job.jobType !== 'mine' && job.status === 'building')
+    .sort((a, b) => Number(a.finishesAt || 0) - Number(b.finishesAt || 0));
   const shipyardActivity = (Array.isArray(state.meta?.buildProjectActivity) ? state.meta.buildProjectActivity : [])
     .filter((entry) => (entry.faction || 'GAR') === faction && entry.jobType !== 'mine')
     .slice(0, 18);
@@ -111,19 +110,6 @@ function renderShipyardView() {
         <p class="muted">Die stündliche Produktionsübersicht findest du jetzt im Tab <strong>Logistik & Lager</strong> unter Bauprojekte.</p>
       </div>
     </div>
-    <div class="workspace-section">
-      <h3>Aktive Bauaufträge</h3>
-      <div class="workspace-card">
-        ${buildJobs.length ? buildJobs.map((job) => `
-          <div class="project-card">
-            <h4>${job.shipName}</h4>
-            <p class="project-meta">${getShipClassMeta(job.classId)?.displayName || job.classId} • ${getBuildJobLocationName(job)}</p>
-            ${getBuildJobProgressBar(job)}
-            ${canCancelBuildJob(job) ? '<button class="mini-btn danger" onclick="cancelBuildJob(\'' + job.id + '\')">Bau abbrechen (90% Rueckgabe)</button>' : ''}
-          </div>
-        `).join('') : '<div class="muted-box">Keine aktiven Bauaufträge.</div>'}
-      </div>
-    </div>
     <div class="workspace-section workspace-columns">
       <div class="workspace-card">
         <h3>Manuelles Schiffbau-Log</h3>
@@ -172,6 +158,7 @@ function renderShipyardView() {
               <div class="project-card">
                 <h4>${getBuildJobDisplayName(job)}</h4>
                 <p class="project-meta">${getBuildJobTypeLabel(job)} • ${getBuildJobLocationName(job)} • ${job.faction || 'GAR'}</p>
+                ${job.startedBy ? `<p class="project-meta">Gestartet von: ${escapeHtml(job.startedBy)}</p>` : ''}
                 ${getBuildJobProgressBar(job)}
                 ${job.status !== 'building' && job.completedAt ? `<p class="project-meta">Abgeschlossen: ${formatMarketDateTime(job.completedAt)}</p>` : ''}
                 ${canCancelBuildJob(job) ? `<button class="mini-btn danger" onclick="cancelBuildJob('${job.id}')">Bau abbrechen (90% Rueckgabe)</button>` : ''}
@@ -187,7 +174,7 @@ function renderShipyardView() {
             <h4>${escapeHtml(entry.title || 'Aktivität')}</h4>
             <p class="project-meta">${escapeHtml(entry.location || '—')} • ${escapeHtml(entry.faction || faction)}</p>
             <p>${escapeHtml(entry.details || 'Keine Zusatzdetails.')}</p>
-            <small>${formatMarketDateTime(entry.createdAt)}</small>
+            <small>${formatMarketDateTime(entry.createdAt)}${entry.author ? ` • ${escapeHtml(entry.author)}` : ''}</small>
           </div>
         `).join('') : '<div class="muted-box">Noch keine abgeschlossenen Aktivitäten geloggt.</div>'}
       </div>
@@ -340,6 +327,7 @@ function renderBuildProjectsView() {
               <div class="project-card">
                 <h4>${getBuildJobDisplayName(job)}</h4>
                 <p class="project-meta">${getBuildJobTypeLabel(job)} • ${getBuildJobLocationName(job)} • ${job.faction || 'GAR'}</p>
+                ${job.startedBy ? `<p class="project-meta">Gestartet von: ${escapeHtml(job.startedBy)}</p>` : ''}
                 ${job.jobType === 'mine' ? `<p class="project-meta">Slot ${Number(job.targetSlotIndex) + 1} • ${getMineProjectMeta(job.buildingKey || job.resourceKey)?.label || 'Infrastruktur'}</p>` : ''}
                 ${getBuildJobProgressBar(job)}
                 ${job.status !== 'building' && job.completedAt ? `<p class="project-meta">Abgeschlossen: ${formatMarketDateTime(job.completedAt)}</p>` : ''}
@@ -358,7 +346,7 @@ function renderBuildProjectsView() {
             <h4>${escapeHtml(entry.title || 'Aktivität')}</h4>
             <p class="project-meta">${escapeHtml(entry.location || '—')} • ${escapeHtml(entry.faction || 'GAR')}</p>
             <p>${escapeHtml(entry.details || 'Keine Zusatzdetails.')}</p>
-            <small>${formatMarketDateTime(entry.createdAt)}</small>
+            <small>${formatMarketDateTime(entry.createdAt)}${entry.author ? ` • ${escapeHtml(entry.author)}` : ''}</small>
           </div>
         `).join('') : '<div class="muted-box">Noch keine abgeschlossenen Aktivitäten geloggt.</div>'}
       </div>

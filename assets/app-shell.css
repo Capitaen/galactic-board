@@ -730,6 +730,10 @@ textarea { min-height:82px; resize:vertical; }
   margin:0;
   line-height:1.5;
 }
+.planet-card-subsection {
+  background:rgba(4,12,20,.32);
+  border-color:rgba(109,234,255,.08);
+}
 .planet-card-editor {
   display:grid;
   gap:14px;

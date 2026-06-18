@@ -58,6 +58,7 @@ function createBuildJobRecord(data = {}) {
     startedAt: data.startedAt || Date.now(),
     finishesAt: data.finishesAt || Date.now(),
     faction: data.faction || 'GAR',
+    startedBy: String(data.startedBy || '').trim(),
     status: data.status || 'building',
     producedShipId: data.producedShipId || '',
     completedAt: Number(data.completedAt || 0) || 0

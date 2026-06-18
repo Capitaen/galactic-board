@@ -401,8 +401,9 @@ function renderAdminControlModal() {
           <div class="admin-control-summary-grid">
             <div class="stat-card"><strong>Besitzer</strong><span>${escapeHtml(selectedPlanet.owner || 'NEUTRAL')}</span></div>
             <div class="stat-card"><strong>Grid</strong><span>${escapeHtml(selectedPlanet.grid || '—')}</span></div>
+            <div class="stat-card"><strong>Sektor</strong><span>${escapeHtml(selectedPlanet.sector || '—')}</span></div>
+            <div class="stat-card"><strong>Region</strong><span>${escapeHtml(getRegionLabel(selectedPlanet.region || ''))}</span></div>
             <div class="stat-card"><strong>Slots belegt</strong><span>${slotUsage.used}/${slotUsage.total || 10}</span></div>
-            <div class="stat-card"><strong>Lager</strong><span>${warehouses.length}</span></div>
           </div>
           <div class="admin-control-columns">
             <article class="admin-control-card">

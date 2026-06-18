@@ -584,7 +584,7 @@ function buildPlanetIntelText(planet, info) {
   if (localNote !== PLANET_INFO_PLACEHOLDER) return localNote;
   if (remoteNote !== PLANET_INFO_PLACEHOLDER) return remoteNote;
   if (!planet) return PLANET_INFO_PLACEHOLDER;
-  return `${planet.name} liegt im Sektor ${sanitizePlanetInfoText(planet.sector, 'Unbekannter Sektor')} auf Raster ${sanitizePlanetInfoText(planet.grid, '—')} und steht aktuell unter ${getOwnerLabel(planet.owner)}-Kontrolle. Aktuell bestehen ${routeCount} Hyperraum-Verbindung${routeCount === 1 ? '' : 'en'}${routeNames.length ? ` über ${routeNames.join(', ')}` : ''}. Infrastrukturbelegung: ${slotUsage.used}/${slotUsage.total} Slots.`;
+  return `${planet.name} gehört aktuell zur Region ${sanitizePlanetInfoText(getRegionLabel(planet.region), 'Unbekannte Region')}, liegt im Sektor ${sanitizePlanetInfoText(planet.sector, 'Unbekannter Sektor')} auf Raster ${sanitizePlanetInfoText(planet.grid, '—')} und steht unter ${getOwnerLabel(planet.owner)}-Kontrolle. Aktuell bestehen ${routeCount} Hyperraum-Verbindung${routeCount === 1 ? '' : 'en'}${routeNames.length ? ` über ${routeNames.join(', ')}` : ''}. Infrastrukturbelegung: ${slotUsage.used}/${slotUsage.total} Slots.`;
 }
 
 function buildPlanetCardInfo(planet, info = {}) {
@@ -1118,6 +1118,7 @@ function createBuildJobRecord(data = {}) {
     startedAt: data.startedAt || Date.now(),
     finishesAt: data.finishesAt || Date.now(),
     faction: data.faction || 'GAR',
+    startedBy: String(data.startedBy || '').trim(),
     status: data.status || 'building',
     producedShipId: data.producedShipId || '',
     completedAt: Number(data.completedAt || 0) || 0
@@ -1152,7 +1153,8 @@ function recordBuildProjectActivity(job, title, details = '', createdAt = Date.n
     jobType: job.jobType || 'ship',
     title,
     details,
-    location: getBuildJobLocationName(job)
+    location: getBuildJobLocationName(job),
+    author: String(job.startedBy || '').trim()
   });
   state.meta.buildProjectActivity = state.meta.buildProjectActivity.slice(0, 80);
 }
@@ -1372,6 +1374,21 @@ function renderResourcePills(slots) {
   }).join('');
 }
 
+function getPlanetInfrastructureBreakdown(slots) {
+  const summary = { military: 0, civilian: 0, development: 0, storage: 0, empty: 0 };
+  (slots || []).forEach((slot) => {
+    const building = getMineProjectMeta(slot);
+    if (!building) {
+      summary.empty += 1;
+      return;
+    }
+    const category = building.category || 'military';
+    if (Object.prototype.hasOwnProperty.call(summary, category)) summary[category] += 1;
+    else summary.military += 1;
+  });
+  return summary;
+}
+
 function getBuildJobProgress(job, now = Date.now()) {
   const startedAt = Number(job?.startedAt) || now;
   const finishesAt = Number(job?.finishesAt) || now;
@@ -1469,6 +1486,7 @@ function startMineBuildProject() {
     startedAt: Date.now(),
     finishesAt: Date.now() + (MINE_BUILD_DURATION_HOURS * RESOURCE_PRODUCTION_TICK_MS),
     faction: 'GAR',
+    startedBy: currentAuthenticatedUsername || currentAssignedRole(),
     status: 'building'
   }));
   saveLocal();
@@ -1549,6 +1567,7 @@ function startWarehouseBuildProject() {
     startedAt: Date.now(),
     finishesAt: Date.now() + (MINE_BUILD_DURATION_HOURS * RESOURCE_PRODUCTION_TICK_MS),
     faction: 'GAR',
+    startedBy: currentAuthenticatedUsername || currentAssignedRole(),
     status: 'building'
   }));
   saveLocal();
