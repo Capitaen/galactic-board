@@ -264,6 +264,8 @@ let serverReloadAdminState = {
   loading: false
 };
 let serverReloadPollTimer = 0;
+const SERVER_RELOAD_STATUS_ENDPOINTS = ['/api/admin/server-reload-status', '/api/server-reload-status'];
+const SERVER_RELOAD_TRIGGER_ENDPOINTS = ['/api/admin/server-reload', '/api/server-reload'];
 
 async function readServerReloadResponse(response) {
   const rawText = await response.text();
@@ -273,6 +275,21 @@ async function readServerReloadResponse(response) {
   } catch {
     return { error: rawText };
   }
+}
+
+async function fetchFirstAvailableServerReloadEndpoint(endpoints, options = {}) {
+  let lastResponse = null;
+  let lastPayload = {};
+  for (const endpoint of endpoints) {
+    const response = await fetch(endpoint, options);
+    const payload = await readServerReloadResponse(response);
+    if (response.status !== 404) {
+      return { endpoint, response, payload };
+    }
+    lastResponse = response;
+    lastPayload = payload;
+  }
+  return { endpoint: endpoints[0], response: lastResponse, payload: lastPayload };
 }
 
 function canManageServerReload() {
@@ -306,10 +323,9 @@ async function fetchServerReloadStatus(options = {}) {
     if (activeMainTab === 'loginManager') renderLoginManagerView();
   }
   try {
-    const response = await fetch('/api/admin/server-reload-status', {
+    const { response, payload } = await fetchFirstAvailableServerReloadEndpoint(SERVER_RELOAD_STATUS_ENDPOINTS, {
       credentials: 'include'
     });
-    const payload = await readServerReloadResponse(response);
     if (response.status === 404) {
       serverReloadAdminState = {
         ...serverReloadAdminState,
@@ -361,11 +377,10 @@ async function triggerServerReload() {
   };
   if (activeMainTab === 'loginManager') renderLoginManagerView();
   try {
-    const response = await fetch('/api/admin/server-reload', {
+    const { response, payload } = await fetchFirstAvailableServerReloadEndpoint(SERVER_RELOAD_TRIGGER_ENDPOINTS, {
       method: 'POST',
       credentials: 'include'
     });
-    const payload = await readServerReloadResponse(response);
     if (!response.ok) throw new Error(payload.error || 'Server-Reload konnte nicht gestartet werden.');
     serverReloadAdminState = {
       status: payload.status || 'queued',

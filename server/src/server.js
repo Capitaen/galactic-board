@@ -1964,7 +1964,45 @@ app.get('/api/admin/server-reload-status', requireAuth, requireGlobalAdmin, (req
   res.json({ ok: true, ...getServerReloadStatusPayload() });
 });
 
+app.get('/api/server-reload-status', requireAuth, requireGlobalAdmin, (req, res) => {
+  res.json({ ok: true, ...getServerReloadStatusPayload() });
+});
+
 app.post('/api/admin/server-reload', requireAuth, requireGlobalAdmin, async (req, res) => {
+  try {
+    const currentState = readServerReloadState();
+    if (currentState.status === 'queued' || currentState.status === 'running') {
+      return res.status(409).json({
+        ok: false,
+        error: 'Ein Server-Reload läuft bereits.',
+        ...getServerReloadStatusPayload()
+      });
+    }
+    const actorName = String(req.user?.username || req.user?.id || 'admin').trim() || 'admin';
+    await queueServerReloadJob(actorName);
+    writeAuditLog(db, {
+      actorUserId: req.user?.id || '',
+      actorUsername: actorName,
+      action: 'admin.server_reload',
+      entityType: 'server',
+      entityId: 'galactic',
+      summary: `${actorName} hat einen Server-Reload angestoßen.`
+    });
+    res.json({
+      ok: true,
+      message: 'Server-Reload wurde gestartet.',
+      ...getServerReloadStatusPayload()
+    });
+  } catch (error) {
+    res.status(500).json({
+      ok: false,
+      error: error?.message || 'Server-Reload konnte nicht gestartet werden.',
+      ...getServerReloadStatusPayload()
+    });
+  }
+});
+
+app.post('/api/server-reload', requireAuth, requireGlobalAdmin, async (req, res) => {
   try {
     const currentState = readServerReloadState();
     if (currentState.status === 'queued' || currentState.status === 'running') {
