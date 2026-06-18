@@ -32,9 +32,6 @@ function renderShipyardView() {
     || (role === 'Republic Navy / GAR' && faction === 'GAR' && canCoordinate4thFleet())
     || (role === 'Eventleiter / KUS' && faction === 'KUS')
   );
-  const canWriteShipyardLog = faction === 'GAR' && canCoordinate4thFleet();
-  const shipyardLogs = getShipyardLogs(faction);
-  const defaultShipyardLogWhen = new Date().toISOString().slice(0, 16);
   const resourceSummary = RESOURCE_KEYS.map((key) => `<div class="stat-card"><strong>${RESOURCE_LABELS[key]}</strong><span>${formatResourceAmount(pool[key])}</span></div>`).join('');
   const buildJobs = state.buildJobs.filter((job) => job.faction === faction && job.jobType !== 'mine' && job.status === 'building');
   const visibleBuildJobs = state.buildJobs
@@ -98,7 +95,7 @@ function renderShipyardView() {
               ? 'Debug aktiv: GAR-Kosten derzeit deaktiviert.'
               : RESOURCE_KEYS.map((key) => `${RESOURCE_LABELS[key]}: ${selectedMeta?.cost?.[key] || 0}`).join(' • '))
             : 'KUS-Bau bleibt sofort verfügbar und ignoriert aktuell Rohstoffkosten.'}</p>
-          ${faction === 'GAR' && sectorCostSummary ? `<p><strong>Lokale Lager ${escapeHtml(sectorCostSummary.sectorInfo.name)}:</strong> ${STORAGE_RESOURCE_KEYS.map((key) => `${RESOURCE_LABELS[key]} ${formatResourceAmount(sectorCostSummary.warehouseSummary.resources?.[key]?.stock || 0)}`).join(' • ')} • Gesamtkapazität ${formatResourceAmount(sectorCostSummary.warehouseSummary.totalCapacity || 0)}</p>` : ''}
+          ${faction === 'GAR' && sectorCostSummary ? `<p><strong>Zentrale Verfügbarkeit:</strong> ${STORAGE_RESOURCE_KEYS.map((key) => `${RESOURCE_LABELS[key]} ${formatResourceAmount(sectorCostSummary.warehouseSummary.resources?.[key]?.stock || 0)}`).join(' • ')}</p>` : ''}
           <p><strong>Bauzeit:</strong> ${faction === 'KUS' || DEBUG_DISABLE_GAR_BUILD_LIMITS ? 'Sofort' : `${selectedMeta?.buildTimeHours || 0}h`}</p>
           <p><strong>Bauorte:</strong> ${faction === 'KUS' ? 'Geonosis, Muunilinst, Serenno, Raxus' : (selectedMeta?.buildLocations === 'anyGARPlanet' ? 'Jeder GAR-Planet' : (selectedMeta?.buildLocations || []).join(', '))}</p>
         </div>
@@ -106,47 +103,8 @@ function renderShipyardView() {
       </div>
       <div class="workspace-card">
         <h3>Bauhinweise</h3>
-        <p>GAR-Schiffbau nutzt automatisch das zentrale Coruscant-Lager und prüft zusätzlich, ob im Zielsektor genug lokale Lagerbestände verfügbar sind.</p>
+        <p>GAR-Schiffbau nutzt automatisch das zentrale Großlager auf Coruscant.</p>
         <p class="muted">Die stündliche Produktionsübersicht findest du jetzt im Tab <strong>Logistik & Lager</strong> unter Bauprojekte.</p>
-      </div>
-    </div>
-    <div class="workspace-section workspace-columns">
-      <div class="workspace-card">
-        <h3>Manuelles Schiffbau-Log</h3>
-        ${canWriteShipyardLog ? `
-          <div class="form-row">
-            <label>Wann</label>
-            <input id="shipyardLogWhen" type="datetime-local" value="${defaultShipyardLogWhen}">
-          </div>
-          <div class="form-row">
-            <label>Wo</label>
-            <input id="shipyardLogWhere" value="${escapeHtml(selectedLocationPlanet?.name || '')}" placeholder="z.B. Kuat">
-          </div>
-          <div class="form-row">
-            <label>Wie</label>
-            <input id="shipyardLogHow" placeholder="z.B. Neubau, Umbau, Reparatur">
-          </div>
-          <div class="form-row">
-            <label>Was</label>
-            <input id="shipyardLogWhat" placeholder="Kurzer Eintrag zum Vorgang">
-          </div>
-          <div class="form-row">
-            <label>Notiz</label>
-            <textarea id="shipyardLogDetails" placeholder="Optionaler Zusatz"></textarea>
-          </div>
-          <button class="primary" onclick="saveShipyardLogEntry()">Log speichern</button>
-        ` : `<div class="muted-box">${faction === 'GAR' ? 'Dieses Log kann nur von der 4th Flottenkoordination gepflegt werden.' : 'Fuer diese Fraktion ist aktuell kein manuelles Schiffbau-Log vorgesehen.'}</div>`}
-      </div>
-      <div class="workspace-card">
-        <h3>Letzte Einträge</h3>
-        ${shipyardLogs.length ? shipyardLogs.map((entry) => `
-          <div class="project-card">
-            <h4>${escapeHtml(entry.subject || 'Schiffbau-Eintrag')}</h4>
-            <p class="project-meta">${escapeHtml(entry.location || '—')} • ${escapeHtml(entry.method || '—')}</p>
-            <p>${escapeHtml(entry.details || 'Keine Zusatznotiz.')}</p>
-            <small>${formatMarketDateTime(entry.eventAt || entry.createdAt)}${entry.author ? ` • ${escapeHtml(entry.author)}` : ''}</small>
-          </div>
-        `).join('') : '<div class="muted-box">Noch keine Schiffbau-Logs vorhanden.</div>'}
       </div>
     </div>
     <div class="workspace-section workspace-columns">
@@ -384,55 +342,10 @@ function renderBuildProjectsView() {
         <p class="muted">Militärische Produktion läuft automatisch ins Coruscant-Lager. Baukosten und Schiffbau ziehen benötigte Bestände automatisch aus dem zentralen GAR-Lager.</p>
       </div>
     </div>
-    <div class="workspace-section workspace-columns">
+    <div class="workspace-section">
       <div class="workspace-card">
-        <h3>Sektorlogistik</h3>
-        <div class="form-row">
-          <label>Sektor</label>
-          <select id="warehouseSectorSelect" onchange="renderBuildProjectsView()">
-            ${logisticsSectors.map((sector) => `<option value="${sector.id}" ${sector.id === selectedLogisticsSector?.id ? 'selected' : ''}>${sector.name}</option>`).join('')}
-          </select>
-        </div>
-        ${sectorWarehouseSummary ? `
-          <table class="data-table">
-            <thead><tr><th>Ressource</th><th>Bestand</th><th>Lokale Gesamtkapazität</th></tr></thead>
-            <tbody>
-              ${STORAGE_RESOURCE_KEYS.map((resourceKey) => `
-                <tr>
-                  <td>${RESOURCE_LABELS[resourceKey]}</td>
-                  <td>${formatResourceAmount(sectorWarehouseSummary.resources[resourceKey]?.stock || 0)}</td>
-                  <td>${formatResourceAmount(sectorWarehouseSummary.totalCapacity || 0)}</td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-          <div class="workspace-card compact" style="margin-top:12px">
-            <strong>Lokale Lager im Sektor</strong><br>
-            <small>Neue Lager dürfen nur auf GAR-Planeten mit sichtbarer Hyperraumroute gebaut werden.</small>
-            <div class="form-row" style="margin-top:10px">
-              <label>Planet</label>
-              <select id="warehouseBuildPlanet" ${canBuildWarehouseInfra ? '' : 'disabled'} onchange="renderBuildProjectsView()">
-                ${warehousePlanetChoices.map((planet) => `<option value="${planet.id}" ${planet.id === selectedWarehousePlanet?.id ? 'selected' : ''}>${planet.name} • ${planet.sector || '—'} • ${planet.grid || '—'}</option>`).join('')}
-              </select>
-            </div>
-            <div class="workspace-card compact" style="margin-top:10px">
-              <strong>${selectedWarehousePlanet?.name || 'Kein Planet gewählt'}</strong>
-              <p>${selectedWarehousePlanet ? `${getPlanetSlotUsage(selectedWarehousePlanet.id).used}/10 Slots belegt • ${selectedWarehousePlanet.storageEligible ? 'Hyperraumroute sichtbar' : 'Keine sichtbare Hyperraumroute'}` : '—'}</p>
-              <p>Startkapazität: ${formatResourceAmount(getWarehouseCapacity(1))} • Ausbau je Stufe: +${formatResourceAmount(WAREHOUSE_LEVEL_STEP_CAPACITY)}</p>
-              <p>Kosten: ${RESOURCE_KEYS.map((key) => `${RESOURCE_LABELS[key]} ${getMineProjectMeta(LOCAL_WAREHOUSE_BUILDING_KEY)?.cost?.[key] || 0}`).join(' • ')}</p>
-              <button class="primary" onclick="startWarehouseBuildProject()" ${(canBuildWarehouseInfra && selectedWarehousePlanet && selectedWarehousePlanet.storageEligible && selectedWarehousePlanetSlots.length && !getPlanetWarehouses(selectedWarehousePlanet.id).length && canAffordGarInfrastructureCost(getMineProjectMeta(LOCAL_WAREHOUSE_BUILDING_KEY)?.cost || {})) ? '' : 'disabled'}>Lokales Lager bauen</button>
-            </div>
-            ${sectorWarehouseSummary.warehouses.length
-              ? sectorWarehouseSummary.warehouses.map((warehouse) => `
-                <div style="margin-top:10px">
-                  <strong>${warehouse.planetName}</strong><br>
-                  <small>Stufe ${warehouse.level} • Belegung ${formatResourceAmount(warehouse.used)}/${formatResourceAmount(warehouse.capacity)}</small>
-                  ${canBuildWarehouseInfra && warehouse.level < WAREHOUSE_MAX_LEVEL ? `<br><button class="mini-btn" onclick="upgradeWarehouse('${warehouse.id}')">Upgrade</button>` : ''}
-                </div>
-              `).join('<hr style="border-color:rgba(255,255,255,.08)">')
-              : '<div class="muted-box" style="margin-top:10px">In diesem Sektor existiert noch kein lokales Lager.</div>'}
-          </div>
-        ` : '<div class="muted-box">Noch keine GAR-Sektoren mit Lagern gefunden.</div>'}
+        <h3>Logistikstatus</h3>
+        <p>Auf der Website wird aktuell nur das zentrale Großlager auf Coruscant geführt. Planetare oder sektorale Zusatzlager werden nicht mehr separat angezeigt.</p>
       </div>
     </div>
     `}

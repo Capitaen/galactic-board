@@ -702,17 +702,13 @@ function openPlanet(id) {
   const resourceOptions = `<option value="">Leer</option><optgroup label="Militärische Infrastruktur">${militaryInfrastructureOptions}</optgroup><optgroup label="Zivile Infrastruktur">${civilianInfrastructureOptions}</optgroup><optgroup label="Wirtschafts- und Entwicklungszentren">${developmentInfrastructureOptions}</optgroup>`;
   const slotUsage = getPlanetSlotUsage(p.id);
   const slotBreakdown = getPlanetInfrastructureBreakdown(resourceSlots);
-  const warehouses = getPlanetWarehouses(p.id).map((warehouse) => ({
-    ...warehouse,
-    capacity: getWarehouseCapacity(warehouse.level)
-  }));
   const resourceSlotControls = resourceSlots.map((slot, index) => {
     const slotEditable = canEditPlanetResourceSlot(p, index);
     if (isWarehouseBuildingKey(slot)) {
       return `
         <div class="resource-slot-cell">
-          <input value="Universallager (Logistik)" disabled>
-          <small>Nur im Tab Logistik & Lager verwaltbar</small>
+          <input value="Reservierter Logistik-Slot" disabled>
+          <small>Nicht direkt in der Planetenverwaltung bearbeitbar</small>
         </div>
       `;
     }
@@ -750,7 +746,6 @@ function openPlanet(id) {
           <span class="planet-card-chip">Militärisch: ${slotBreakdown.military}</span>
           <span class="planet-card-chip">Zivil: ${slotBreakdown.civilian}</span>
           <span class="planet-card-chip">Zentren: ${slotBreakdown.development}</span>
-          <span class="planet-card-chip">Lager: ${slotBreakdown.storage}</span>
           <span class="planet-card-chip">Frei: ${slotBreakdown.empty}</span>
         </div>
         <div class="resource-slot-row">
@@ -761,19 +756,6 @@ function openPlanet(id) {
           : (currentRole() === 'Senat'
             ? (isResourceAssignmentEditable(p) ? 'Senat kann alle 10 Infrastruktur-Slots auf republikanischen Planeten verwalten.' : 'Senat kann nur republikanische Planeten verwalten.')
             : (isResourceAssignmentEditable(p) ? 'Eventleitung darf nur die ersten 3 Infrastruktur-Slots auf KUS- und Neutral-Planeten ändern.' : 'Infrastruktur-Slots sind für deine Rolle auf diesem Planeten nicht editierbar.'))}</small>
-      </div>
-      <div class="form-row">
-        <label>Lager auf diesem Planeten</label>
-        <div class="workspace-card compact">
-          ${warehouses.length
-            ? warehouses.map((warehouse) => `
-              <div>
-                <strong>Universallager</strong><br>
-                <small>Slot ${Number(warehouse.slotIndex) + 1} • Stufe ${warehouse.level} • Belegung ${formatResourceAmount(warehouse.used || getWarehouseStoredTotal(warehouse))}/${formatResourceAmount(warehouse.capacity)}</small>
-              </div>
-            `).join('<hr style="border-color:rgba(255,255,255,.08)">')
-            : '<span class="muted">Auf diesem Planeten stehen noch keine Lager.</span>'}
-        </div>
       </div>
       <div class="form-row">
         <label>Orbitale Raumstationen</label>
@@ -852,7 +834,6 @@ function openPlanet(id) {
             <span class="planet-card-chip">Militärisch: ${slotBreakdown.military}</span>
             <span class="planet-card-chip">Zivil: ${slotBreakdown.civilian}</span>
             <span class="planet-card-chip">Zentren: ${slotBreakdown.development}</span>
-            <span class="planet-card-chip">Lager: ${slotBreakdown.storage}</span>
             <span class="planet-card-chip">Frei: ${slotBreakdown.empty}</span>
           </div>
           <div style="margin-top:10px">${renderResourcePills(resourceSlots)}</div>

@@ -334,7 +334,6 @@ function renderAdminControlModal() {
   const selectedPoolGar = getFactionResourcePool('GAR');
   const selectedPoolKus = getFactionResourcePool('KUS');
   const selectedSlots = selectedPlanet ? getPlanetResourceSlots(selectedPlanet.id) : Array.from({ length: 10 }, () => '');
-  const warehouses = selectedPlanet ? getPlanetWarehouses(selectedPlanet.id) : [];
   const slotUsage = selectedPlanet ? getPlanetSlotUsage(selectedPlanet.id) : { used: 0, total: 10 };
   const productionRate = selectedPlanet ? getPlanetProductionRate(selectedPlanet.id) : createEmptyFactionResources();
   adminControlModalContent.innerHTML = `
@@ -447,35 +446,6 @@ function renderAdminControlModal() {
               </div>
             </article>
           </div>
-          <article class="admin-control-card" style="margin-top:14px">
-            <h4>Lokale Lager</h4>
-            ${warehouses.length ? warehouses.map((warehouse, index) => `
-              <div class="admin-control-warehouse-card">
-                <div class="admin-control-input-grid">
-                  <label class="admin-control-input">
-                    <span>Slot</span>
-                    <input value="${Number(warehouse.slotIndex) + 1}" disabled>
-                  </label>
-                  <label class="admin-control-input">
-                    <span>Level</span>
-                    <input id="adminWarehouseLevel_${index}" type="number" min="1" max="${WAREHOUSE_MAX_LEVEL}" step="1" value="${Math.round(Number(warehouse.level || 1))}">
-                  </label>
-                  <label class="admin-control-input">
-                    <span>Kapazitaet</span>
-                    <input value="${formatResourceAmount(getWarehouseCapacity(warehouse.level || 1))}" disabled>
-                  </label>
-                </div>
-                <div class="admin-control-input-grid">
-                  ${STORAGE_RESOURCE_KEYS.map((resourceKey) => `
-                    <label class="admin-control-input">
-                      <span>${escapeHtml(RESOURCE_LABELS[resourceKey])}</span>
-                      <input id="adminWarehouse_${index}_${resourceKey}" type="number" min="0" step="1" value="${Math.round(Number(warehouse.stockByResource?.[resourceKey] || 0))}">
-                    </label>
-                  `).join('')}
-                </div>
-              </div>
-            `).join('') : '<div class="muted-box">Noch kein lokales Lager auf diesem Planeten. Weise einem Slot „Universallager“ zu und speichere den Planeten, dann wird das Lager automatisch angelegt.</div>'}
-          </article>
           <div class="toolbar-row end" style="margin-top:14px">
             <button type="button" class="mini-btn primary" id="adminControlSavePlanetBtn">Planet speichern</button>
           </div>
@@ -534,21 +504,6 @@ function renderAdminControlModal() {
     const nextSlots = Array.from({ length: 10 }, (_, index) => document.getElementById(`adminControlSlot_${index}`)?.value || '');
     setPlanetResourceSlots(selectedPlanet.id, nextSlots);
     syncWarehouseStoreForPlanet(selectedPlanet.id);
-    const refreshedWarehouses = getPlanetWarehouses(selectedPlanet.id);
-    refreshedWarehouses.forEach((warehouse, index) => {
-      warehouse.level = clamp(Math.round(Number(document.getElementById(`adminWarehouseLevel_${index}`)?.value || warehouse.level || 1)), 1, WAREHOUSE_MAX_LEVEL);
-      warehouse.stockByResource = sanitizeWarehouseStock(Object.fromEntries(
-        STORAGE_RESOURCE_KEYS.map((resourceKey) => [resourceKey, Math.max(0, Math.round(Number(document.getElementById(`adminWarehouse_${index}_${resourceKey}`)?.value || 0)))])
-      ));
-      const capacity = getWarehouseCapacity(warehouse.level);
-      const total = getWarehouseStoredTotal(warehouse);
-      if (total > capacity) {
-        const ratio = capacity / Math.max(1, total);
-        STORAGE_RESOURCE_KEYS.forEach((resourceKey) => {
-          warehouse.stockByResource[resourceKey] = Math.floor(Number(warehouse.stockByResource[resourceKey] || 0) * ratio);
-        });
-      }
-    });
     saveLocal();
     playAudioCue(datapadAcceptAudio);
     syncViewsAfterAdminControlSave();

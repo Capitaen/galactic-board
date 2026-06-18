@@ -345,7 +345,7 @@ async function fetchServerReloadStatus(options = {}) {
         message: 'Reload-Status ist gerade nicht verfuegbar. Du kannst den Reload trotzdem manuell starten.'
       };
       clearServerReloadPollTimer();
-      if (activeMainTab === 'loginManager') renderLoginManagerView();
+      if (activeMainTab === 'loginManager' && !silent) renderLoginManagerView();
       if (!silent) setStatus('Reload-Status ist momentan nicht verfuegbar.');
       return;
     }
@@ -362,7 +362,7 @@ async function fetchServerReloadStatus(options = {}) {
       loading: false
     };
     scheduleServerReloadPoll();
-    if (activeMainTab === 'loginManager') renderLoginManagerView();
+    if (activeMainTab === 'loginManager' && !silent) renderLoginManagerView();
   } catch (error) {
     serverReloadAdminState = {
       ...serverReloadAdminState,
@@ -371,7 +371,7 @@ async function fetchServerReloadStatus(options = {}) {
       message: error.message || 'Server-Reload-Status konnte nicht geladen werden.'
     };
     clearServerReloadPollTimer();
-    if (activeMainTab === 'loginManager') renderLoginManagerView();
+    if (activeMainTab === 'loginManager' && !silent) renderLoginManagerView();
     if (!silent) setStatus(`Server-Reload-Status fehlgeschlagen: ${error.message}`);
   }
 }
