@@ -24,9 +24,10 @@ const CORPORATE_PRODUCTION_TICK_MS = 15 * 60 * 1000;
 const CORPORATE_CIVILIAN_SALE_TICK_MS = 15 * 60 * 1000;
 const CORPORATE_FINANCE_TICK_MS = 15 * 60 * 1000;
 const CORPORATE_BUILD_DURATION_MS = 10 * 60 * 60 * 1000;
-const CORPORATE_BUILD_TICK_TIME_BUDGET_MS = 1500;
-const CORPORATE_BUILD_TICK_COMPANY_LIMIT = 12;
-const CORPORATE_BUILD_SELLER_SCAN_LIMIT = 12;
+const CORPORATE_BUILD_TICK_TIME_BUDGET_MS = 750;
+const CORPORATE_BUILD_TICK_COMPANY_LIMIT = 4;
+const CORPORATE_BUILD_TICK_START_LIMIT = 2;
+const CORPORATE_BUILD_SELLER_SCAN_LIMIT = 6;
 const CORPORATE_CIVILIAN_SALE_MIN_RATIO = 0.01;
 const CORPORATE_CIVILIAN_SALE_MAX_RATIO = 0.05;
 const CORPORATE_CIVILIAN_SALE_HARD_CAP = 180;
@@ -2556,6 +2557,7 @@ export function readCompanyOwnership(db, companyId) {
 export function runCorporateBuildTick(db, state, now = Date.now()) {
   if (!state || !canRunCadence(db, 'last_corporate_build_tick', CORPORATE_BUILD_TICK_MS, now)) return 0;
   const tickStartedAt = Date.now();
+  const deadlineAt = tickStartedAt + CORPORATE_BUILD_TICK_TIME_BUDGET_MS;
   const rows = db.prepare(`
     SELECT id, name, sector_id AS sectorId, resource_refs_json AS resourceRefsJson,
       market_status AS marketStatus, is_embargoed AS isEmbargoed,
@@ -2595,87 +2597,110 @@ export function runCorporateBuildTick(db, state, now = Date.now()) {
       corporate_build_cooldown_until = ?, expansion_score = ?, monopoly_score = ?, updated_at = ?
     WHERE id = ?
   `);
+  const readRefreshedCompany = db.prepare(`
+    SELECT id, corporate_cash AS corporateCash, corporate_resources_json AS corporateResourcesJson
+    FROM market_companies
+    WHERE id = ?
+    LIMIT 1
+  `);
+  const tryStartBuildForCompany = db.transaction((company, sectorState, choice, cost) => {
+    if (Date.now() >= deadlineAt) {
+      throw Object.assign(new Error('corporate-build-budget-exceeded'), { code: 'CORPORATE_BUILD_SKIP' });
+    }
+    const planets = getSectorPlanetsForCompany(state, company);
+    const currentAssets = readCompanyCorporateAssets(db, state, company.id);
+    const targetPlanet = pickCorporateAssetPlanet(planets, `${company.id}:build`, currentAssets, true);
+    if (!targetPlanet) {
+      throw Object.assign(new Error('corporate-build-no-planet'), { code: 'CORPORATE_BUILD_SKIP' });
+    }
+    const procurement = procureResourcesForCorporateBuild(db, state, company, cost, {
+      reason: `Input-Beschaffung fuer ${choice.buildingType}`,
+      expectedRoi: choice.expectedRoi,
+      createdAt: new Date(now).toISOString(),
+      deadlineAt
+    });
+    if (!procurement.ok) {
+      throw Object.assign(new Error(procurement.reason || 'corporate-build-procurement-failed'), { code: 'CORPORATE_BUILD_SKIP' });
+    }
+    const refreshedCompany = readRefreshedCompany.get(company.id);
+    if (!refreshedCompany) {
+      throw Object.assign(new Error('corporate-build-company-refresh-missing'), { code: 'CORPORATE_BUILD_SKIP' });
+    }
+    const refreshedResources = sanitizeResourceBag(refreshedCompany.corporateResourcesJson);
+    if (RESOURCE_KEYS.some((key) => safeNumber(refreshedResources[key], 0, 0, 1e9) < safeNumber(cost.costResources[key], 0, 0, 1e9))) {
+      throw Object.assign(new Error('corporate-build-insufficient-resources-after-procurement'), { code: 'CORPORATE_BUILD_SKIP' });
+    }
+    if (safeNumber(refreshedCompany.corporateCash, 0, 0, 1e9) < safeNumber(cost.costCredits, 0, 0, 1e9)) {
+      throw Object.assign(new Error('corporate-build-insufficient-cash-after-procurement'), { code: 'CORPORATE_BUILD_SKIP' });
+    }
+    const charged = chargeCorporateBuildCost({
+      corporateCash: refreshedCompany.corporateCash,
+      corporateResourcesJson: JSON.stringify(refreshedResources)
+    }, cost);
+    const createdAt = new Date(now).toISOString();
+    updateCompany.run(
+      charged.nextCash,
+      JSON.stringify(charged.nextResources),
+      now,
+      now + (choice.expectedRoi > 0.25 ? (12 * 60 * 60 * 1000) : (18 * 60 * 60 * 1000)),
+      clamp(safeNumber(company.expansionScore, 0.2, 0, 1) + 0.04, 0, 1),
+      clamp(safeNumber(company.monopolyScore, 0, 0, 1) + (choice.expectedRoi >= 0.22 ? 0.03 : 0.01), 0, 1),
+      createdAt,
+      company.id
+    );
+    insertProject.run(
+      crypto.randomUUID(),
+      company.id,
+      company.sectorId,
+      targetPlanet.id,
+      choice.buildingType,
+      choice.resourceType,
+      'building',
+      createdAt,
+      new Date(now + CORPORATE_BUILD_DURATION_MS).toISOString(),
+      JSON.stringify(cost.costResources),
+      cost.costCredits,
+      choice.expectedRoi,
+      choice.reason,
+      createdAt,
+      createdAt
+    );
+    insertMarketEvent(db, {
+      eventType: 'corporate_build_started',
+      title: 'Privates Holding-Bauprojekt',
+      description: `${company.name} startet den privaten Ausbau von ${getCorporateBuildingMeta(choice.buildingType)?.label || choice.buildingType}.`,
+      impact: 0.02,
+      startedAt: createdAt
+    });
+    return true;
+  });
   let started = 0;
   let processed = 0;
-  db.transaction(() => {
-    for (const company of rows) {
-      if (processed >= CORPORATE_BUILD_TICK_COMPANY_LIMIT) break;
-      if ((Date.now() - tickStartedAt) >= CORPORATE_BUILD_TICK_TIME_BUDGET_MS) break;
-      processed += 1;
-      if (normalizeMarketStatus(company.marketStatus) !== 'tradeable' || Number(company.isEmbargoed || 0)) continue;
-      const sectorState = sectorStateMap.get(company.sectorId) || {};
-      if (Number(sectorState.isEmbargoed || 0)) continue;
-      const activity = getCompanyActivityWindowStats(db, company.id, now);
-      if (activity.activeProjects >= CORPORATE_MAX_ACTIVE_PROJECTS || activity.completed48h >= CORPORATE_MAX_COMPLETED_48H) continue;
-      if (safeNumber(company.corporateBuildCooldownUntil, 0, 0, Number.MAX_SAFE_INTEGER) > now) continue;
-      const opportunities = evaluateCorporateBuildOpportunities(company, sectorState, demandBySector.get(company.sectorId) || [], state);
-      const choice = opportunities[0];
-      if (!choice) continue;
-      const cost = calculateCorporateBuildCost(company, choice.buildingType, sectorState);
-      if (!cost || safeNumber(company.corporateCash, 0, 0, 1e9) < cost.costCredits) continue;
-      const procurement = procureResourcesForCorporateBuild(db, state, company, cost, {
-        reason: `Input-Beschaffung fuer ${choice.buildingType}`,
-        expectedRoi: choice.expectedRoi,
-        createdAt: new Date(now).toISOString()
-      });
-      if (!procurement.ok) continue;
-      const refreshedCompany = db.prepare(`
-        SELECT id, corporate_cash AS corporateCash, corporate_resources_json AS corporateResourcesJson
-        FROM market_companies
-        WHERE id = ?
-        LIMIT 1
-      `).get(company.id);
-      if (!refreshedCompany) continue;
-      const refreshedResources = sanitizeResourceBag(refreshedCompany.corporateResourcesJson);
-      if (RESOURCE_KEYS.some((key) => safeNumber(refreshedResources[key], 0, 0, 1e9) < safeNumber(cost.costResources[key], 0, 0, 1e9))) continue;
-      if (safeNumber(refreshedCompany.corporateCash, 0, 0, 1e9) < safeNumber(cost.costCredits, 0, 0, 1e9)) continue;
-      const planets = getSectorPlanetsForCompany(state, company);
-      const currentAssets = readCompanyCorporateAssets(db, state, company.id);
-      const targetPlanet = pickCorporateAssetPlanet(planets, `${company.id}:build`, currentAssets, true);
-      if (!targetPlanet) continue;
-      const charged = chargeCorporateBuildCost({
-        corporateCash: refreshedCompany.corporateCash,
-        corporateResourcesJson: JSON.stringify(refreshedResources)
-      }, cost);
-      const createdAt = new Date(now).toISOString();
-      updateCompany.run(
-        charged.nextCash,
-        JSON.stringify(charged.nextResources),
-        now,
-        now + (choice.expectedRoi > 0.25 ? (12 * 60 * 60 * 1000) : (18 * 60 * 60 * 1000)),
-        clamp(safeNumber(company.expansionScore, 0.2, 0, 1) + 0.04, 0, 1),
-        clamp(safeNumber(company.monopolyScore, 0, 0, 1) + (choice.expectedRoi >= 0.22 ? 0.03 : 0.01), 0, 1),
-        createdAt,
-        company.id
-      );
-      insertProject.run(
-        crypto.randomUUID(),
-        company.id,
-        company.sectorId,
-        targetPlanet.id,
-        choice.buildingType,
-        choice.resourceType,
-        'building',
-        createdAt,
-        new Date(now + CORPORATE_BUILD_DURATION_MS).toISOString(),
-        JSON.stringify(cost.costResources),
-        cost.costCredits,
-        choice.expectedRoi,
-        choice.reason,
-        createdAt,
-        createdAt
-      );
-      insertMarketEvent(db, {
-        eventType: 'corporate_build_started',
-        title: 'Privates Holding-Bauprojekt',
-        description: `${company.name} startet den privaten Ausbau von ${getCorporateBuildingMeta(choice.buildingType)?.label || choice.buildingType}.`,
-        impact: 0.02,
-        startedAt: createdAt
-      });
-      started += 1;
+  for (const company of rows) {
+    if (processed >= CORPORATE_BUILD_TICK_COMPANY_LIMIT) break;
+    if (started >= CORPORATE_BUILD_TICK_START_LIMIT) break;
+    if (Date.now() >= deadlineAt) break;
+    processed += 1;
+    if (normalizeMarketStatus(company.marketStatus) !== 'tradeable' || Number(company.isEmbargoed || 0)) continue;
+    const sectorState = sectorStateMap.get(company.sectorId) || {};
+    if (Number(sectorState.isEmbargoed || 0)) continue;
+    const activity = getCompanyActivityWindowStats(db, company.id, now);
+    if (activity.activeProjects >= CORPORATE_MAX_ACTIVE_PROJECTS || activity.completed48h >= CORPORATE_MAX_COMPLETED_48H) continue;
+    if (safeNumber(company.corporateBuildCooldownUntil, 0, 0, Number.MAX_SAFE_INTEGER) > now) continue;
+    const opportunities = evaluateCorporateBuildOpportunities(company, sectorState, demandBySector.get(company.sectorId) || [], state);
+    const choice = opportunities[0];
+    if (!choice) continue;
+    const cost = calculateCorporateBuildCost(company, choice.buildingType, sectorState);
+    if (!cost || safeNumber(company.corporateCash, 0, 0, 1e9) < cost.costCredits) continue;
+    try {
+      if (tryStartBuildForCompany(company, sectorState, choice, cost)) {
+        started += 1;
+      }
+    } catch (error) {
+      if (error?.code !== 'CORPORATE_BUILD_SKIP') throw error;
     }
-    setRuntimeStateNumber(db, 'last_corporate_build_tick', now, new Date(now).toISOString());
-  })();
+  }
+  setRuntimeStateNumber(db, 'last_corporate_build_tick', now, new Date(now).toISOString());
   return started;
 }
 
@@ -4690,6 +4715,7 @@ export function warmHoldingInfrastructureBootstrap(db, now = Date.now()) {
 function procureResourcesForCorporateBuild(db, state, company, buildCost, options = {}) {
   const buyerCompanyId = String(company?.id || '').trim();
   if (!buyerCompanyId || !buildCost) return { ok: false, reason: 'invalid-build-context', trades: [] };
+  const deadlineAt = safeNumber(options.deadlineAt, 0, 0, Number.MAX_SAFE_INTEGER);
   const currentCompany = db.prepare(`
     SELECT id, name, sector_id AS sectorId, market_status AS marketStatus, is_embargoed AS isEmbargoed,
       corporate_cash AS corporateCash, corporate_resources_json AS corporateResourcesJson
@@ -4701,9 +4727,11 @@ function procureResourcesForCorporateBuild(db, state, company, buildCost, option
   const trades = [];
   const buyerResources = sanitizeResourceBag(currentCompany.corporateResourcesJson);
   for (const resourceType of RESOURCE_KEYS) {
+    if (deadlineAt && Date.now() >= deadlineAt) return { ok: false, reason: 'time-budget-exceeded', trades };
     const needed = round2(Math.max(0, safeNumber(buildCost.costResources?.[resourceType], 0, 0, 1e9) - safeNumber(buyerResources[resourceType], 0, 0, 1e9)));
     if (!(needed > 0)) continue;
     let remaining = needed;
+    if (deadlineAt && Date.now() >= deadlineAt) return { ok: false, reason: 'time-budget-exceeded', trades };
     const sellers = db.prepare(`
       SELECT c.id, c.name, c.sector_id AS sectorId, c.market_status AS marketStatus, c.is_embargoed AS isEmbargoed,
         c.corporate_cash AS corporateCash, c.corporate_resources_json AS corporateResourcesJson,
@@ -4732,6 +4760,7 @@ function procureResourcesForCorporateBuild(db, state, company, buildCost, option
       .slice(0, CORPORATE_BUILD_SELLER_SCAN_LIMIT);
     sellers.forEach((seller) => {
       if (!(remaining > 0)) return;
+      if (deadlineAt && Date.now() >= deadlineAt) return;
       const availableAmount = safeNumber(seller.availableAmount, 0, 0, 1e9);
       if (!(availableAmount > 0)) return;
       const quantity = round2(Math.min(remaining, availableAmount));
