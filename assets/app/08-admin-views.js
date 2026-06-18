@@ -265,6 +265,16 @@ let serverReloadAdminState = {
 };
 let serverReloadPollTimer = 0;
 
+async function readServerReloadResponse(response) {
+  const rawText = await response.text();
+  if (!rawText) return {};
+  try {
+    return JSON.parse(rawText);
+  } catch {
+    return { error: rawText };
+  }
+}
+
 function canManageServerReload() {
   return LOGIN_ROLE_DEFINITIONS[currentAssignedRole()]?.level === 'global';
 }
@@ -299,7 +309,19 @@ async function fetchServerReloadStatus(options = {}) {
     const response = await fetch('/api/admin/server-reload-status', {
       credentials: 'include'
     });
-    const payload = await response.json();
+    const payload = await readServerReloadResponse(response);
+    if (response.status === 404) {
+      serverReloadAdminState = {
+        ...serverReloadAdminState,
+        loading: false,
+        status: 'error',
+        message: 'Diese Serverinstanz kennt den Reload-Status-Endpunkt noch nicht. Bitte einmal `git pull`, `pm2 restart galactic` und `pm2 save` auf dem Server ausführen.'
+      };
+      clearServerReloadPollTimer();
+      if (activeMainTab === 'loginManager') renderLoginManagerView();
+      if (!silent) setStatus('Server-Reload-Status ist auf dieser Serverversion noch nicht verfuegbar.');
+      return;
+    }
     if (!response.ok) throw new Error(payload.error || 'Server-Reload-Status konnte nicht geladen werden.');
     serverReloadAdminState = {
       status: payload.status || 'idle',
@@ -343,7 +365,7 @@ async function triggerServerReload() {
       method: 'POST',
       credentials: 'include'
     });
-    const payload = await response.json();
+    const payload = await readServerReloadResponse(response);
     if (!response.ok) throw new Error(payload.error || 'Server-Reload konnte nicht gestartet werden.');
     serverReloadAdminState = {
       status: payload.status || 'queued',

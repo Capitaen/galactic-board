@@ -1137,6 +1137,25 @@ function setBootProgress(progress, statusText = getBootStatusText()) {
   if (bootStatusLabel) bootStatusLabel.textContent = statusText;
 }
 
+const RESTART_VERIFICATION_SPLASH_DURATION_MS = 20000;
+let restartVerificationSplashTimer = 0;
+
+function showRestartVerificationSplash() {
+  if (!restartVerificationSplash) return;
+  if (restartVerificationSplashTimer) {
+    window.clearTimeout(restartVerificationSplashTimer);
+    restartVerificationSplashTimer = 0;
+  }
+  restartVerificationSplash.classList.remove('hidden');
+  restartVerificationSplash.classList.add('visible');
+  restartVerificationSplash.setAttribute('aria-hidden', 'false');
+  restartVerificationSplashTimer = window.setTimeout(() => {
+    restartVerificationSplash.classList.remove('visible');
+    restartVerificationSplash.classList.add('hidden');
+    restartVerificationSplash.setAttribute('aria-hidden', 'true');
+  }, RESTART_VERIFICATION_SPLASH_DURATION_MS);
+}
+
 function finalizeBootScreen(statusText = 'SYSTEME ONLINE') {
   if (bootLoadState.hidden) return;
   bootLoadState.hidden = true;
@@ -1201,6 +1220,7 @@ function resetBootSequenceState(mode = 'app') {
 }
 
 function startBootSequence(mode = 'app') {
+  showRestartVerificationSplash();
   resetBootSequenceState(mode);
   setBootProgress(4, getBootStatusText());
   bootLoadState.timer = window.setInterval(() => {

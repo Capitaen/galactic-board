@@ -500,6 +500,7 @@ const guestContinueBtn = document.getElementById('guestContinueBtn');
 const loginModal = document.getElementById('loginModal');
 const loginModalUser = document.getElementById('loginUser');
 const loginModalPassword = document.getElementById('loginPassword');
+const restartVerificationSplash = document.getElementById('restartVerificationSplash');
 const bootScreen = document.getElementById('bootScreen');
 const bootProgressFill = document.getElementById('bootProgressFill');
 const bootProgressText = document.getElementById('bootProgressText');
