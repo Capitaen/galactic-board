@@ -163,6 +163,7 @@ function queueHoverStateUpdate(event) {
 
 function getOverlayModalById(modalId) {
   if (modalId === 'settingsModal') return settingsModal;
+  if (modalId === 'adminControlModal') return adminControlModal;
   if (modalId === 'creditsModal') return creditsModal;
   if (modalId === 'tutorialModal') return tutorialModal;
   return null;
@@ -268,6 +269,283 @@ function getCurrentSessionLabel() {
   return currentAuthenticatedUsername ? `${currentAuthenticatedUsername} (${currentRole()})` : 'Gast / Viewer';
 }
 
+function getAdminControlFilteredPlanets() {
+  const normalizedQuery = normalizeSearchText(adminControlPlanetSearchQuery || '');
+  return (state.planets || [])
+    .slice()
+    .sort((left, right) => left.name.localeCompare(right.name, 'de'))
+    .filter((planet) => {
+      if (!normalizedQuery) return true;
+      const haystack = normalizeSearchText([planet.name, planet.sector, planet.region, planet.grid, planet.owner].join(' '));
+      return haystack.includes(normalizedQuery);
+    });
+}
+
+function ensureAdminControlPlanetSelection() {
+  const filteredPlanets = getAdminControlFilteredPlanets();
+  const existingPlanet = planetIndex.get(selectedAdminControlPlanetId);
+  if (existingPlanet && filteredPlanets.some((planet) => planet.id === existingPlanet.id)) return existingPlanet;
+  if (!filteredPlanets.length) {
+    selectedAdminControlPlanetId = '';
+    return null;
+  }
+  selectedAdminControlPlanetId = filteredPlanets[0]?.id || state.planets?.[0]?.id || '';
+  return planetIndex.get(selectedAdminControlPlanetId) || null;
+}
+
+function getInfrastructureOptionMarkup(selectedKey = '') {
+  const categoryLabels = {
+    military: 'Militaerisch',
+    civilian: 'Zivil',
+    development: 'Entwicklung',
+    storage: 'Lager'
+  };
+  const grouped = new Map();
+  Object.entries(MINE_PROJECT_DEFS).forEach(([buildingKey, meta]) => {
+    const category = meta.category || 'military';
+    if (!grouped.has(category)) grouped.set(category, []);
+    grouped.get(category).push({ buildingKey, meta });
+  });
+  return ['military', 'civilian', 'development', 'storage']
+    .filter((category) => grouped.has(category))
+    .map((category) => `
+      <optgroup label="${categoryLabels[category] || category}">
+        ${grouped.get(category)
+          .sort((left, right) => (left.meta.label || left.buildingKey).localeCompare((right.meta.label || right.buildingKey), 'de'))
+          .map(({ buildingKey, meta }) => `<option value="${buildingKey}" ${selectedKey === buildingKey ? 'selected' : ''}>${escapeHtml(meta.label || buildingKey)}</option>`)
+          .join('')}
+      </optgroup>
+    `)
+    .join('');
+}
+
+function syncViewsAfterAdminControlSave() {
+  render({ positions: true, layers: true, frontline: true, influence: true });
+  if (activeMainTab === 'shipyard') renderShipyardView();
+  if (activeMainTab === 'fleetManagement') renderFleetManagementView();
+  if (activeMainTab === 'buildProjects') renderBuildProjectsView();
+  if (activeMainTab === 'economy') renderEconomyView();
+}
+
+function renderAdminControlModal() {
+  if (!adminControlModalContent || !isAdminRole()) return;
+  const selectedPlanet = ensureAdminControlPlanetSelection();
+  const filteredPlanets = getAdminControlFilteredPlanets();
+  const selectedPoolGar = getFactionResourcePool('GAR');
+  const selectedPoolKus = getFactionResourcePool('KUS');
+  const selectedSlots = selectedPlanet ? getPlanetResourceSlots(selectedPlanet.id) : Array.from({ length: 10 }, () => '');
+  const warehouses = selectedPlanet ? getPlanetWarehouses(selectedPlanet.id) : [];
+  const slotUsage = selectedPlanet ? getPlanetSlotUsage(selectedPlanet.id) : { used: 0, total: 10 };
+  const productionRate = selectedPlanet ? getPlanetProductionRate(selectedPlanet.id) : createEmptyFactionResources();
+  adminControlModalContent.innerHTML = `
+    <div class="overlay-panel admin-control-panel">
+      <div class="overlay-panel-head">
+        <div class="overlay-panel-title">
+          <h2 id="adminControlModalTitle">Globales Kontrollzentrum</h2>
+          <p>Manuelle Eingriffe fuer globale Admins: Fraktionspools, Planeteneigentuemer, Infrastruktur-Slots und lokale Lager.</p>
+        </div>
+        <button type="button" class="secondary overlay-panel-close" data-close-modal="adminControlModal" aria-label="Kontrollzentrum schliessen">×</button>
+      </div>
+      <section class="overlay-section">
+        <div class="admin-control-section-head">
+          <div>
+            <h3>Fraktionspools</h3>
+            <p>Direkter Eingriff in Ressourcen und Credits fuer GAR und KUS.</p>
+          </div>
+        </div>
+        <div class="admin-control-resource-grid">
+          ${[
+            { faction: 'GAR', pool: selectedPoolGar, title: 'GAR-Haushalt' },
+            { faction: 'KUS', pool: selectedPoolKus, title: 'KUS-Haushalt' }
+          ].map(({ faction, pool, title }) => `
+            <article class="admin-control-card">
+              <h4>${title}</h4>
+              <div class="admin-control-input-grid">
+                ${RESOURCE_KEYS.map((resourceKey) => `
+                  <label class="admin-control-input">
+                    <span>${escapeHtml(RESOURCE_LABELS[resourceKey] || resourceKey)}</span>
+                    <input id="adminPool_${faction}_${resourceKey}" type="number" min="0" step="1" value="${Math.round(Number(pool?.[resourceKey] || 0))}">
+                  </label>
+                `).join('')}
+              </div>
+              <div class="toolbar-row end">
+                <button type="button" class="mini-btn primary" data-admin-save-pool="${faction}">${faction} speichern</button>
+              </div>
+            </article>
+          `).join('')}
+        </div>
+      </section>
+      <section class="overlay-section">
+        <div class="admin-control-section-head">
+          <div>
+            <h3>Planeteneditor</h3>
+            <p>Planeten schnell finden, Besitzer wechseln, Slots anpassen und Lager direkt pflegen.</p>
+          </div>
+        </div>
+        <div class="admin-control-planet-toolbar">
+          <label class="admin-control-search">
+            <span>Planet suchen</span>
+            <input id="adminControlPlanetSearch" type="search" placeholder="Name, Sektor, Grid ..." value="${escapeHtml(adminControlPlanetSearchQuery)}">
+          </label>
+          <label class="admin-control-select">
+            <span>Auswahl</span>
+            <select id="adminControlPlanetSelect">
+              ${filteredPlanets.map((planet) => `<option value="${planet.id}" ${planet.id === selectedPlanet?.id ? 'selected' : ''}>${escapeHtml(planet.name)} • ${escapeHtml(planet.sector || '—')} • ${escapeHtml(planet.grid || '—')}</option>`).join('') || '<option value="">Keine Treffer</option>'}
+            </select>
+          </label>
+          <div class="toolbar-row end">
+            <button type="button" class="mini-btn" id="adminControlFocusPlanetBtn" ${selectedPlanet ? '' : 'disabled'}>Auf Karte zeigen</button>
+          </div>
+        </div>
+        ${selectedPlanet ? `
+          <div class="admin-control-summary-grid">
+            <div class="stat-card"><strong>Besitzer</strong><span>${escapeHtml(selectedPlanet.owner || 'NEUTRAL')}</span></div>
+            <div class="stat-card"><strong>Grid</strong><span>${escapeHtml(selectedPlanet.grid || '—')}</span></div>
+            <div class="stat-card"><strong>Slots belegt</strong><span>${slotUsage.used}/${slotUsage.total || 10}</span></div>
+            <div class="stat-card"><strong>Lager</strong><span>${warehouses.length}</span></div>
+          </div>
+          <div class="admin-control-columns">
+            <article class="admin-control-card">
+              <h4>Grunddaten</h4>
+              <div class="admin-control-input-grid">
+                <label class="admin-control-input">
+                  <span>Besitzer</span>
+                  <select id="adminControlPlanetOwner">
+                    ${['GAR', 'KUS', 'HUTT', 'NEUTRAL'].map((owner) => `<option value="${owner}" ${selectedPlanet.owner === owner ? 'selected' : ''}>${owner}</option>`).join('')}
+                  </select>
+                </label>
+                <label class="admin-control-input">
+                  <span>Sektor</span>
+                  <input value="${escapeHtml(selectedPlanet.sector || '—')}" disabled>
+                </label>
+                <label class="admin-control-input">
+                  <span>Region</span>
+                  <input value="${escapeHtml(selectedPlanet.region || '—')}" disabled>
+                </label>
+                <label class="admin-control-input">
+                  <span>Produktion / h</span>
+                  <input value="${RESOURCE_KEYS.filter((resourceKey) => Number(productionRate?.[resourceKey] || 0) > 0).map((resourceKey) => `${RESOURCE_LABELS[resourceKey]} +${Math.round(Number(productionRate[resourceKey] || 0))}`).join(' • ') || 'Keine'}" disabled>
+                </label>
+              </div>
+            </article>
+            <article class="admin-control-card">
+              <div class="admin-control-card-head">
+                <h4>Infrastruktur-Slots</h4>
+                <button type="button" class="mini-btn" id="adminControlClearSlotsBtn">Alle Slots leeren</button>
+              </div>
+              <div class="admin-control-slot-grid">
+                ${selectedSlots.map((slot, index) => `
+                  <label class="admin-control-slot-card">
+                    <span>Slot ${index + 1}</span>
+                    <select id="adminControlSlot_${index}">
+                      <option value="" ${!slot ? 'selected' : ''}>Leer</option>
+                      ${getInfrastructureOptionMarkup(slot)}
+                    </select>
+                  </label>
+                `).join('')}
+              </div>
+            </article>
+          </div>
+          <article class="admin-control-card" style="margin-top:14px">
+            <h4>Lokale Lager</h4>
+            ${warehouses.length ? warehouses.map((warehouse, index) => `
+              <div class="admin-control-warehouse-card">
+                <div class="admin-control-input-grid">
+                  <label class="admin-control-input">
+                    <span>Slot</span>
+                    <input value="${Number(warehouse.slotIndex) + 1}" disabled>
+                  </label>
+                  <label class="admin-control-input">
+                    <span>Level</span>
+                    <input id="adminWarehouseLevel_${index}" type="number" min="1" max="${WAREHOUSE_MAX_LEVEL}" step="1" value="${Math.round(Number(warehouse.level || 1))}">
+                  </label>
+                  <label class="admin-control-input">
+                    <span>Kapazitaet</span>
+                    <input value="${formatResourceAmount(getWarehouseCapacity(warehouse.level || 1))}" disabled>
+                  </label>
+                </div>
+                <div class="admin-control-input-grid">
+                  ${STORAGE_RESOURCE_KEYS.map((resourceKey) => `
+                    <label class="admin-control-input">
+                      <span>${escapeHtml(RESOURCE_LABELS[resourceKey])}</span>
+                      <input id="adminWarehouse_${index}_${resourceKey}" type="number" min="0" step="1" value="${Math.round(Number(warehouse.stockByResource?.[resourceKey] || 0))}">
+                    </label>
+                  `).join('')}
+                </div>
+              </div>
+            `).join('') : '<div class="muted-box">Noch kein lokales Lager auf diesem Planeten. Weise einem Slot „Universallager“ zu und speichere den Planeten, dann wird das Lager automatisch angelegt.</div>'}
+          </article>
+          <div class="toolbar-row end" style="margin-top:14px">
+            <button type="button" class="mini-btn primary" id="adminControlSavePlanetBtn">Planet speichern</button>
+          </div>
+        ` : '<div class="muted-box">Kein Planet passend zur aktuellen Suche gefunden.</div>'}
+      </section>
+    </div>
+  `;
+  adminControlModalContent.querySelectorAll('[data-admin-save-pool]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const faction = button.dataset.adminSavePool;
+      const pool = getFactionResourcePool(faction);
+      RESOURCE_KEYS.forEach((resourceKey) => {
+        const input = document.getElementById(`adminPool_${faction}_${resourceKey}`);
+        pool[resourceKey] = Math.max(0, Math.round(Number(input?.value || 0)));
+      });
+      saveLocal();
+      playAudioCue(datapadAcceptAudio);
+      syncViewsAfterAdminControlSave();
+      renderAdminControlModal();
+      setStatus(`${faction}-Haushalt manuell aktualisiert.`);
+    });
+  });
+  adminControlModalContent.querySelector('#adminControlPlanetSearch')?.addEventListener('input', (event) => {
+    adminControlPlanetSearchQuery = event.target.value || '';
+    renderAdminControlModal();
+  });
+  adminControlModalContent.querySelector('#adminControlPlanetSelect')?.addEventListener('change', (event) => {
+    selectedAdminControlPlanetId = event.target.value || '';
+    renderAdminControlModal();
+  });
+  adminControlModalContent.querySelector('#adminControlFocusPlanetBtn')?.addEventListener('click', () => {
+    if (!selectedPlanet) return;
+    closeOverlayModal('adminControlModal');
+    focusPlanetOnMap(selectedPlanet.id);
+  });
+  adminControlModalContent.querySelector('#adminControlClearSlotsBtn')?.addEventListener('click', () => {
+    for (let index = 0; index < 10; index += 1) {
+      const input = document.getElementById(`adminControlSlot_${index}`);
+      if (input) input.value = '';
+    }
+  });
+  adminControlModalContent.querySelector('#adminControlSavePlanetBtn')?.addEventListener('click', () => {
+    if (!selectedPlanet) return;
+    const nextOwner = document.getElementById('adminControlPlanetOwner')?.value || selectedPlanet.owner || 'NEUTRAL';
+    selectedPlanet.owner = nextOwner;
+    const nextSlots = Array.from({ length: 10 }, (_, index) => document.getElementById(`adminControlSlot_${index}`)?.value || '');
+    setPlanetResourceSlots(selectedPlanet.id, nextSlots);
+    syncWarehouseStoreForPlanet(selectedPlanet.id);
+    const refreshedWarehouses = getPlanetWarehouses(selectedPlanet.id);
+    refreshedWarehouses.forEach((warehouse, index) => {
+      warehouse.level = clamp(Math.round(Number(document.getElementById(`adminWarehouseLevel_${index}`)?.value || warehouse.level || 1)), 1, WAREHOUSE_MAX_LEVEL);
+      warehouse.stockByResource = sanitizeWarehouseStock(Object.fromEntries(
+        STORAGE_RESOURCE_KEYS.map((resourceKey) => [resourceKey, Math.max(0, Math.round(Number(document.getElementById(`adminWarehouse_${index}_${resourceKey}`)?.value || 0)))])
+      ));
+      const capacity = getWarehouseCapacity(warehouse.level);
+      const total = getWarehouseStoredTotal(warehouse);
+      if (total > capacity) {
+        const ratio = capacity / Math.max(1, total);
+        STORAGE_RESOURCE_KEYS.forEach((resourceKey) => {
+          warehouse.stockByResource[resourceKey] = Math.floor(Number(warehouse.stockByResource[resourceKey] || 0) * ratio);
+        });
+      }
+    });
+    saveLocal();
+    playAudioCue(datapadAcceptAudio);
+    syncViewsAfterAdminControlSave();
+    renderAdminControlModal();
+    setStatus(`Planet manuell aktualisiert: ${selectedPlanet.name}`);
+  });
+}
+
 function renderSettingsModal() {
   if (!settingsModalContent) return;
   const toggleRows = getSettingsToggleDefinitions().map((entry) => {
@@ -323,6 +601,9 @@ function renderSettingsModal() {
               data-settings-admin-toggle="true"
             ></button>
           </div>
+          <div class="toolbar-row" style="margin-top:12px">
+            <button type="button" class="mini-btn primary" id="openAdminControlCenter">Globales Kontrollzentrum öffnen</button>
+          </div>
         </section>
       ` : ''}
       <section class="overlay-section">
@@ -348,6 +629,10 @@ function renderSettingsModal() {
     saveUiSettingsPrefs();
     refreshRoleChrome();
     renderSettingsModal();
+  });
+  settingsModalContent.querySelector('#openAdminControlCenter')?.addEventListener('click', () => {
+    renderAdminControlModal();
+    openOverlayModal('adminControlModal');
   });
   settingsModalContent.querySelector('#settingsSoundRange')?.addEventListener('input', (event) => {
     uiSoundVolume = clampUiSoundVolume(event.target.value);

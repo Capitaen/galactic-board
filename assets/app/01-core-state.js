@@ -506,6 +506,8 @@ const bootProgressText = document.getElementById('bootProgressText');
 const bootStatusLabel = document.getElementById('bootStatusLabel');
 const settingsModal = document.getElementById('settingsModal');
 const settingsModalContent = document.getElementById('settingsModalContent');
+const adminControlModal = document.getElementById('adminControlModal');
+const adminControlModalContent = document.getElementById('adminControlModalContent');
 const creditsModal = document.getElementById('creditsModal');
 const creditsModalContent = document.getElementById('creditsModalContent');
 const tutorialModal = document.getElementById('tutorialModal');
@@ -719,6 +721,8 @@ let activePlanetSearchHighlightId = '';
 let activePlanetSearchHighlightTimer = 0;
 let draggedFleetManagementFleetId = '';
 let draggedFleetCategoryId = '';
+let adminControlPlanetSearchQuery = '';
+let selectedAdminControlPlanetId = '';
 let radioCommandAdminState = {
   permissions: [],
   audit: [],
