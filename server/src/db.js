@@ -2674,6 +2674,11 @@ export function runCorporateBuildTick(db, state, now = Date.now()) {
       impact: 0.02,
       startedAt: createdAt
     });
+    refreshCorporateSummaries(
+      db,
+      procurement.touchedCompanyIds?.length ? procurement.touchedCompanyIds : [company.id],
+      Date.parse(createdAt) || now
+    );
     return true;
   });
   let started = 0;
@@ -4215,6 +4220,7 @@ export function executeCorporateResourceTrade(db, state, input = {}) {
   const buyerType = String(input.buyerType || (buyerCompanyId ? 'holding' : 'civilian_market')).trim();
   const createdAt = input.createdAt || new Date().toISOString();
   const reason = String(input.reason || 'Corporate resource trade').trim();
+  const skipSummaryRefresh = Boolean(input.skipSummaryRefresh);
   if (!RESOURCE_KEYS.includes(resourceType)) throw Object.assign(new Error('Ungueltiger Ressourcentyp.'), { status: 400 });
   if (!(quantity > 0) || !(requestedUnitPrice > 0 || buyerType === 'civilian_market')) throw Object.assign(new Error('Menge und Preis muessen positiv sein.'), { status: 400 });
   const seller = sellerCompanyId ? db.prepare(`
@@ -4263,7 +4269,9 @@ export function executeCorporateResourceTrade(db, state, input = {}) {
         SET corporate_resources_json = ?, corporate_cash = ?, updated_at = ?
         WHERE id = ?
       `).run(JSON.stringify(sellerResources), round2(safeNumber(seller.corporateCash, 0, 0, 1e9) + totalPrice), createdAt, seller.id);
-      updateCompanyCorporateSummary(db, seller.id, Date.parse(createdAt) || Date.now());
+      if (!skipSummaryRefresh) {
+        updateCompanyCorporateSummary(db, seller.id, Date.parse(createdAt) || Date.now());
+      }
     }
     if (buyer) {
       buyerResources[resourceType] = round2(safeNumber(buyerResources[resourceType], 0, 0, 1e9) + quantity);
@@ -4272,7 +4280,9 @@ export function executeCorporateResourceTrade(db, state, input = {}) {
         SET corporate_resources_json = ?, corporate_cash = ?, updated_at = ?
         WHERE id = ?
       `).run(JSON.stringify(buyerResources), round2(Math.max(0, safeNumber(buyer.corporateCash, 0, 0, 1e9) - totalPrice)), createdAt, buyer.id);
-      updateCompanyCorporateSummary(db, buyer.id, Date.parse(createdAt) || Date.now());
+      if (!skipSummaryRefresh) {
+        updateCompanyCorporateSummary(db, buyer.id, Date.parse(createdAt) || Date.now());
+      }
     }
     db.prepare(`
       INSERT INTO corporate_resource_trades (
@@ -4760,7 +4770,7 @@ export function warmHoldingInfrastructureBootstrap(db, now = Date.now()) {
 
 function procureResourcesForCorporateBuild(db, state, company, buildCost, options = {}) {
   const buyerCompanyId = String(company?.id || '').trim();
-  if (!buyerCompanyId || !buildCost) return { ok: false, reason: 'invalid-build-context', trades: [] };
+  if (!buyerCompanyId || !buildCost) return { ok: false, reason: 'invalid-build-context', trades: [], touchedCompanyIds: [] };
   const deadlineAt = safeNumber(options.deadlineAt, 0, 0, Number.MAX_SAFE_INTEGER);
   const currentCompany = db.prepare(`
     SELECT id, name, sector_id AS sectorId, market_status AS marketStatus, is_embargoed AS isEmbargoed,
@@ -4769,15 +4779,16 @@ function procureResourcesForCorporateBuild(db, state, company, buildCost, option
     WHERE id = ?
     LIMIT 1
   `).get(buyerCompanyId);
-  if (!currentCompany) return { ok: false, reason: 'buyer-not-found', trades: [] };
+  if (!currentCompany) return { ok: false, reason: 'buyer-not-found', trades: [], touchedCompanyIds: [] };
   const trades = [];
+  const touchedCompanyIds = new Set([buyerCompanyId]);
   const buyerResources = sanitizeResourceBag(currentCompany.corporateResourcesJson);
   for (const resourceType of RESOURCE_KEYS) {
-    if (deadlineAt && Date.now() >= deadlineAt) return { ok: false, reason: 'time-budget-exceeded', trades };
+    if (deadlineAt && Date.now() >= deadlineAt) return { ok: false, reason: 'time-budget-exceeded', trades, touchedCompanyIds: Array.from(touchedCompanyIds) };
     const needed = round2(Math.max(0, safeNumber(buildCost.costResources?.[resourceType], 0, 0, 1e9) - safeNumber(buyerResources[resourceType], 0, 0, 1e9)));
     if (!(needed > 0)) continue;
     let remaining = needed;
-    if (deadlineAt && Date.now() >= deadlineAt) return { ok: false, reason: 'time-budget-exceeded', trades };
+    if (deadlineAt && Date.now() >= deadlineAt) return { ok: false, reason: 'time-budget-exceeded', trades, touchedCompanyIds: Array.from(touchedCompanyIds) };
     const sellers = db.prepare(`
       SELECT c.id, c.name, c.sector_id AS sectorId, c.market_status AS marketStatus, c.is_embargoed AS isEmbargoed,
         c.corporate_cash AS corporateCash, c.corporate_resources_json AS corporateResourcesJson,
@@ -4821,9 +4832,11 @@ function procureResourcesForCorporateBuild(db, state, company, buildCost, option
         unitPrice,
         reason: options.reason || `Beschaffung fuer ${buildCost.buildingType || 'Bauprojekt'}`,
         expectedRoi: options.expectedRoi || 0,
-        createdAt: options.createdAt
+        createdAt: options.createdAt,
+        skipSummaryRefresh: true
       });
       trades.push(trade);
+      touchedCompanyIds.add(seller.id);
       remaining = round2(Math.max(0, remaining - quantity));
     });
     if (remaining > 0) {
@@ -4845,17 +4858,25 @@ function procureResourcesForCorporateBuild(db, state, company, buildCost, option
           unitPrice,
           reason: options.reason || `Ziviler Markt-Fallback fuer ${buildCost.buildingType || 'Bauprojekt'}`,
           expectedRoi: options.expectedRoi || 0,
-          createdAt: options.createdAt
+          createdAt: options.createdAt,
+          skipSummaryRefresh: true
         });
         trades.push(fallbackTrade);
         remaining = round2(Math.max(0, remaining - fallbackQuantity));
       }
     }
     if (remaining > 0) {
-      return { ok: false, reason: `missing-${resourceType}`, missingResource: resourceType, missingQuantity: remaining, trades };
+      return {
+        ok: false,
+        reason: `missing-${resourceType}`,
+        missingResource: resourceType,
+        missingQuantity: remaining,
+        trades,
+        touchedCompanyIds: Array.from(touchedCompanyIds)
+      };
     }
   }
-  return { ok: true, trades };
+  return { ok: true, trades, touchedCompanyIds: Array.from(touchedCompanyIds) };
 }
 
 export function calculateCivilianMineYield(db, sectorName, resourceType, amount, state, options = {}) {
