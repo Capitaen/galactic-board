@@ -2012,13 +2012,18 @@ function runServerCampaignMaintenance() {
   }
 }
 
-setInterval(() => {
-  try {
-    runServerCampaignMaintenance();
-  } catch (error) {
-    console.warn('Server maintenance tick failed', error);
-  }
-}, 15000);
+let maintenanceIntervalHandle = null;
+
+function ensureMaintenanceLoopStarted() {
+  if (maintenanceIntervalHandle) return;
+  maintenanceIntervalHandle = setInterval(() => {
+    try {
+      runServerCampaignMaintenance();
+    } catch (error) {
+      console.warn('Server maintenance tick failed', error);
+    }
+  }, 15000);
+}
 
 function scheduleHoldingInfrastructureWarmup() {
   if (holdingInfrastructureWarmupStarted) return;
@@ -2046,6 +2051,7 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log(`Galactic Campaign Board server listening on http://0.0.0.0:${PORT}`);
   console.log('Default admin login: admin / admin');
   discordRadioListener.start();
+  ensureMaintenanceLoopStarted();
   scheduleHoldingInfrastructureWarmup();
 });
 
