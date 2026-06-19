@@ -1613,6 +1613,20 @@ body.nav-collapsed #mainNavToggle {
 .fleet-card.compact p { margin:4px 0; }
 .fleet-card.hierarchy-card { background:linear-gradient(180deg, rgba(20,31,46,.9), rgba(11,17,26,.94)); border-color:rgba(109,234,255,.1); }
 .fleet-card.compact .fleet-card-overview { grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); }
+.fleet-card.subordinate-card { padding:10px 10px 12px; border-radius:14px; }
+.fleet-card.subordinate-card h4 { font-size:15px; margin-bottom:4px; padding-right:34px; }
+.fleet-card.subordinate-card .fleet-card-headline p { font-size:11px; }
+.fleet-card.subordinate-card .fleet-card-overview { grid-template-columns:repeat(2, minmax(0, 1fr)); gap:8px; }
+.fleet-card.subordinate-card .fleet-card-stat { padding:8px 9px; }
+.fleet-card.subordinate-card .fleet-card-stat strong { font-size:13px; }
+.fleet-card.subordinate-card .fleet-card-stat small { font-size:10px; line-height:1.3; }
+.fleet-card.subordinate-card .split-inline,
+.fleet-card.subordinate-card .form-row,
+.fleet-card.subordinate-card .actions { gap:8px; }
+.fleet-card.subordinate-card input,
+.fleet-card.subordinate-card select,
+.fleet-card.subordinate-card .mini-btn { min-height:38px; font-size:12px; }
+.fleet-card.subordinate-card .actions { flex-wrap:wrap; }
 .fleet-command-warning { margin:8px 0 0; padding:10px 12px; border-radius:12px; border:1px solid rgba(255,107,107,.24); background:rgba(121,37,40,.18); color:#ffd8d8 !important; }
 .card-drag-handle { position:absolute; top:10px; right:10px; width:34px; height:34px; border-radius:10px; border:1px solid rgba(255,255,255,.16); background:rgba(255,255,255,.08); display:flex; align-items:center; justify-content:center; color:#d9e7ff; font-size:18px; cursor:grab; user-select:none; box-shadow:0 6px 18px rgba(0,0,0,.22); }
 .card-drag-handle:hover { background:rgba(255,255,255,.14); }

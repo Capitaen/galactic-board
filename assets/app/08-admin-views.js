@@ -121,6 +121,7 @@ function renderFleetManagementView() {
                   <p><span class="badge ${category.faction}">${category.faction}</span> • ${categorySummary.groups} Kampfgeschwader • ${categorySummary.divisions} Divisionen • ${categorySummary.stations} Stationen</p>
                 </div>
                 <div class="fleet-category-actions">
+                  ${categoryEditable ? `<button class="mini-btn" onclick="createFleetManagementFleet('${category.id}')">Verband in Kategorie anlegen</button>` : ''}
                   <button class="mini-btn" onclick="toggleFleetManagementCategory('${category.id}')">${collapsed ? 'Ausklappen' : 'Einklappen'}</button>
                   ${categoryEditable ? `
                     <button class="mini-btn primary" onclick="saveFleetManagementCategory('${category.id}')">Kategorie speichern</button>
@@ -575,8 +576,8 @@ function renderLoginManagerView() {
         : '<span class="muted">—</span>';
     return `
       <tr>
-        <td><input id="authUser_${user.id}" value="${escapeLoginManagerText(user.username)}" placeholder="z.B. benutzer" ${editable ? '' : 'disabled'}></td>
-        <td><input id="authPass_${user.id}" type="text" value="${user.password || ''}" placeholder="${editable ? 'Neues Passwort' : 'Nicht bearbeitbar'}" ${editable ? '' : 'disabled'}></td>
+        <td><input id="authUser_${user.id}" value="${escapeLoginManagerText(user.username)}" placeholder="z.B. benutzer" autocomplete="off" ${editable ? 'required' : 'disabled'}></td>
+        <td><input id="authPass_${user.id}" type="text" value="${user.password || ''}" placeholder="${editable ? 'Neues Passwort' : 'Nicht bearbeitbar'}" autocomplete="off" ${editable ? 'required' : 'disabled'}></td>
         <td>
           <select id="authRole_${user.id}" ${editable ? '' : 'disabled'}>
             ${roleOptions.map((role) => `<option value="${role}" ${user.role === role ? 'selected' : ''}>${LOGIN_ROLE_DEFINITIONS[role]?.label || role}</option>`).join('')}

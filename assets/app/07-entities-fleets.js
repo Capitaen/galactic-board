@@ -1087,19 +1087,28 @@ function saveFleetManagementFleet(id) {
   setStatus('Verband gespeichert: ' + fleet.name);
 }
 
-function createFleetManagementFleet() {
+function createFleetManagementFleet(categoryId = '') {
   const role = currentRole();
   if (role === 'Viewer' || role === 'Senat' || isUnderworldRole(role)) return;
   const faction = role === 'Eventleiter / KUS'
     ? 'KUS'
     : (fleetManagementFactionFilter === 'KUS' ? 'KUS' : 'GAR');
-  const fleet = createFleetRecord({ name: 'Neues Kampfgeschwader', faction, commandRole: 'battle_group' });
+  const validCategory = categoryId
+    ? ensureFleetCategoriesStore().find((entry) => entry.id === categoryId && entry.faction === faction)
+    : null;
+  const fleet = createFleetRecord({
+    name: 'Neues Kampfgeschwader',
+    faction,
+    commandRole: 'battle_group',
+    categoryId: validCategory?.id || ''
+  });
   state.fleets.push(fleet);
   saveLocal();
   playAudioCue(datapadAcceptAudio);
   rebuildIndexes();
   render({ positions: true, layers: true });
   renderFleetManagementView();
+  setStatus(validCategory ? `Neuer Verband in Kategorie erstellt: ${validCategory.name}` : 'Neuer Verband erstellt.');
 }
 
 function saveManagedShip(id) {
@@ -1769,13 +1778,13 @@ function renderFleetHierarchyColumns(fleets, bucketKeyPrefix = 'category') {
         <div class="fleet-command-child-block">
           <div class="fleet-command-child-title">Raumstationen</div>
           ${stations.length
-            ? `<div class="fleet-command-child-list">${stations.map((entry) => renderFleetManagementFleetCard(entry, bucketKey, { compact: true, inHierarchy: true })).join('')}</div>`
+            ? `<div class="fleet-command-child-list">${stations.map((entry) => renderFleetManagementFleetCard(entry, bucketKey, { compact: true, inHierarchy: true, subordinate: true })).join('')}</div>`
             : '<div class="fleet-category-empty">Keine Raumstation zugeordnet.</div>'}
         </div>
         <div class="fleet-command-child-block">
           <div class="fleet-command-child-title">Schlachtdivisionen</div>
           ${divisions.length
-            ? `<div class="fleet-command-child-list">${divisions.map((entry) => renderFleetManagementFleetCard(entry, bucketKey, { compact: true, inHierarchy: true })).join('')}</div>`
+            ? `<div class="fleet-command-child-list">${divisions.map((entry) => renderFleetManagementFleetCard(entry, bucketKey, { compact: true, inHierarchy: true, subordinate: true })).join('')}</div>`
             : '<div class="fleet-category-empty">Keine Schlachtdivision zugeordnet.</div>'}
         </div>
       </div>
@@ -1805,6 +1814,7 @@ function renderFleetManagementFleetCard(fleet, bucketKey = getFleetOrderBucketKe
   const editable = canEditFaction(fleet.faction);
   const compact = Boolean(options?.compact);
   const hierarchy = Boolean(options?.inHierarchy);
+  const subordinate = Boolean(options?.subordinate);
   const commandRole = normalizeFleetCommandRole(fleet.commandRole);
   const parentOptions = getFleetParentOptions(fleet, state.fleets);
   const currentParent = fleet.parentFleetId ? (fleetIndex.get(fleet.parentFleetId) || state.fleets.find((entry) => entry.id === fleet.parentFleetId)) : null;
@@ -1819,7 +1829,7 @@ function renderFleetManagementFleetCard(fleet, bucketKey = getFleetOrderBucketKe
     ? `ondragover="allowFleetCardReorder(event)" ondragleave="clearFleetCardReorder(event)" ondrop="handleFleetCardReorderDrop('${fleet.id}', '${bucketKey}', event)"`
     : '';
   return `
-    <div class="fleet-card ${compact ? 'compact' : ''} ${hierarchy ? 'hierarchy-card' : ''}" data-focus-key="fleet:${fleet.id}" ${reorderAttrs}>
+    <div class="fleet-card ${compact ? 'compact' : ''} ${hierarchy ? 'hierarchy-card' : ''} ${subordinate ? 'subordinate-card' : ''}" data-focus-key="fleet:${fleet.id}" ${reorderAttrs}>
       ${editable ? `<div class="card-drag-handle" title="Verband ziehen" draggable="true" ondragstart="startFleetManagementFleetDrag('${fleet.id}', event)" ondragend="endFleetManagementFleetDrag(event)">::</div>` : ''}
       <div class="fleet-card-headline">
         <div>
@@ -1881,12 +1891,14 @@ function renderFleetManagementFleetCard(fleet, bucketKey = getFleetOrderBucketKe
         <label>Planetenbindung</label>
         <input id="fmFleetLocation_${fleet.id}" value="${getFleetDisplayLocation(fleet)}" placeholder="z.B. Coruscant">
       </div>
-      <p>${commandRole === 'battle_group'
-        ? `Oberverband ohne doppelte Schiffsbindung. Gesamtstärke wird aus den unterstellten Schlachtdivisionen aggregiert.${summary.directShips ? ` Legacy-Direktzuweisungen: ${summary.directShips}.` : ''}`
-        : `Diese Einheit wird normalerweise eigenständig bewegt und kann optional einem Kampfgeschwader unterstellt werden.`}</p>
-      ${commandRole === 'battle_group'
-        ? '<p class="fleet-command-warning">Bewegung nur im Notfall. Normalerweise werden die unterstellten Schlachtdivisionen verlegt.</p>'
-        : '<p class="muted">Diese Einheit ist regulär einzeln verlegbar.</p>'}
+      ${subordinate ? '' : `
+        <p>${commandRole === 'battle_group'
+          ? `Oberverband ohne doppelte Schiffsbindung. Gesamtstärke wird aus den unterstellten Schlachtdivisionen aggregiert.${summary.directShips ? ` Legacy-Direktzuweisungen: ${summary.directShips}.` : ''}`
+          : `Diese Einheit wird normalerweise eigenständig bewegt und kann optional einem Kampfgeschwader unterstellt werden.`}</p>
+        ${commandRole === 'battle_group'
+          ? '<p class="fleet-command-warning">Bewegung nur im Notfall. Normalerweise werden die unterstellten Schlachtdivisionen verlegt.</p>'
+          : '<p class="muted">Diese Einheit ist regulär einzeln verlegbar.</p>'}
+      `}
       <div class="actions">
         <button class="mini-btn primary" onclick="saveFleetManagementFleet('${fleet.id}')">Verband speichern</button>
         <button class="mini-btn" onclick="openFleetManifestInManagement('${fleet.id}')">Schiffsmanifest</button>
