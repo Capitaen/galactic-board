@@ -187,6 +187,7 @@ function renderBuildProjectsView() {
   const availableSlots = getAvailableMineSlots(selectedPlanet?.id || '');
   const selectedSlotIndex = document.getElementById('mineBuildSlot')?.value || String(availableSlots[0]?.index ?? '');
   const selectedMineMeta = getMineProjectMeta(selectedBuildingKey);
+  const selectedMineProductionPerHour = Math.max(1, Number(selectedMineMeta?.productionPerHour || 1));
   const selectedPlanetProduction = selectedPlanet ? getPlanetProductionRate(selectedPlanet.id) : createEmptyFactionResources();
   const selectedPlanetBonuses = selectedPlanet ? getPlanetCivilianBonuses(selectedPlanet.id) : createEmptyFactionResources();
   const logisticsSectors = getLogisticsSectorChoices();
@@ -257,8 +258,8 @@ function renderBuildProjectsView() {
           <p>${selectedMineMeta?.category === 'development'
             ? selectedMineMeta.description
             : (selectedMineMeta?.category === 'civilian'
-              ? `Erwirtschaftet etwa ${formatCredits(CIVILIAN_CREDIT_YIELDS[selectedBuildingKey]?.credits || 0)} Bruttoumsatz pro Stunde. Nur der festgelegte Steuersatz fließt in den GAR-Haushalt.`
-              : `Produziert +1 ${RESOURCE_LABELS[selectedMineMeta?.productionResource] || 'Ressource'} pro Stunde und speist sie direkt ins Grosslager auf Coruscant.`)}</p>
+              ? `Erwirtschaftet etwa ${formatCredits((CIVILIAN_CREDIT_YIELDS[selectedBuildingKey]?.credits || 0) * selectedMineProductionPerHour)} Bruttoumsatz pro Stunde. Nur der festgelegte Steuersatz fließt in den GAR-Haushalt.`
+              : `Produziert +${selectedMineProductionPerHour} ${RESOURCE_LABELS[selectedMineMeta?.productionResource] || 'Ressource'} pro Stunde und speist sie direkt ins Grosslager auf Coruscant.`)}</p>
           <strong>Kosten</strong>
           <p>${RESOURCE_KEYS.map((key) => `${RESOURCE_LABELS[key]}: ${selectedMineMeta?.cost?.[key] || 0}`).join(' • ')}</p>
           <p><strong>Bauzeit:</strong> ${MINE_BUILD_DURATION_HOURS}h</p>
