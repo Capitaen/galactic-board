@@ -1695,6 +1695,16 @@ function buildFleetHierarchy(fleets) {
   return { roots, childrenMap };
 }
 
+function syncFleetParentSelectState(fleetId) {
+  const roleSelect = document.getElementById(`fmFleetRole_${fleetId}`);
+  const parentSelect = document.getElementById(`fmFleetParent_${fleetId}`);
+  if (!roleSelect || !parentSelect) return;
+  const role = normalizeFleetCommandRole(roleSelect.value);
+  const disableParent = role === 'battle_group';
+  parentSelect.disabled = disableParent;
+  if (disableParent) parentSelect.value = '';
+}
+
 function renderFleetHierarchyColumns(fleets, bucketKeyPrefix = 'category') {
   const { roots, childrenMap } = buildFleetHierarchy(fleets);
   const commandGroups = roots.filter((fleet) => normalizeFleetCommandRole(fleet.commandRole) === 'battle_group');
@@ -1768,7 +1778,7 @@ function renderFleetManagementFleetCard(fleet, bucketKey = getFleetOrderBucketKe
       <div class="split-inline">
         <div class="form-row">
           <label>Kommandotyp</label>
-          <select id="fmFleetRole_${fleet.id}">
+          <select id="fmFleetRole_${fleet.id}" onchange="syncFleetParentSelectState('${fleet.id}')">
             <option value="battle_group" ${commandRole === 'battle_group' ? 'selected' : ''}>Kampfgeschwader</option>
             <option value="station" ${commandRole === 'station' ? 'selected' : ''}>Raumstation</option>
             <option value="battle_division" ${commandRole === 'battle_division' ? 'selected' : ''}>Schlachtdivision</option>

@@ -125,6 +125,7 @@ window.openFleetManifestInManagement = openFleetManifestInManagement;
 window.openFleetInManagement = openFleetInManagement;
 window.clearFleetManifestFilter = clearFleetManifestFilter;
 window.setFleetManifestSearchQuery = setFleetManifestSearchQuery;
+window.syncFleetParentSelectState = syncFleetParentSelectState;
 window.createLoginManagerUser = createLoginManagerUser;
 window.saveLoginManagerUser = saveLoginManagerUser;
 window.deleteLoginManagerUser = deleteLoginManagerUser;
