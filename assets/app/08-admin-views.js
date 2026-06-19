@@ -200,7 +200,11 @@ function renderFleetManagementView() {
             ${ships.length ? ships.map((ship) => `
               ${(() => {
                 const station = isStationClass(ship.classId);
-                const canAssignStationPlanet = station && isAdminRole();
+                const canAssignStationPlanet = station && (
+                  isAdminRole()
+                  || (ship.faction === 'GAR' && canCoordinate4thFleet())
+                  || (ship.faction === 'KUS' && currentRole() === 'Eventleiter / KUS')
+                );
                 const stationPlanet = ship.locationPlanetId ? planetIndex.get(ship.locationPlanetId) : null;
                 const positionCell = canAssignStationPlanet
                   ? `<input id="shipPlanet_${ship.id}" value="${stationPlanet?.name || ''}" placeholder="z.B. Corellia">`

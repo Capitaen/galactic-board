@@ -1165,7 +1165,12 @@ function saveManagedShip(id) {
     const nextRole = normalizeFleetCommandRole(nextFleet?.commandRole);
     ship.assignedFleetId = station ? '' : (nextFleet && nextFleet.faction === ship.faction && nextRole !== 'battle_group' ? nextFleet.id : '');
   }
-  if (station && isAdminRole() && stationPlanetInput) {
+  const canEditManifestPosition = station && (
+    isAdminRole()
+    || (ship.faction === 'GAR' && canCoordinate4thFleet())
+    || (ship.faction === 'KUS' && currentRole() === 'Eventleiter / KUS')
+  );
+  if (canEditManifestPosition && stationPlanetInput) {
     const rawPlanetName = stationPlanetInput.value.trim();
     const targetPlanet = rawPlanetName ? resolvePlanetBySearchValue(rawPlanetName) : null;
     if (rawPlanetName && !targetPlanet) {
