@@ -1047,10 +1047,24 @@ function saveFleetManagementFleet(id) {
   const commanderInput = document.getElementById(`fmFleetCommander_${id}`);
   const assignmentInput = document.getElementById(`fmFleetAssignment_${id}`);
   const locationInput = document.getElementById(`fmFleetLocation_${id}`);
+  const roleInput = document.getElementById(`fmFleetRole_${id}`);
+  const parentInput = document.getElementById(`fmFleetParent_${id}`);
   if (nameInput) fleet.name = nameInput.value.trim() || fleet.name;
   if (commanderInput) {
     fleet.commander = commanderInput.value.trim();
     fleet.leader = fleet.commander;
+  }
+  if (roleInput) fleet.commandRole = normalizeFleetCommandRole(roleInput.value);
+  if (parentInput && fleet.commandRole !== 'battle_group') {
+    const parent = state.fleets.find((entry) => entry.id === parentInput.value);
+    const validParent = parent
+      && parent.id !== fleet.id
+      && parent.faction === fleet.faction
+      && (parent.categoryId || '') === (fleet.categoryId || '')
+      && normalizeFleetCommandRole(parent.commandRole) === 'battle_group';
+    fleet.parentFleetId = validParent ? parent.id : '';
+  } else {
+    fleet.parentFleetId = '';
   }
   if (assignmentInput) fleet.assignment = assignmentInput.value.trim();
   if (locationInput) {
@@ -1074,7 +1088,7 @@ function createFleetManagementFleet() {
   const faction = role === 'Eventleiter / KUS'
     ? 'KUS'
     : (fleetManagementFactionFilter === 'KUS' ? 'KUS' : 'GAR');
-  const fleet = createFleetRecord({ name: 'Neue Taskforce', faction });
+  const fleet = createFleetRecord({ name: 'Neues Kampfgeschwader', faction, commandRole: 'battle_group' });
   state.fleets.push(fleet);
   saveLocal();
   playAudioCue(datapadAcceptAudio);
@@ -1628,8 +1642,114 @@ function handleFleetCategoryReorderDrop(targetCategoryId, event) {
   reorderFleetCategory(draggedCategoryId, targetCategoryId);
 }
 
-function renderFleetManagementFleetCard(fleet, bucketKey = getFleetOrderBucketKey(fleet)) {
+function getFleetHierarchySortValue(fleet) {
+  const role = normalizeFleetCommandRole(fleet?.commandRole);
+  if (role === 'station') return 0;
+  if (role === 'battle_division') return 1;
+  return 2;
+}
+
+function getFleetParentOptions(fleet, fleets) {
+  if (!fleet || normalizeFleetCommandRole(fleet.commandRole) === 'battle_group') return [];
+  return fleets
+    .filter((entry) => entry.id !== fleet.id
+      && entry.faction === fleet.faction
+      && (entry.categoryId || '') === (fleet.categoryId || '')
+      && normalizeFleetCommandRole(entry.commandRole) === 'battle_group')
+    .sort((a, b) => a.name.localeCompare(b.name, 'de', { sensitivity: 'base' }));
+}
+
+function buildFleetHierarchy(fleets) {
+  const fleetById = new Map(fleets.map((fleet) => [fleet.id, fleet]));
+  const childrenMap = new Map();
+  const roots = [];
+  fleets.forEach((fleet) => {
+    const role = normalizeFleetCommandRole(fleet.commandRole);
+    const parent = fleet.parentFleetId ? fleetById.get(fleet.parentFleetId) : null;
+    const parentValid = parent
+      && parent.id !== fleet.id
+      && parent.faction === fleet.faction
+      && (parent.categoryId || '') === (fleet.categoryId || '')
+      && normalizeFleetCommandRole(parent.commandRole) === 'battle_group'
+      && role !== 'battle_group';
+    if (parentValid) {
+      if (!childrenMap.has(parent.id)) childrenMap.set(parent.id, []);
+      childrenMap.get(parent.id).push(fleet);
+      return;
+    }
+    roots.push(fleet);
+  });
+  roots.sort((a, b) => {
+    const roleDelta = getFleetHierarchySortValue(a) - getFleetHierarchySortValue(b);
+    if (roleDelta !== 0) return roleDelta;
+    return (a.assignment || a.name).localeCompare(b.assignment || b.name, 'de', { sensitivity: 'base', numeric: true });
+  });
+  childrenMap.forEach((children, key) => {
+    children.sort((a, b) => {
+      const roleDelta = getFleetHierarchySortValue(a) - getFleetHierarchySortValue(b);
+      if (roleDelta !== 0) return roleDelta;
+      return (a.assignment || a.name).localeCompare(b.assignment || b.name, 'de', { sensitivity: 'base', numeric: true });
+    });
+    childrenMap.set(key, children);
+  });
+  return { roots, childrenMap };
+}
+
+function renderFleetHierarchyColumns(fleets, bucketKeyPrefix = 'category') {
+  const { roots, childrenMap } = buildFleetHierarchy(fleets);
+  const commandGroups = roots.filter((fleet) => normalizeFleetCommandRole(fleet.commandRole) === 'battle_group');
+  const unassignedNodes = roots.filter((fleet) => normalizeFleetCommandRole(fleet.commandRole) !== 'battle_group');
+  const columns = commandGroups.map((fleet) => {
+    const children = childrenMap.get(fleet.id) || [];
+    const stations = children.filter((entry) => normalizeFleetCommandRole(entry.commandRole) === 'station');
+    const divisions = children.filter((entry) => normalizeFleetCommandRole(entry.commandRole) === 'battle_division');
+    const bucketKey = bucketKeyPrefix.startsWith('category:') || bucketKeyPrefix.startsWith('ungrouped:')
+      ? bucketKeyPrefix
+      : `${bucketKeyPrefix}:${fleet.categoryId || fleet.faction}`;
+    return `
+      <div class="fleet-command-column">
+        ${renderFleetManagementFleetCard(fleet, bucketKey, { compact: true, inHierarchy: true })}
+        <div class="fleet-command-child-block">
+          <div class="fleet-command-child-title">Raumstationen</div>
+          ${stations.length
+            ? `<div class="fleet-command-child-list">${stations.map((entry) => renderFleetManagementFleetCard(entry, bucketKey, { compact: true, inHierarchy: true })).join('')}</div>`
+            : '<div class="fleet-category-empty">Keine Raumstation zugeordnet.</div>'}
+        </div>
+        <div class="fleet-command-child-block">
+          <div class="fleet-command-child-title">Schlachtdivisionen</div>
+          ${divisions.length
+            ? `<div class="fleet-command-child-list">${divisions.map((entry) => renderFleetManagementFleetCard(entry, bucketKey, { compact: true, inHierarchy: true })).join('')}</div>`
+            : '<div class="fleet-category-empty">Keine Schlachtdivision zugeordnet.</div>'}
+        </div>
+      </div>
+    `;
+  }).join('');
+  const normalizedBucketKey = bucketKeyPrefix.startsWith('category:') || bucketKeyPrefix.startsWith('ungrouped:')
+    ? bucketKeyPrefix
+    : `${bucketKeyPrefix}:${fleets[0]?.categoryId || fleets[0]?.faction || 'GAR'}`;
+  const unassignedBlock = unassignedNodes.length
+    ? `
+      <div class="fleet-command-unassigned">
+        <h5>Direkt auf Kategorieebene</h5>
+        <div class="fleet-card-list">
+          ${unassignedNodes.map((fleet) => renderFleetManagementFleetCard(fleet, normalizedBucketKey, { compact: true })).join('')}
+        </div>
+      </div>
+    `
+    : '';
+  if (!columns && !unassignedBlock) return '<div class="fleet-category-empty">Noch keine Verbände in dieser Kategorie.</div>';
+  return `
+    ${columns ? `<div class="fleet-command-grid">${columns}</div>` : ''}
+    ${unassignedBlock}
+  `;
+}
+
+function renderFleetManagementFleetCard(fleet, bucketKey = getFleetOrderBucketKey(fleet), options = {}) {
   const editable = canEditFaction(fleet.faction);
+  const compact = Boolean(options?.compact);
+  const hierarchy = Boolean(options?.inHierarchy);
+  const commandRole = normalizeFleetCommandRole(fleet.commandRole);
+  const parentOptions = getFleetParentOptions(fleet, state.fleets);
   const reorderAttrs = editable
     ? `ondragover="allowFleetCardReorder(event)" ondragleave="clearFleetCardReorder(event)" ondrop="handleFleetCardReorderDrop('${fleet.id}', '${bucketKey}', event)"`
     : '';
@@ -1637,16 +1757,33 @@ function renderFleetManagementFleetCard(fleet, bucketKey = getFleetOrderBucketKe
     ? `draggable="true" ondragstart="startFleetManagementFleetDrag('${fleet.id}', event)" ondragend="endFleetManagementFleetDrag(event)"`
     : 'draggable="false"';
   return `
-    <div class="fleet-card" data-focus-key="fleet:${fleet.id}" ${reorderAttrs} ${cardDragAttrs}>
+    <div class="fleet-card ${compact ? 'compact' : ''} ${hierarchy ? 'hierarchy-card' : ''}" data-focus-key="fleet:${fleet.id}" ${reorderAttrs} ${cardDragAttrs}>
       ${editable ? '<div class="card-drag-handle" title="Verband ziehen">::</div>' : ''}
       <h4>${fleet.name}</h4>
-      <p><span class="badge ${fleet.faction}">${fleet.faction}</span></p>
+      <p><span class="badge ${fleet.faction}">${fleet.faction}</span> • ${getFleetCommandRoleLabel(commandRole)}</p>
       <div class="split-inline">
         <input id="fmFleetName_${fleet.id}" value="${fleet.name}">
         <input id="fmFleetCommander_${fleet.id}" value="${fleet.commander || ''}" placeholder="CO / Commander">
       </div>
+      <div class="split-inline">
+        <div class="form-row">
+          <label>Kommandotyp</label>
+          <select id="fmFleetRole_${fleet.id}">
+            <option value="battle_group" ${commandRole === 'battle_group' ? 'selected' : ''}>Kampfgeschwader</option>
+            <option value="station" ${commandRole === 'station' ? 'selected' : ''}>Raumstation</option>
+            <option value="battle_division" ${commandRole === 'battle_division' ? 'selected' : ''}>Schlachtdivision</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label>Unterstellt</label>
+          <select id="fmFleetParent_${fleet.id}" ${commandRole === 'battle_group' ? 'disabled' : ''}>
+            <option value="">Direkt auf Kategorieebene</option>
+            ${parentOptions.map((entry) => `<option value="${entry.id}" ${fleet.parentFleetId === entry.id ? 'selected' : ''}>${entry.name}</option>`).join('')}
+          </select>
+        </div>
+      </div>
       <div class="form-row">
-        <label>Zuordnung</label>
+        <label>Kennung</label>
         <input id="fmFleetAssignment_${fleet.id}" value="${fleet.assignment || ''}" placeholder="z.B. 1.1.1">
       </div>
       <div class="form-row">

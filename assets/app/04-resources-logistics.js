@@ -1079,6 +1079,8 @@ function createFleetRecord(data = {}) {
     locationPlanetId: data.locationPlanetId || data.planetId || '',
     shipIds: Array.isArray(data.shipIds) ? data.shipIds : [],
     categoryId: String(data.categoryId || ''),
+    commandRole: normalizeFleetCommandRole(data.commandRole),
+    parentFleetId: String(data.parentFleetId || ''),
     status: data.status || 'Operational',
     contents: data.contents || '',
     visibility: data.visibility || 'public'

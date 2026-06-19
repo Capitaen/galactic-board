@@ -91,6 +91,18 @@ function escapeHtml(value) {
     .replaceAll("'", '&#39;');
 }
 
+function normalizeFleetCommandRole(value) {
+  if (value === 'station') return 'station';
+  if (value === 'battle_division') return 'battle_division';
+  return 'battle_group';
+}
+
+function getFleetCommandRoleLabel(value) {
+  if (value === 'station') return 'Raumstation';
+  if (value === 'battle_division') return 'Schlachtdivision';
+  return 'Kampfgeschwader';
+}
+
 function createFleetCategoryRecord(data = {}) {
   return {
     id: data.id || `fleetcat_${Math.random().toString(36).slice(2, 10)}`,
@@ -256,6 +268,19 @@ function normalizeCampaignState() {
     fleet.shipIds = Array.isArray(fleet.shipIds) ? fleet.shipIds : [];
     fleet.locationPlanetId = fleet.locationPlanetId || fleet.planetId || '';
     fleet.categoryId = String(fleet.categoryId || '');
+    fleet.commandRole = normalizeFleetCommandRole(fleet.commandRole);
+    fleet.parentFleetId = String(fleet.parentFleetId || '');
+  });
+  const validFleetIds = new Set(state.fleets.map((fleet) => fleet.id));
+  state.fleets.forEach((fleet) => {
+    const parent = fleet.parentFleetId ? state.fleets.find((entry) => entry.id === fleet.parentFleetId) : null;
+    const parentValid = parent
+      && validFleetIds.has(parent.id)
+      && parent.id !== fleet.id
+      && parent.faction === fleet.faction
+      && (parent.categoryId || '') === (fleet.categoryId || '')
+      && normalizeFleetCommandRole(parent.commandRole) === 'battle_group';
+    if (!parentValid || fleet.commandRole === 'battle_group') fleet.parentFleetId = '';
   });
   state.ships = state.ships
     .map((ship) => ({

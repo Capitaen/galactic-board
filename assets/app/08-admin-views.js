@@ -81,9 +81,20 @@ function renderFleetManagementView() {
       <h3>Navy-Kategorien / Verbände</h3>
       <div class="fleet-category-ungrouped" ondragover="allowFleetCategoryDrop(event)" ondragleave="clearFleetCategoryDrop(event)" ondrop="handleFleetCategoryDrop('', event)">
         <h4>Ohne Kategorie</h4>
-        <div class="fleet-card-list">
-          ${ungroupedFleets.length ? ungroupedFleets.map((fleet) => renderFleetManagementFleetCard(fleet, `ungrouped:${fleet.faction}`)).join('') : '<div class="fleet-category-empty">Keine ungruppierten Verbände sichtbar.</div>'}
-        </div>
+        ${ungroupedFleets.length ? `
+          ${ungroupedFleets.some((fleet) => fleet.faction === 'GAR') ? `
+            <div class="fleet-command-unassigned">
+              <h5>GAR</h5>
+              ${renderFleetHierarchyColumns(ungroupedFleets.filter((fleet) => fleet.faction === 'GAR'), 'ungrouped:GAR')}
+            </div>
+          ` : ''}
+          ${ungroupedFleets.some((fleet) => fleet.faction === 'KUS') ? `
+            <div class="fleet-command-unassigned">
+              <h5>KUS</h5>
+              ${renderFleetHierarchyColumns(ungroupedFleets.filter((fleet) => fleet.faction === 'KUS'), 'ungrouped:KUS')}
+            </div>
+          ` : ''}
+        ` : '<div class="fleet-category-empty">Keine ungruppierten Verbände sichtbar.</div>'}
       </div>
       <div class="fleet-category-list">
         ${visibleCategories.map((category) => {
@@ -113,9 +124,7 @@ function renderFleetManagementView() {
                 <input id="fleetCategoryName_${category.id}" value="${category.name}" ${categoryEditable ? '' : 'disabled'}>
               </div>
               <div class="fleet-category-body ${collapsed ? 'collapsed' : ''}">
-                <div class="fleet-card-list">
-                  ${categoryFleets.length ? categoryFleets.map((fleet) => renderFleetManagementFleetCard(fleet, `category:${category.id}`)).join('') : '<div class="fleet-category-empty">Noch keine Verbände in dieser Kategorie.</div>'}
-                </div>
+                ${renderFleetHierarchyColumns(categoryFleets, `category:${category.id}`)}
               </div>
             </div>
           `;
