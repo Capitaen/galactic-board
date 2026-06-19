@@ -1737,6 +1737,16 @@ function syncFleetParentSelectState(fleetId) {
   const parentSelect = document.getElementById(`fmFleetParent_${fleetId}`);
   if (!roleSelect || !parentSelect) return;
   const role = normalizeFleetCommandRole(roleSelect.value);
+  const fleet = state.fleets.find((entry) => entry.id === fleetId);
+  if (fleet) {
+    const optionFleet = { ...fleet, commandRole: role };
+    const selectedParentId = parentSelect.value || fleet.parentFleetId || '';
+    const parentOptions = getFleetParentOptions(optionFleet, state.fleets);
+    parentSelect.innerHTML = [
+      '<option value="">Nicht unterstellt</option>',
+      ...parentOptions.map((entry) => `<option value="${entry.id}" ${selectedParentId === entry.id ? 'selected' : ''}>${entry.assignment ? `${entry.assignment} • ` : ''}${entry.name}</option>`)
+    ].join('');
+  }
   const disableParent = role === 'battle_group';
   parentSelect.disabled = disableParent;
   if (disableParent) parentSelect.value = '';

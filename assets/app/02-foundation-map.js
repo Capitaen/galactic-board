@@ -267,6 +267,7 @@ function normalizeCampaignState() {
   state.fleets.forEach((fleet) => {
     fleet.commander = fleet.commander || fleet.leader || '';
     fleet.assignment = String(fleet.assignment || '').trim();
+    fleet.faction = fleet.faction === 'KUS' ? 'KUS' : 'GAR';
     fleet.shipIds = Array.isArray(fleet.shipIds) ? fleet.shipIds : [];
     fleet.locationPlanetId = fleet.locationPlanetId || fleet.planetId || '';
     fleet.categoryId = String(fleet.categoryId || '');
@@ -280,9 +281,12 @@ function normalizeCampaignState() {
       && validFleetIds.has(parent.id)
       && parent.id !== fleet.id
       && parent.faction === fleet.faction
-      && (parent.categoryId || '') === (fleet.categoryId || '')
       && normalizeFleetCommandRole(parent.commandRole) === 'battle_group';
-    if (!parentValid || fleet.commandRole === 'battle_group') fleet.parentFleetId = '';
+    if (!parentValid || fleet.commandRole === 'battle_group') {
+      fleet.parentFleetId = '';
+      return;
+    }
+    fleet.categoryId = String(parent.categoryId || '');
   });
   state.ships = state.ships
     .map((ship) => ({
