@@ -87,8 +87,38 @@ function getMarketCooldownRemaining() {
   return Math.max(0, next - Date.now());
 }
 
+function captureEconomySearchFocusState(input = document.getElementById('economySectorSearch')) {
+  if (!input) {
+    economySearchFocusState = null;
+    return null;
+  }
+  economySearchFocusState = {
+    shouldRestore: document.activeElement === input || document.activeElement?.id === 'economySectorSearch',
+    selectionStart: input.selectionStart ?? input.value.length,
+    selectionEnd: input.selectionEnd ?? input.value.length
+  };
+  return economySearchFocusState;
+}
+
+function restoreEconomySearchFocusState() {
+  if (!economySearchFocusState?.shouldRestore || activeMainTab !== 'economy' || economyViewState.activeSection !== 'trade') {
+    economySearchFocusState = null;
+    return;
+  }
+  const nextState = economySearchFocusState;
+  requestAnimationFrame(() => {
+    const input = document.getElementById('economySectorSearch');
+    if (!input) return;
+    input.focus({ preventScroll: true });
+    if (typeof input.setSelectionRange === 'function') {
+      input.setSelectionRange(nextState.selectionStart ?? input.value.length, nextState.selectionEnd ?? input.value.length);
+    }
+  });
+  economySearchFocusState = null;
+}
+
 function updateEconomySectorQuery(input) {
-  const cursor = input.selectionStart ?? input.value.length;
+  captureEconomySearchFocusState(input);
   economyViewState.sectorQuery = input.value;
   economyViewState.companySearchError = '';
   if (economySearchTimer) window.clearTimeout(economySearchTimer);
@@ -101,10 +131,7 @@ function updateEconomySectorQuery(input) {
     economyViewState.searchResults = [];
   }
   renderEconomyView();
-  const nextInput = document.getElementById('economySectorSearch');
-  if (!nextInput) return;
-  nextInput.focus();
-  nextInput.setSelectionRange(cursor, cursor);
+  restoreEconomySearchFocusState();
 }
 
 function getActiveEconomyCompanies() {
@@ -454,6 +481,7 @@ async function fetchEconomyView(options = {}) {
   if (economyViewState.loading) return;
   const renderLoading = options.renderLoading !== false;
   let loadedSuccessfully = false;
+  const preserveSearchFocus = captureEconomySearchFocusState();
   economyViewState.loading = true;
   economyViewState.error = '';
   if (renderLoading && activeMainTab === 'economy') renderEconomyView();
@@ -484,23 +512,33 @@ async function fetchEconomyView(options = {}) {
     if (options.markBootReady) markBootTask('economyReady', false);
   } finally {
     economyViewState.loading = false;
-    if (activeMainTab === 'economy') renderEconomyView();
+    if (activeMainTab === 'economy') {
+      renderEconomyView();
+      if (preserveSearchFocus?.shouldRestore) restoreEconomySearchFocusState();
+    }
   }
   return loadedSuccessfully;
 }
 
 async function fetchEconomyCompanySearch(query, resourceFilter = 'all') {
   const normalizedQuery = String(query || '').trim();
+  const preserveSearchFocus = captureEconomySearchFocusState();
   if (!normalizedQuery) {
     economyViewState.searchResults = [];
     economyViewState.companySearchLoading = false;
     economyViewState.companySearchError = '';
-    if (activeMainTab === 'economy') renderEconomyView();
+    if (activeMainTab === 'economy') {
+      renderEconomyView();
+      if (preserveSearchFocus?.shouldRestore) restoreEconomySearchFocusState();
+    }
     return;
   }
   economyViewState.companySearchLoading = true;
   economyViewState.companySearchError = '';
-  if (activeMainTab === 'economy') renderEconomyView();
+  if (activeMainTab === 'economy') {
+    renderEconomyView();
+    if (preserveSearchFocus?.shouldRestore) restoreEconomySearchFocusState();
+  }
   try {
     const url = `/api/economy/market/search?q=${encodeURIComponent(normalizedQuery)}&resource=${encodeURIComponent(resourceFilter || 'all')}&limit=60`;
     const response = await fetch(url, { credentials: 'include' });
@@ -515,7 +553,10 @@ async function fetchEconomyCompanySearch(query, resourceFilter = 'all') {
     economyViewState.companySearchError = error.message;
   } finally {
     economyViewState.companySearchLoading = false;
-    if (activeMainTab === 'economy') renderEconomyView();
+    if (activeMainTab === 'economy') {
+      renderEconomyView();
+      if (preserveSearchFocus?.shouldRestore) restoreEconomySearchFocusState();
+    }
   }
 }
 

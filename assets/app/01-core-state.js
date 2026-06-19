@@ -679,6 +679,7 @@ let activeOverlayModalId = '';
 let lastFocusedElementBeforeModal = null;
 let tutorialCheckPromise = null;
 let economySearchTimer = null;
+let economySearchFocusState = null;
 let planetHyperlaneDegreeCache = { signature: '', map: new Map() };
 let tutorialFlowState = {
   shouldPrompt: false,
