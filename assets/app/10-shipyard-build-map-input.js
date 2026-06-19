@@ -116,6 +116,7 @@ function renderShipyardView() {
               <div class="project-card">
                 <h4>${getBuildJobDisplayName(job)}</h4>
                 <p class="project-meta">${getBuildJobTypeLabel(job)} • ${getBuildJobLocationName(job)} • ${job.faction || 'GAR'}</p>
+                <p class="project-meta">Im Bau: ${escapeHtml(getShipClassMeta(job.classId)?.displayName || job.shipName || job.classId || 'Unbekanntes Schiff')}</p>
                 ${job.startedBy ? `<p class="project-meta">Gestartet von: ${escapeHtml(job.startedBy)}</p>` : ''}
                 ${getBuildJobProgressBar(job)}
                 ${job.status !== 'building' && job.completedAt ? `<p class="project-meta">Abgeschlossen: ${formatMarketDateTime(job.completedAt)}</p>` : ''}
