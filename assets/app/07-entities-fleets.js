@@ -917,6 +917,7 @@ function openFleet(id) {
   const travel = fleetTravelState.get(f.id);
   const jumpDisabled = (!canEditFaction(f.faction) || travel) ? 'disabled' : '';
   const summary = getFleetOperationalSummary(f.id);
+  const isBattleGroup = summary.role === 'battle_group';
   const classSummary = summary.classSummary;
   const activeShips = summary.activeShips;
   const shipManifest = activeShips.length
@@ -932,6 +933,9 @@ function openFleet(id) {
         <small>Gesamtstaerke aus Unterverbänden: ${summary.totalShips} Schiff(e)${summary.directShips ? ` • Direkt zugewiesen: ${summary.directShips}` : ''}</small>
       </div></div>`
     : '';
+  const movementNotice = isBattleGroup
+    ? `<p class="muted fleet-command-warning">Dieser Kampfverband ist ein Oberverband. Im Normalfall werden einzelne Schlachtdivisionen bewegt. Eine Verlegung des gesamten Verbandes ist nur für Notfälle gedacht.</p>`
+    : `<p class="muted">Diese Schlachtdivision/Raumstation ist die reguläre Bewegungseinheit für Einsätze und Verlegungen.</p>`;
   fleetJumpSearchState.fleetId = f.id;
   fleetJumpSearchState.selectedPlanetId = null;
   infoPanel.style.display = 'block';
@@ -956,8 +960,9 @@ function openFleet(id) {
         <div id="fleetJumpResults" class="inline-search-results hidden"></div>
       </div>
     </div>
+    ${movementNotice}
     <p class="muted">Reisezeit orientiert sich an Hyperraumdistanz. Eine Strecke von Kartenmitte oben nach Kartenmitte unten dauert etwa 5 Minuten.</p>
-    <button class="primary" onclick="startFleetJump('${f.id}')" ${jumpDisabled}>Jump</button>
+    <button class="primary ${isBattleGroup ? 'danger' : ''}" onclick="startFleetJump('${f.id}')" ${jumpDisabled}>${isBattleGroup ? 'Notfallverlegung starten' : 'Division verlegen'}</button>
     <button class="secondary" onclick="openFleetInManagement('${f.id}')">Im Flottenmanagement</button>
     <button class="primary" onclick="saveFleet('${f.id}')" ${disabled}>Flotte speichern</button>
     <button class="secondary danger" onclick="deleteFleet('${f.id}')" ${disabled}>Flotte löschen</button>
@@ -1767,6 +1772,9 @@ function renderFleetManagementFleetCard(fleet, bucketKey = getFleetOrderBucketKe
   const secondaryStat = commandRole === 'battle_group'
     ? `${summary.divisions.length} Division(en) • ${summary.stations.length} Station(en)`
     : `${summary.totalShips} Schiff(e) • ${fleet.assignment || 'ohne Kennung'}`;
+  const shipSummaryText = summary.totalShips
+    ? summary.classSummary.replaceAll('<br>', ' • ')
+    : 'Keine Schiffe zugewiesen';
   const reorderAttrs = editable
     ? `ondragover="allowFleetCardReorder(event)" ondragleave="clearFleetCardReorder(event)" ondrop="handleFleetCardReorderDrop('${fleet.id}', '${bucketKey}', event)"`
     : '';
@@ -1798,6 +1806,13 @@ function renderFleetManagementFleetCard(fleet, bucketKey = getFleetOrderBucketKe
         <div class="fleet-card-stat">
           <span class="fleet-card-stat-label">Standort</span>
           <strong>${escapeHtml(getFleetDisplayLocation(fleet))}</strong>
+        </div>
+        <div class="fleet-card-stat fleet-card-shipbox">
+          <span class="fleet-card-stat-label">Schiffe</span>
+          <strong>${commandRole === 'battle_group'
+            ? `${summary.totalShips} Gesamt`
+            : `${summary.totalShips} Direkt`}</strong>
+          <small>${escapeHtml(shipSummaryText)}</small>
         </div>
       </div>
       <div class="split-inline">
@@ -1831,7 +1846,10 @@ function renderFleetManagementFleetCard(fleet, bucketKey = getFleetOrderBucketKe
       </div>
       <p>${commandRole === 'battle_group'
         ? `Oberverband ohne doppelte Schiffsbindung. Gesamtstärke wird aus den unterstellten Schlachtdivisionen aggregiert.${summary.directShips ? ` Legacy-Direktzuweisungen: ${summary.directShips}.` : ''}`
-        : `Direkt zugewiesene Schiffe: ${summary.totalShips}`}</p>
+        : `Diese Division oder Station wird regulär eigenständig bewegt.`}</p>
+      ${commandRole === 'battle_group'
+        ? '<p class="fleet-command-warning">Bewegung nur im Notfall. Normalerweise werden die unterstellten Schlachtdivisionen verlegt.</p>'
+        : '<p class="muted">Diese Einheit ist regulär einzeln verlegbar.</p>'}
       <div class="actions">
         <button class="mini-btn primary" onclick="saveFleetManagementFleet('${fleet.id}')">Verband speichern</button>
         <button class="mini-btn" onclick="openFleetManifestInManagement('${fleet.id}')">Schiffsmanifest</button>

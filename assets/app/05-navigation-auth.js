@@ -1138,6 +1138,16 @@ function moveFleetJumpSelection(direction) {
 function startFleetJump(id) {
   const fleet = fleetIndex.get(id);
   if (!fleet || !canEditFaction(fleet.faction) || isFleetTraveling(fleet)) return;
+  const fleetRole = normalizeFleetCommandRole(fleet.commandRole);
+  if (fleetRole === 'battle_group') {
+    const confirmed = window.confirm(
+      `Achtung: ${fleet.name} ist als Kampfverband/Oberverband markiert.\n\nNormalerweise werden Schlachtdivisionen verlegt, nicht der gesamte Verband.\n\nWillst du diese Notfallverlegung wirklich starten?`
+    );
+    if (!confirmed) {
+      setStatus('Verlegung abgebrochen. Bewege nach Möglichkeit die unterstellten Schlachtdivisionen.');
+      return;
+    }
+  }
   const jumpInput = document.getElementById('fleetJumpTarget');
   const typedTarget = jumpInput?.value?.trim() || '';
   let targetId = document.getElementById('fleetJumpTargetId')?.value || fleetJumpSearchState.selectedPlanetId;
