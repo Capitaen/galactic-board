@@ -39,7 +39,10 @@ function renderFleetManagementView() {
   ];
   const ships = state.ships.filter((ship) => {
     if (!visibleFactions.has(ship.faction)) return false;
-    if (manifestFleet) return ship.assignedFleetId === manifestFleet.id;
+    if (manifestFleet) {
+      const relevantFleetIds = new Set([manifestFleet.id, ...getFleetSubordinateFleets(manifestFleet.id).map((fleet) => fleet.id)]);
+      return relevantFleetIds.has(ship.assignedFleetId);
+    }
     return true;
   }).filter((ship) => {
     if (!normalizedManifestQuery) return true;
@@ -99,6 +102,13 @@ function renderFleetManagementView() {
       <div class="fleet-category-list">
         ${visibleCategories.map((category) => {
           const categoryFleets = groupedFleetMap.get(category.id) || [];
+          const categoryFleetIds = new Set(categoryFleets.map((fleet) => fleet.id));
+          const categorySummary = {
+            groups: categoryFleets.filter((fleet) => normalizeFleetCommandRole(fleet.commandRole) === 'battle_group').length,
+            divisions: categoryFleets.filter((fleet) => normalizeFleetCommandRole(fleet.commandRole) === 'battle_division').length,
+            stations: categoryFleets.filter((fleet) => normalizeFleetCommandRole(fleet.commandRole) === 'station').length,
+            ships: state.ships.filter((ship) => categoryFleetIds.has(ship.assignedFleetId) && !isStationClass(ship.classId)).length
+          };
           const collapsed = fleetCategoryCollapsedIds.has(category.id);
           const categoryEditable = canEditFaction(category.faction);
           const categoryDragAttrs = categoryEditable
@@ -110,7 +120,11 @@ function renderFleetManagementView() {
               <div class="fleet-category-head">
                 <div>
                   <h4>${category.name}</h4>
-                  <p><span class="badge ${category.faction}">${category.faction}</span> • ${categoryFleets.length} Verband/Verbände</p>
+                  <p><span class="badge ${category.faction}">${category.faction}</span> • ${categorySummary.groups} Kampfgeschwader • ${categorySummary.divisions} Divisionen • ${categorySummary.stations} Stationen</p>
+                </div>
+                <div class="fleet-category-summary-badge">
+                  <strong>${categorySummary.ships}</strong>
+                  <span>Schiffe gesamt</span>
                 </div>
                 <div class="fleet-category-actions">
                   <button class="mini-btn" onclick="toggleFleetManagementCategory('${category.id}')">${collapsed ? 'Ausklappen' : 'Einklappen'}</button>
@@ -159,11 +173,12 @@ function renderFleetManagementView() {
                 const positionCell = canAssignStationPlanet
                   ? `<input id="shipPlanet_${ship.id}" value="${stationPlanet?.name || ''}" placeholder="z.B. Corellia">`
                   : getShipDisplayLocation(ship);
+                const fleetOptions = getAssignableFleetOptionsForShip(ship);
                 const fleetCell = station
                   ? `<div class="muted-box">Planetgebunden</div>`
                   : `<select id="shipFleet_${ship.id}">
                       <option value="">Nicht zugeteilt</option>
-                      ${visibleFleets.filter((fleet) => fleet.faction === ship.faction).map((fleet) => `<option value="${fleet.id}" ${ship.assignedFleetId === fleet.id ? 'selected' : ''}>${fleet.name}</option>`).join('')}
+                      ${fleetOptions.map((fleet) => `<option value="${fleet.id}" ${ship.assignedFleetId === fleet.id ? 'selected' : ''}>${fleet.name}${normalizeFleetCommandRole(fleet.commandRole) === 'battle_group' ? ' (Legacy)' : ''}</option>`).join('')}
                     </select>`;
                 const actions = `
                   <button class="mini-btn primary" onclick="saveManagedShip('${ship.id}')">Speichern</button>

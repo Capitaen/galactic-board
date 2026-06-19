@@ -916,17 +916,9 @@ function openFleet(id) {
   const planet = planetIndex.get(f.locationPlanetId || f.planetId);
   const travel = fleetTravelState.get(f.id);
   const jumpDisabled = (!canEditFaction(f.faction) || travel) ? 'disabled' : '';
-  const assignedShips = state.ships.filter((ship) => ship.assignedFleetId === f.id);
-  const activeShips = assignedShips.filter((ship) => !isStationClass(ship.classId));
-  const classSummaryMap = new Map();
-  activeShips.forEach((ship) => {
-    const classMeta = getShipClassMeta(ship.classId);
-    const label = classMeta?.displayName || ship.classId || 'Unbekannte Klasse';
-    classSummaryMap.set(label, (classSummaryMap.get(label) || 0) + 1);
-  });
-  const classSummary = activeShips.length
-    ? [...classSummaryMap.entries()].map(([label, count]) => `${count}x ${label}`).join('<br>')
-    : 'Keine Schiffe zugeteilt.';
+  const summary = getFleetOperationalSummary(f.id);
+  const classSummary = summary.classSummary;
+  const activeShips = summary.activeShips;
   const shipManifest = activeShips.length
     ? activeShips.map((ship) => {
         const classMeta = getShipClassMeta(ship.classId);
@@ -934,6 +926,12 @@ function openFleet(id) {
         return `<div data-manifest-ship-id="${ship.id}" class="${isHighlighted ? 'focus-highlight' : ''}"><strong>${ship.name}</strong><br><small>${classMeta?.displayName || ship.classId}${ship.commander ? ` • CO ${ship.commander}` : ''}</small></div>`;
       }).join('')
     : '<span class="muted">Dieser Flotte sind aktuell keine einzelnen Schiffe zugewiesen.</span>';
+  const subordinateInfo = summary.role === 'battle_group'
+    ? `<div class="form-row"><label>Unterstellte Einheiten</label><div class="workspace-card compact">
+        <strong>${summary.divisions.length} Schlachtdivision(en)</strong> • <strong>${summary.stations.length} Raumstation(en)</strong><br>
+        <small>Gesamtstaerke aus Unterverbänden: ${summary.totalShips} Schiff(e)${summary.directShips ? ` • Direkt zugewiesen: ${summary.directShips}` : ''}</small>
+      </div></div>`
+    : '';
   fleetJumpSearchState.fleetId = f.id;
   fleetJumpSearchState.selectedPlanetId = null;
   infoPanel.style.display = 'block';
@@ -941,6 +939,7 @@ function openFleet(id) {
     ${getInfoPanelHeader(f.name)}
     <p><span class="badge ${f.faction}">${f.faction}</span><span class="badge">${f.status || 'Operational'}</span></p>
     <p class="muted">Position: ${planet ? planet.name : '—'}${travel ? ` • Unterwegs nach ${travel.targetPlanetName}` : ' • Verlegung nur per Hyperraumsprung'}</p>
+    ${subordinateInfo}
     <div class="form-row"><label>Zugewiesene Klassen</label><div class="workspace-card compact">${classSummary}</div></div>
     <div class="form-row"><label>Schiffsmanifest</label><div class="workspace-card compact">${shipManifest}</div></div>
     <div class="form-row"><label>Flottenname</label><input id="fleetName" value="${f.name}" ${disabled}></div>
@@ -1112,7 +1111,8 @@ function saveManagedShip(id) {
   let nextFleet = null;
   if (fleetSelect) {
     nextFleet = state.fleets.find((entry) => entry.id === fleetSelect.value);
-    ship.assignedFleetId = station ? '' : (nextFleet && nextFleet.faction === ship.faction ? nextFleet.id : '');
+    const nextRole = normalizeFleetCommandRole(nextFleet?.commandRole);
+    ship.assignedFleetId = station ? '' : (nextFleet && nextFleet.faction === ship.faction && nextRole !== 'battle_group' ? nextFleet.id : '');
   }
   if (station && isAdminRole() && stationPlanetInput) {
     const rawPlanetName = stationPlanetInput.value.trim();
@@ -1760,6 +1760,13 @@ function renderFleetManagementFleetCard(fleet, bucketKey = getFleetOrderBucketKe
   const hierarchy = Boolean(options?.inHierarchy);
   const commandRole = normalizeFleetCommandRole(fleet.commandRole);
   const parentOptions = getFleetParentOptions(fleet, state.fleets);
+  const summary = getFleetOperationalSummary(fleet.id);
+  const statLabel = commandRole === 'battle_group'
+    ? 'Gesamtstärke'
+    : 'Zugewiesen';
+  const secondaryStat = commandRole === 'battle_group'
+    ? `${summary.divisions.length} Division(en) • ${summary.stations.length} Station(en)`
+    : `${summary.totalShips} Schiff(e) • ${fleet.assignment || 'ohne Kennung'}`;
   const reorderAttrs = editable
     ? `ondragover="allowFleetCardReorder(event)" ondragleave="clearFleetCardReorder(event)" ondrop="handleFleetCardReorderDrop('${fleet.id}', '${bucketKey}', event)"`
     : '';
@@ -1769,8 +1776,30 @@ function renderFleetManagementFleetCard(fleet, bucketKey = getFleetOrderBucketKe
   return `
     <div class="fleet-card ${compact ? 'compact' : ''} ${hierarchy ? 'hierarchy-card' : ''}" data-focus-key="fleet:${fleet.id}" ${reorderAttrs} ${cardDragAttrs}>
       ${editable ? '<div class="card-drag-handle" title="Verband ziehen">::</div>' : ''}
-      <h4>${fleet.name}</h4>
-      <p><span class="badge ${fleet.faction}">${fleet.faction}</span> • ${getFleetCommandRoleLabel(commandRole)}</p>
+      <div class="fleet-card-headline">
+        <div>
+          <h4>${fleet.name}</h4>
+          <p><span class="badge ${fleet.faction}">${fleet.faction}</span> • ${getFleetCommandRoleLabel(commandRole)}</p>
+        </div>
+        <div class="fleet-strength-badge">
+          <strong>${summary.totalShips}</strong>
+          <span>${statLabel}</span>
+        </div>
+      </div>
+      <div class="fleet-card-overview">
+        <div class="fleet-card-stat">
+          <span class="fleet-card-stat-label">CO</span>
+          <strong>${escapeHtml(fleet.commander || fleet.leader || 'Nicht gesetzt')}</strong>
+        </div>
+        <div class="fleet-card-stat">
+          <span class="fleet-card-stat-label">Struktur</span>
+          <strong>${escapeHtml(secondaryStat)}</strong>
+        </div>
+        <div class="fleet-card-stat">
+          <span class="fleet-card-stat-label">Standort</span>
+          <strong>${escapeHtml(getFleetDisplayLocation(fleet))}</strong>
+        </div>
+      </div>
       <div class="split-inline">
         <input id="fmFleetName_${fleet.id}" value="${fleet.name}">
         <input id="fmFleetCommander_${fleet.id}" value="${fleet.commander || ''}" placeholder="CO / Commander">
@@ -1800,7 +1829,9 @@ function renderFleetManagementFleetCard(fleet, bucketKey = getFleetOrderBucketKe
         <label>Planetenbindung</label>
         <input id="fmFleetLocation_${fleet.id}" value="${getFleetDisplayLocation(fleet)}" placeholder="z.B. Coruscant">
       </div>
-      <p>Schiffe zugewiesen: ${fleet.shipIds?.length || 0}</p>
+      <p>${commandRole === 'battle_group'
+        ? `Oberverband ohne doppelte Schiffsbindung. Gesamtstärke wird aus den unterstellten Schlachtdivisionen aggregiert.${summary.directShips ? ` Legacy-Direktzuweisungen: ${summary.directShips}.` : ''}`
+        : `Direkt zugewiesene Schiffe: ${summary.totalShips}`}</p>
       <div class="actions">
         <button class="mini-btn primary" onclick="saveFleetManagementFleet('${fleet.id}')">Verband speichern</button>
         <button class="mini-btn" onclick="openFleetManifestInManagement('${fleet.id}')">Schiffsmanifest</button>

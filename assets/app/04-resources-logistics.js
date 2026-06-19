@@ -1761,6 +1761,87 @@ function focusShipOnMap(shipId) {
   openPlanet(ship.locationPlanetId);
 }
 
+function getFleetDirectChildFleets(fleetId) {
+  return state.fleets.filter((fleet) => String(fleet.parentFleetId || '') === String(fleetId || ''));
+}
+
+function getFleetSubordinateFleets(fleetId) {
+  const collected = [];
+  const queue = [...getFleetDirectChildFleets(fleetId)];
+  const seen = new Set();
+  while (queue.length) {
+    const fleet = queue.shift();
+    if (!fleet || seen.has(fleet.id)) continue;
+    seen.add(fleet.id);
+    collected.push(fleet);
+    queue.push(...getFleetDirectChildFleets(fleet.id));
+  }
+  return collected;
+}
+
+function getFleetOperationalShips(fleetId, options = {}) {
+  const includeSubordinates = options.includeSubordinates !== false;
+  const fleet = fleetIndex.get(fleetId) || state.fleets.find((entry) => entry.id === fleetId);
+  if (!fleet) return [];
+  const role = normalizeFleetCommandRole(fleet.commandRole);
+  const relevantFleetIds = new Set([fleet.id]);
+  if (includeSubordinates && role === 'battle_group') {
+    getFleetSubordinateFleets(fleet.id).forEach((entry) => relevantFleetIds.add(entry.id));
+  }
+  return state.ships.filter((ship) => relevantFleetIds.has(ship.assignedFleetId));
+}
+
+function getFleetOperationalSummary(fleetId) {
+  const fleet = fleetIndex.get(fleetId) || state.fleets.find((entry) => entry.id === fleetId);
+  if (!fleet) {
+    return {
+      role: 'battle_group',
+      directChildren: [],
+      divisions: [],
+      stations: [],
+      ships: [],
+      activeShips: [],
+      totalShips: 0,
+      directShips: 0,
+      classSummary: 'Keine Schiffe zugeteilt.'
+    };
+  }
+  const directChildren = getFleetDirectChildFleets(fleet.id);
+  const divisions = directChildren.filter((entry) => normalizeFleetCommandRole(entry.commandRole) === 'battle_division');
+  const stations = directChildren.filter((entry) => normalizeFleetCommandRole(entry.commandRole) === 'station');
+  const ships = getFleetOperationalShips(fleet.id, { includeSubordinates: true });
+  const activeShips = ships.filter((ship) => !isStationClass(ship.classId));
+  const directShips = state.ships.filter((ship) => ship.assignedFleetId === fleet.id && !isStationClass(ship.classId)).length;
+  const classSummaryMap = new Map();
+  activeShips.forEach((ship) => {
+    const classMeta = getShipClassMeta(ship.classId);
+    const label = classMeta?.displayName || ship.classId || 'Unbekannte Klasse';
+    classSummaryMap.set(label, (classSummaryMap.get(label) || 0) + 1);
+  });
+  return {
+    role: normalizeFleetCommandRole(fleet.commandRole),
+    directChildren,
+    divisions,
+    stations,
+    ships,
+    activeShips,
+    totalShips: activeShips.length,
+    directShips,
+    classSummary: activeShips.length
+      ? [...classSummaryMap.entries()].map(([label, count]) => `${count}x ${label}`).join('<br>')
+      : 'Keine Schiffe zugeteilt.'
+  };
+}
+
+function getAssignableFleetOptionsForShip(ship) {
+  const visibleFactions = getFleetManagementVisibleFactions();
+  return state.fleets
+    .filter((fleet) => visibleFactions.has(fleet.faction))
+    .filter((fleet) => fleet.faction === ship.faction)
+    .filter((fleet) => normalizeFleetCommandRole(fleet.commandRole) !== 'battle_group' || fleet.id === ship.assignedFleetId)
+    .sort((a, b) => String(a.assignment || a.name).localeCompare(String(b.assignment || b.name), 'de', { sensitivity: 'base', numeric: true }));
+}
+
 function getFleetManagementSearchCandidates() {
   const visibleFactions = getFleetManagementVisibleFactions();
   const fleetCandidates = state.fleets
@@ -1769,7 +1850,7 @@ function getFleetManagementSearchCandidates() {
         type: 'fleet',
         id: fleet.id,
         label: fleet.name,
-        meta: `${fleet.faction} • ${fleet.assignment || 'ohne Zuordnung'} • ${fleet.commander || fleet.leader || 'kein CO'} • ${getFleetDisplayLocation(fleet)}`,
+        meta: `${fleet.faction} • ${getFleetCommandRoleLabel(fleet.commandRole)} • ${fleet.assignment || 'ohne Zuordnung'} • ${fleet.commander || fleet.leader || 'kein CO'} • ${getFleetDisplayLocation(fleet)}`,
         search: normalizeSearchText(`${fleet.name} ${fleet.commander || fleet.leader || ''} ${fleet.assignment || ''} ${getFleetDisplayLocation(fleet)}`)
       }));
   const shipCandidates = state.ships
