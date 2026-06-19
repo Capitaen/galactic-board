@@ -176,7 +176,8 @@ function renderBuildProjectsView() {
   const buildJobs = state.buildJobs
     .filter((job) => (role === 'Admin' ? true : job.faction === faction))
     .sort((a, b) => Number(a.finishesAt || 0) - Number(b.finishesAt || 0));
-  const visibleBuildJobs = buildJobs.filter((job) => job.status === 'building' || (job.completedAt && (Date.now() - Number(job.completedAt || 0)) < (48 * 60 * 60 * 1000)));
+  const retainedBuildJobs = buildJobs.filter((job) => job.status === 'building' || (job.completedAt && (Date.now() - Number(job.completedAt || 0)) < (48 * 60 * 60 * 1000)));
+  const infrastructureProjects = retainedBuildJobs.filter((job) => job.jobType === 'mine');
   const buildActivity = (Array.isArray(state.meta?.buildProjectActivity) ? state.meta.buildProjectActivity : [])
     .filter((entry) => role === 'Admin' || entry.faction === faction)
     .slice(0, 18);
@@ -216,7 +217,7 @@ function renderBuildProjectsView() {
   const selectedShipyardFacility = selectedShipyardPlanet ? getShipyardFacilityByPlanet(selectedShipyardPlanet.id) : null;
   const selectedShipyardTargetLevel = selectedShipyardFacility ? Math.min(selectedShipyardFacility.level + 1, Object.keys(SHIPYARD_LEVEL_DEFS).length) : 1;
   const selectedShipyardTargetMeta = getShipyardLevelMeta(selectedShipyardTargetLevel);
-  const shipyardProjects = visibleBuildJobs.filter((job) => job.jobType === 'shipyard');
+  const shipyardProjects = retainedBuildJobs.filter((job) => job.jobType === 'shipyard');
   const activeTab = ['infrastructure', 'logistics', 'shipyards'].includes(buildProjectsViewTab) ? buildProjectsViewTab : 'infrastructure';
   workspacePanel.innerHTML = `
     <div class="workspace-head">
@@ -296,9 +297,9 @@ function renderBuildProjectsView() {
       </div>
       <div class="workspace-card">
         <h3>Projektübersicht</h3>
-        ${visibleBuildJobs.length ? `
+        ${infrastructureProjects.length ? `
           <div class="project-grid">
-            ${visibleBuildJobs.map((job) => `
+            ${infrastructureProjects.map((job) => `
               <div class="project-card">
                 <h4>${getBuildJobDisplayName(job)}</h4>
                 <p class="project-meta">${getBuildJobTypeLabel(job)} • ${getBuildJobLocationName(job)} • ${job.faction || 'GAR'}</p>
