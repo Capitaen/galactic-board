@@ -2,6 +2,7 @@
 
 function renderFleetManagementView() {
   runCampaignMaintenance();
+  syncFleetHierarchyCategoryLinks();
   const role = currentRole();
   if (role === 'Senat') {
     workspacePanel.innerHTML = `
@@ -83,7 +84,7 @@ function renderFleetManagementView() {
     <div class="workspace-section">
       <h3>Navy-Kategorien / Verbände</h3>
       <div class="fleet-category-ungrouped" ondragover="allowFleetCategoryDrop(event)" ondragleave="clearFleetCategoryDrop(event)" ondrop="handleFleetCategoryDrop('', event)">
-        <h4>Ohne Kategorie</h4>
+        <h4>Ohne Kategorie / nicht unterstellt</h4>
         ${ungroupedFleets.length ? `
           ${ungroupedFleets.some((fleet) => fleet.faction === 'GAR') ? `
             <div class="fleet-command-unassigned">
@@ -111,12 +112,9 @@ function renderFleetManagementView() {
           };
           const collapsed = fleetCategoryCollapsedIds.has(category.id);
           const categoryEditable = canEditFaction(category.faction);
-          const categoryDragAttrs = categoryEditable
-            ? `draggable="true" ondragstart="startFleetCategoryDrag('${category.id}', event)" ondragend="endFleetCategoryDrag(event)"`
-            : 'draggable="false"';
           return `
-            <div class="fleet-category-card" data-focus-key="fleet-category:${category.id}" ${categoryDragAttrs} ondragover="allowFleetCategoryDrop(event); allowFleetCategoryReorder(event)" ondragleave="clearFleetCategoryDrop(event); clearFleetCategoryReorder(event)" ondrop="handleFleetCategoryDrop('${category.id}', event); handleFleetCategoryReorderDrop('${category.id}', event)">
-              ${categoryEditable ? '<div class="card-drag-handle" title="Kategorie ziehen">::</div>' : ''}
+            <div class="fleet-category-card" data-focus-key="fleet-category:${category.id}" ondragover="allowFleetCategoryDrop(event); allowFleetCategoryReorder(event)" ondragleave="clearFleetCategoryDrop(event); clearFleetCategoryReorder(event)" ondrop="handleFleetCategoryDrop('${category.id}', event); handleFleetCategoryReorderDrop('${category.id}', event)">
+              ${categoryEditable ? `<div class="card-drag-handle" title="Kategorie ziehen" draggable="true" ondragstart="startFleetCategoryDrag('${category.id}', event)" ondragend="endFleetCategoryDrag(event)">::</div>` : ''}
               <div class="fleet-category-head">
                 <div>
                   <h4>${category.name}</h4>

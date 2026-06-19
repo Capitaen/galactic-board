@@ -1064,9 +1064,9 @@ function saveFleetManagementFleet(id) {
     const validParent = parent
       && parent.id !== fleet.id
       && parent.faction === fleet.faction
-      && (parent.categoryId || '') === (fleet.categoryId || '')
       && normalizeFleetCommandRole(parent.commandRole) === 'battle_group';
     fleet.parentFleetId = validParent ? parent.id : '';
+    if (validParent) fleet.categoryId = parent.categoryId || '';
   } else {
     fleet.parentFleetId = '';
   }
@@ -1077,6 +1077,7 @@ function saveFleetManagementFleet(id) {
     fleet.planetId = fleet.locationPlanetId;
   }
   normalizeFleetShipAssignments();
+  syncFleetHierarchyCategoryLinks();
   rebuildFleetRenderPositions();
   rebuildIndexes();
   saveLocal();
@@ -1344,12 +1345,16 @@ function deleteFleetManagementFleet(id) {
   assignedShips.forEach((ship) => {
     ship.assignedFleetId = '';
   });
+  state.fleets.forEach((entry) => {
+    if (entry.parentFleetId === fleet.id) entry.parentFleetId = '';
+  });
   fleetTravelState.delete(fleet.id);
   removeFleetMotionRecord(fleet.id);
   emitLiveSocketEvent('fx:fleet-delete', { fleetId: fleet.id });
   state.fleets = state.fleets.filter((entry) => entry.id !== fleet.id);
   removeFleetFromOrderBuckets(fleet.id);
   normalizeFleetShipAssignments();
+  syncFleetHierarchyCategoryLinks();
   rebuildFleetRenderPositions();
   rebuildIndexes();
   saveLocal();
@@ -1466,6 +1471,7 @@ function deleteFleetManagementCategory(id) {
   state.fleets.forEach((fleet) => {
     if (fleet.categoryId === id) fleet.categoryId = '';
   });
+  syncFleetHierarchyCategoryLinks();
   state.meta.fleetCategories = ensureFleetCategoriesStore().filter((entry) => entry.id !== id);
   delete ensureFleetCardOrderStore()[`category:${id}`];
   fleetCategoryCollapsedIds.delete(id);
@@ -1493,7 +1499,7 @@ function startFleetManagementFleetDrag(fleetId, event) {
     event?.preventDefault?.();
     return;
   }
-  if (event?.target?.closest?.('input, select, textarea, button, option, label')) {
+  if (!event?.target?.closest?.('.card-drag-handle')) {
     event?.preventDefault?.();
     return;
   }
@@ -1517,7 +1523,7 @@ function startFleetCategoryDrag(categoryId, event) {
     event?.preventDefault?.();
     return;
   }
-  if (event?.target?.closest?.('input, select, textarea, button, option, label')) {
+  if (!event?.target?.closest?.('.card-drag-handle')) {
     event?.preventDefault?.();
     return;
   }
@@ -1560,6 +1566,7 @@ function assignFleetToCategory(fleetId, categoryId) {
     fleet.categoryId = '';
     syncFleetIntoOrderBucket(fleet, getFleetOrderBucketKey(fleet, ''));
   }
+  syncFleetHierarchyCategoryLinks();
   saveClientUiPrefs();
   saveLocal();
   playAudioCue(datapadAcceptAudio);
@@ -1665,9 +1672,8 @@ function getFleetParentOptions(fleet, fleets) {
   return fleets
     .filter((entry) => entry.id !== fleet.id
       && entry.faction === fleet.faction
-      && (entry.categoryId || '') === (fleet.categoryId || '')
       && normalizeFleetCommandRole(entry.commandRole) === 'battle_group')
-    .sort((a, b) => a.name.localeCompare(b.name, 'de', { sensitivity: 'base' }));
+    .sort((a, b) => String(a.assignment || a.name).localeCompare(String(b.assignment || b.name), 'de', { sensitivity: 'base', numeric: true }));
 }
 
 function buildFleetHierarchy(fleets) {
@@ -1680,7 +1686,6 @@ function buildFleetHierarchy(fleets) {
     const parentValid = parent
       && parent.id !== fleet.id
       && parent.faction === fleet.faction
-      && (parent.categoryId || '') === (fleet.categoryId || '')
       && normalizeFleetCommandRole(parent.commandRole) === 'battle_group'
       && role !== 'battle_group';
     if (parentValid) {
@@ -1704,6 +1709,27 @@ function buildFleetHierarchy(fleets) {
     childrenMap.set(key, children);
   });
   return { roots, childrenMap };
+}
+
+function syncFleetHierarchyCategoryLinks() {
+  const fleetById = new Map(state.fleets.map((fleet) => [fleet.id, fleet]));
+  state.fleets.forEach((fleet) => {
+    const role = normalizeFleetCommandRole(fleet.commandRole);
+    if (role === 'battle_group') {
+      fleet.parentFleetId = '';
+      return;
+    }
+    const parent = fleet.parentFleetId ? fleetById.get(fleet.parentFleetId) : null;
+    const validParent = parent
+      && parent.id !== fleet.id
+      && parent.faction === fleet.faction
+      && normalizeFleetCommandRole(parent.commandRole) === 'battle_group';
+    if (!validParent) {
+      fleet.parentFleetId = '';
+      return;
+    }
+    fleet.categoryId = parent.categoryId || '';
+  });
 }
 
 function syncFleetParentSelectState(fleetId) {
@@ -1771,6 +1797,7 @@ function renderFleetManagementFleetCard(fleet, bucketKey = getFleetOrderBucketKe
   const hierarchy = Boolean(options?.inHierarchy);
   const commandRole = normalizeFleetCommandRole(fleet.commandRole);
   const parentOptions = getFleetParentOptions(fleet, state.fleets);
+  const currentParent = fleet.parentFleetId ? (fleetIndex.get(fleet.parentFleetId) || state.fleets.find((entry) => entry.id === fleet.parentFleetId)) : null;
   const summary = getFleetOperationalSummary(fleet.id);
   const secondaryStat = commandRole === 'battle_group'
     ? `${summary.divisions.length} Division(en) • ${summary.stations.length} Station(en)`
@@ -1781,12 +1808,9 @@ function renderFleetManagementFleetCard(fleet, bucketKey = getFleetOrderBucketKe
   const reorderAttrs = editable
     ? `ondragover="allowFleetCardReorder(event)" ondragleave="clearFleetCardReorder(event)" ondrop="handleFleetCardReorderDrop('${fleet.id}', '${bucketKey}', event)"`
     : '';
-  const cardDragAttrs = editable
-    ? `draggable="true" ondragstart="startFleetManagementFleetDrag('${fleet.id}', event)" ondragend="endFleetManagementFleetDrag(event)"`
-    : 'draggable="false"';
   return `
-    <div class="fleet-card ${compact ? 'compact' : ''} ${hierarchy ? 'hierarchy-card' : ''}" data-focus-key="fleet:${fleet.id}" ${reorderAttrs} ${cardDragAttrs}>
-      ${editable ? '<div class="card-drag-handle" title="Verband ziehen">::</div>' : ''}
+    <div class="fleet-card ${compact ? 'compact' : ''} ${hierarchy ? 'hierarchy-card' : ''}" data-focus-key="fleet:${fleet.id}" ${reorderAttrs}>
+      ${editable ? `<div class="card-drag-handle" title="Verband ziehen" draggable="true" ondragstart="startFleetManagementFleetDrag('${fleet.id}', event)" ondragend="endFleetManagementFleetDrag(event)">::</div>` : ''}
       <div class="fleet-card-headline">
         <div>
           <h4>${fleet.name}</h4>
@@ -1805,6 +1829,10 @@ function renderFleetManagementFleetCard(fleet, bucketKey = getFleetOrderBucketKe
         <div class="fleet-card-stat">
           <span class="fleet-card-stat-label">Standort</span>
           <strong>${escapeHtml(getFleetDisplayLocation(fleet))}</strong>
+        </div>
+        <div class="fleet-card-stat">
+          <span class="fleet-card-stat-label">Unterstellt</span>
+          <strong>${escapeHtml(commandRole === 'battle_group' ? 'Eigenständig' : (currentParent?.name || 'Nicht unterstellt'))}</strong>
         </div>
         <div class="fleet-card-stat fleet-card-shipbox">
           <span class="fleet-card-stat-label">Schiffe</span>
@@ -1830,8 +1858,8 @@ function renderFleetManagementFleetCard(fleet, bucketKey = getFleetOrderBucketKe
         <div class="form-row">
           <label>Unterstellt</label>
           <select id="fmFleetParent_${fleet.id}" ${commandRole === 'battle_group' ? 'disabled' : ''}>
-            <option value="">Direkt auf Kategorieebene</option>
-            ${parentOptions.map((entry) => `<option value="${entry.id}" ${fleet.parentFleetId === entry.id ? 'selected' : ''}>${entry.name}</option>`).join('')}
+            <option value="">Nicht unterstellt</option>
+            ${parentOptions.map((entry) => `<option value="${entry.id}" ${fleet.parentFleetId === entry.id ? 'selected' : ''}>${entry.assignment ? `${entry.assignment} • ` : ''}${entry.name}</option>`).join('')}
           </select>
         </div>
       </div>
@@ -1845,7 +1873,7 @@ function renderFleetManagementFleetCard(fleet, bucketKey = getFleetOrderBucketKe
       </div>
       <p>${commandRole === 'battle_group'
         ? `Oberverband ohne doppelte Schiffsbindung. Gesamtstärke wird aus den unterstellten Schlachtdivisionen aggregiert.${summary.directShips ? ` Legacy-Direktzuweisungen: ${summary.directShips}.` : ''}`
-        : `Diese Division oder Station wird regulär eigenständig bewegt.`}</p>
+        : `Diese Einheit wird normalerweise eigenständig bewegt und kann optional einem Kampfgeschwader unterstellt werden.`}</p>
       ${commandRole === 'battle_group'
         ? '<p class="fleet-command-warning">Bewegung nur im Notfall. Normalerweise werden die unterstellten Schlachtdivisionen verlegt.</p>'
         : '<p class="muted">Diese Einheit ist regulär einzeln verlegbar.</p>'}
