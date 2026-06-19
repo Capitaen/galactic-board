@@ -1217,6 +1217,12 @@ function startBuildOrder() {
     setStatus(`Bauort muss ${faction}-kontrolliert sein.`);
     return;
   }
+  const locationChoice = getShipyardLocationChoices(classId).find((entry) => entry.id === locationPlanetId) || null;
+  if (locationChoice && !locationChoice.enabled) {
+    setStatus(locationChoice.disabledReason || 'Dieser Bauort ist für die gewählte Klasse derzeit nicht verfügbar.');
+    renderShipyardView();
+    return;
+  }
   const validLocations = new Set(getAvailableBuildLocations(classId).map((entry) => entry.id));
   if (!validLocations.has(locationPlanetId)) {
     setStatus('Dieser Bauort ist für die gewählte Klasse nicht erlaubt.');

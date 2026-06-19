@@ -464,6 +464,10 @@ function canManageWarehouseLogistics() {
     || currentRole() === 'Republic Navy / GAR';
 }
 
+function canManageShipyards() {
+  return currentRole() === 'Admin' || currentRole() === 'Republic Navy / GAR';
+}
+
 function getMineProjectMeta(buildingKey) {
   return MINE_PROJECT_DEFS[normalizeWarehouseBuildingKey(buildingKey)] || null;
 }
@@ -975,6 +979,91 @@ function getDefaultShipyardPlanets() {
   return state.planets.filter((planet) => targets.has(normalizePlanetKey(planet.id || planet.name)));
 }
 
+function createShipyardFacilityRecord(data = {}) {
+  const level = clamp(Math.max(1, Number(data.level || 1)), 1, Object.keys(SHIPYARD_LEVEL_DEFS).length);
+  return {
+    id: String(data.id || `shipyard_${Math.random().toString(36).slice(2, 10)}`),
+    planetId: String(data.planetId || '').trim(),
+    level,
+    createdAt: Number(data.createdAt || Date.now()) || Date.now(),
+    updatedAt: Number(data.updatedAt || Date.now()) || Date.now()
+  };
+}
+
+function ensureShipyardFacilityStore() {
+  state.meta = state.meta || {};
+  if (!Array.isArray(state.meta.shipyardFacilities)) state.meta.shipyardFacilities = [];
+  state.meta.shipyardFacilities = state.meta.shipyardFacilities
+    .map((entry) => createShipyardFacilityRecord(entry))
+    .filter((entry) => entry.planetId);
+  Object.entries(GAR_SHIPYARD_SEED_LEVELS || {}).forEach(([planetKey, level]) => {
+    const planet = state.planets.find((candidate) => normalizePlanetKey(candidate.id || candidate.name) === planetKey);
+    if (!planet) return;
+    if (state.meta.shipyardFacilities.some((entry) => entry.planetId === planet.id)) return;
+    state.meta.shipyardFacilities.push(createShipyardFacilityRecord({
+      id: `shipyard_${planetKey}`,
+      planetId: planet.id,
+      level
+    }));
+  });
+  return state.meta.shipyardFacilities;
+}
+
+function getShipyardLevelMeta(level = 1) {
+  const normalizedLevel = clamp(Math.max(1, Number(level || 1)), 1, Object.keys(SHIPYARD_LEVEL_DEFS).length);
+  return SHIPYARD_LEVEL_DEFS[normalizedLevel] || SHIPYARD_LEVEL_DEFS[1];
+}
+
+function getGarShipyardEligiblePlanets() {
+  const allowed = new Set(GAR_SHIPYARD_ELIGIBLE_PLANET_KEYS || []);
+  return state.planets
+    .filter((planet) => allowed.has(normalizePlanetKey(planet.id || planet.name)))
+    .sort((a, b) => a.name.localeCompare(b.name, 'de'));
+}
+
+function getShipyardFacilityByPlanet(planetId) {
+  return ensureShipyardFacilityStore().find((entry) => entry.planetId === planetId) || null;
+}
+
+function getShipyardCapacityUsage(planetId) {
+  return state.buildJobs
+    .filter((job) => (
+      job.status === 'building'
+      && job.jobType === 'ship'
+      && (job.faction || 'GAR') === 'GAR'
+      && job.buildLocationPlanetId === planetId
+    ))
+    .reduce((sum, job) => sum + Number(getShipClassMeta(job.classId)?.shipyardCapacityCost || 0), 0);
+}
+
+function getShipyardCapacityFree(planetId) {
+  const facility = getShipyardFacilityByPlanet(planetId);
+  if (!facility) return 0;
+  return Math.max(0, Number(getShipyardLevelMeta(facility.level)?.capacity || 0) - getShipyardCapacityUsage(planetId));
+}
+
+function getShipyardBuildEligibility(planet, classId) {
+  const meta = getShipClassMeta(classId);
+  if (!planet || !meta || (meta.faction || 'GAR') !== 'GAR') return { enabled: false, reason: 'Klasse nicht verfügbar.' };
+  if (isStationClass(classId)) {
+    return planet.owner === 'GAR'
+      ? { enabled: true, reason: '' }
+      : { enabled: false, reason: 'Planet ist nicht unter GAR-Kontrolle.' };
+  }
+  const facility = getShipyardFacilityByPlanet(planet.id);
+  if (planet.owner !== 'GAR') return { enabled: false, reason: 'Planet ist nicht unter GAR-Kontrolle.' };
+  if (!facility) return { enabled: false, reason: 'Keine Werft vorhanden.' };
+  if (facility.level < Number(meta.shipyardLevel || 1)) {
+    return { enabled: false, reason: `Mindestens Werftstufe ${Number(meta.shipyardLevel || 1)} benötigt.` };
+  }
+  const freeCapacity = getShipyardCapacityFree(planet.id);
+  const requiredCapacity = Number(meta.shipyardCapacityCost || 0);
+  if (freeCapacity < requiredCapacity) {
+    return { enabled: false, reason: `Zu wenig Werftplätze frei (${freeCapacity}/${requiredCapacity}).` };
+  }
+  return { enabled: true, reason: '' };
+}
+
 function getShipyardLocationChoices(classId) {
   const meta = getShipClassMeta(classId);
   if (!meta) return [];
@@ -989,12 +1078,20 @@ function getShipyardLocationChoices(classId) {
     return getGARControlledPlanets().map((planet) => ({ ...planet, enabled: true }));
   }
   const allowed = new Set((meta.buildLocations || []).map((name) => normalizePlanetKey(name)));
-  return state.planets
+  return getGarShipyardEligiblePlanets()
     .filter((planet) => allowed.has(normalizePlanetKey(planet.id || planet.name)))
-    .map((planet) => ({
-      ...planet,
-      enabled: planet.owner === 'GAR'
-    }));
+    .map((planet) => {
+      const facility = getShipyardFacilityByPlanet(planet.id);
+      const eligibility = getShipyardBuildEligibility(planet, classId);
+      return {
+        ...planet,
+        enabled: eligibility.enabled,
+        disabledReason: eligibility.reason,
+        shipyardLevel: Number(facility?.level || 0),
+        shipyardCapacity: Number(getShipyardLevelMeta(facility?.level || 1)?.capacity || 0),
+        shipyardFreeCapacity: getShipyardCapacityFree(planet.id)
+      };
+    });
 }
 
 function getAvailableBuildLocations(classId) {
@@ -1124,6 +1221,8 @@ function createBuildJobRecord(data = {}) {
     startedBy: String(data.startedBy || '').trim(),
     status: data.status || 'building',
     producedShipId: data.producedShipId || '',
+    shipyardAction: String(data.shipyardAction || '').trim(),
+    targetShipyardLevel: Math.max(0, Number(data.targetShipyardLevel || 0)),
     completedAt: Number(data.completedAt || 0) || 0
   };
 }
@@ -1192,6 +1291,7 @@ function getShipyardLogs(faction = 'GAR') {
 function getBuildJobCost(job) {
   if (!job) return {};
   if (job.jobType === 'mine') return getMineProjectMeta(job.buildingKey || job.resourceKey)?.cost || {};
+  if (job.jobType === 'shipyard') return getShipyardLevelMeta(job.targetShipyardLevel)?.cost || {};
   return getShipClassMeta(job.classId)?.cost || {};
 }
 
@@ -1223,7 +1323,11 @@ function canCancelBuildJob(job) {
   if (role === 'Admin') return true;
   if (role === 'Senat') return (job.faction || 'GAR') === 'GAR' && job.jobType === 'mine';
   if (role === 'Eventleiter / KUS') return (job.faction || 'GAR') === 'KUS';
-  if (role === 'Republic Navy / GAR') return (job.faction || 'GAR') === 'GAR' && job.jobType !== 'mine' && canCoordinate4thFleet();
+  if (role === 'Republic Navy / GAR') {
+    if ((job.faction || 'GAR') !== 'GAR') return false;
+    if (job.jobType === 'shipyard') return true;
+    return job.jobType !== 'mine' && canCoordinate4thFleet();
+  }
   return false;
 }
 
@@ -1298,6 +1402,40 @@ function processBuildJobs(now = Date.now()) {
       job.status = 'completed';
       job.completedAt = now;
       recordBuildProjectActivity(job, 'Bauprojekt abgeschlossen', `${getMineProjectMeta(buildingKey)?.label || buildingKey} auf ${getBuildJobLocationName(job)}`, now);
+      changed = true;
+      return;
+    }
+    if (job.jobType === 'shipyard') {
+      const planet = planetIndex.get(job.buildLocationPlanetId);
+      if (!planet || normalizePlanetKey(planet.id || planet.name) === normalizePlanetKey(CENTRAL_WAREHOUSE_ID)) {
+        job.status = 'cancelled';
+        changed = true;
+        return;
+      }
+      const store = ensureShipyardFacilityStore();
+      let facility = getShipyardFacilityByPlanet(job.buildLocationPlanetId);
+      const targetLevel = Math.max(1, Number(job.targetShipyardLevel || 1));
+      if (!facility) {
+        facility = createShipyardFacilityRecord({
+          id: `shipyard_${normalizePlanetKey(planet.id || planet.name)}`,
+          planetId: planet.id,
+          level: targetLevel,
+          createdAt: now,
+          updatedAt: now
+        });
+        store.push(facility);
+      } else {
+        facility.level = Math.max(facility.level, targetLevel);
+        facility.updatedAt = now;
+      }
+      job.status = 'completed';
+      job.completedAt = now;
+      recordBuildProjectActivity(
+        job,
+        job.shipyardAction === 'upgrade' ? 'Werft-Upgrade abgeschlossen' : 'Werftbau abgeschlossen',
+        `${planet.name} verfügt jetzt über ${getShipyardLevelMeta(facility.level).label} (Stufe ${facility.level}).`,
+        now
+      );
       changed = true;
       return;
     }
@@ -1401,6 +1539,7 @@ function getBuildJobProgress(job, now = Date.now()) {
 
 function getBuildJobDisplayName(job) {
   if (job?.jobType === 'mine') return job.projectName || (getMineProjectMeta(job.buildingKey || job.resourceKey)?.label || 'Infrastrukturprojekt');
+  if (job?.jobType === 'shipyard') return job.projectName || `${job.shipyardAction === 'upgrade' ? 'Werft-Upgrade' : 'Werftbau'} ${getBuildJobLocationName(job)}`;
   return job?.shipName || getShipClassMeta(job?.classId)?.displayName || 'Bauprojekt';
 }
 
@@ -1413,6 +1552,7 @@ function getSectorDisplayName(sectorId) {
 }
 
 function getBuildJobTypeLabel(job) {
+  if (job?.jobType === 'shipyard') return job.shipyardAction === 'upgrade' ? 'Werft-Upgrade' : 'Werftbau';
   if (job?.jobType !== 'mine') return 'Schiffbau';
   const category = getMineProjectMeta(job.buildingKey || job.resourceKey)?.category;
   if (category === 'development') return 'Wirtschafts- und Entwicklungszentrum';
@@ -1605,6 +1745,66 @@ function upgradeWarehouse(warehouseId) {
   if (activeMainTab === 'buildProjects') renderBuildProjectsView();
   if (activeMainTab === 'shipyard') renderShipyardView();
   setStatus(`Lager-Upgrade abgeschlossen: Universallager jetzt Stufe ${warehouse.level}.`);
+}
+
+function isShipyardProjectUnderConstruction(planetId) {
+  return state.buildJobs.some((job) => (
+    job.jobType === 'shipyard'
+    && job.status === 'building'
+    && job.buildLocationPlanetId === planetId
+  ));
+}
+
+function startShipyardProject(planetId = '') {
+  if (!canManageShipyards()) {
+    setStatus('Nur Navy oder globale Admins können Werften bauen und ausbauen.');
+    return;
+  }
+  const resolvedPlanetId = planetId || document.getElementById('shipyardProjectPlanet')?.value || '';
+  const planet = planetIndex.get(resolvedPlanetId);
+  if (!planet || planet.owner !== 'GAR') {
+    setStatus('Werften können nur auf republikanisch kontrollierten Werftwelten gebaut werden.');
+    return;
+  }
+  if (!(GAR_SHIPYARD_ELIGIBLE_PLANET_KEYS || []).includes(normalizePlanetKey(planet.id || planet.name))) {
+    setStatus('Dieser Planet ist keine hinterlegte Lore-Werftwelt.');
+    return;
+  }
+  if (isShipyardProjectUnderConstruction(planet.id)) {
+    setStatus('Auf diesem Planeten läuft bereits ein Werftprojekt.');
+    return;
+  }
+  const facility = getShipyardFacilityByPlanet(planet.id);
+  const maxLevel = Object.keys(SHIPYARD_LEVEL_DEFS).length;
+  if (facility && facility.level >= maxLevel) {
+    setStatus('Diese Werft hat bereits die höchste Ausbaustufe erreicht.');
+    return;
+  }
+  const targetLevel = facility ? facility.level + 1 : 1;
+  const levelMeta = getShipyardLevelMeta(targetLevel);
+  if (!spendSectorShipyardCost(planet.id, levelMeta.cost || {}, 'GAR')) {
+    setStatus('Nicht genug GAR-Ressourcen für dieses Werftprojekt.');
+    renderBuildProjectsView();
+    return;
+  }
+  const action = facility ? 'upgrade' : 'build';
+  state.buildJobs.push(createBuildJobRecord({
+    jobType: 'shipyard',
+    shipyardAction: action,
+    targetShipyardLevel: targetLevel,
+    projectName: `${action === 'upgrade' ? 'Werft-Upgrade' : 'Werftbau'} (${planet.name})`,
+    buildLocationPlanetId: planet.id,
+    startedAt: Date.now(),
+    finishesAt: Date.now() + (Number(levelMeta.buildTimeHours || 0) * RESOURCE_PRODUCTION_TICK_MS),
+    faction: 'GAR',
+    startedBy: currentAuthenticatedUsername || currentAssignedRole(),
+    status: 'building'
+  }));
+  saveLocal();
+  playAudioCue(datapadAcceptAudio);
+  if (activeMainTab === 'shipyard') renderShipyardView();
+  if (activeMainTab === 'buildProjects') renderBuildProjectsView();
+  setStatus(`${action === 'upgrade' ? 'Werft-Upgrade' : 'Werftbau'} gestartet: ${planet.name} -> ${levelMeta.label}`);
 }
 
 function closeMineBuildPlanetResults() {

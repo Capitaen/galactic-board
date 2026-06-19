@@ -98,10 +98,42 @@ const CIVILIAN_CREDIT_YIELDS = {
   civilian_kavamSalz: { resource: 'kavamSalz', credits: 180 }
 };
 const DEFAULT_SHIPYARD_PLANET_KEYS = ['anaxes', 'kuat', 'rothana'];
+const GAR_SHIPYARD_ELIGIBLE_PLANET_KEYS = ['anaxes', 'bilbringi', 'corellia', 'fondor', 'kuat', 'mon_calamari', 'rendili', 'rothana', 'sluis_van'];
+const GAR_SHIPYARD_SEED_LEVELS = {
+  kuat: 3,
+  anaxes: 2,
+  rothana: 2
+};
+const SHIPYARD_LEVEL_DEFS = {
+  1: {
+    label: 'Leichte Werft',
+    capacity: 16,
+    buildTimeHours: 96,
+    cost: { quadraniumErz: 2800, agrinium: 1800, tibannaGas: 1500, baradium: 1400, kavamSalz: 1600, credits: 150000 }
+  },
+  2: {
+    label: 'Flottenwerft',
+    capacity: 28,
+    buildTimeHours: 132,
+    cost: { quadraniumErz: 5200, agrinium: 3400, tibannaGas: 2900, baradium: 2600, kavamSalz: 3200, credits: 290000 }
+  },
+  3: {
+    label: 'Schwere Werft',
+    capacity: 42,
+    buildTimeHours: 180,
+    cost: { quadraniumErz: 8600, agrinium: 5600, tibannaGas: 4800, baradium: 4300, kavamSalz: 5200, credits: 520000 }
+  },
+  4: {
+    label: 'Strategische Werft',
+    capacity: 60,
+    buildTimeHours: 264,
+    cost: { quadraniumErz: 14000, agrinium: 9200, tibannaGas: 7800, baradium: 6900, kavamSalz: 8600, credits: 900000 }
+  }
+};
 const KUS_SHIPYARD_PLANET_KEYS = ['geonosis', 'muunilinst', 'serenno', 'raxus'];
 const RESOURCE_FACTIONS = ['GAR', 'KUS'];
 const MARKER_COLORS = ['#ffd54d', '#4ecdc4', '#ff6b6b', '#6ea8ff', '#c084fc', '#7ee081'];
-const STATION_CLASS_IDS = new Set(['golan_1', 'haven_medistation', 'cardan_station', 'galactic_orbital_station', 'nis_black_site']);
+const STATION_CLASS_IDS = new Set(['golan_1', 'haven_medistation', 'cardan_station', 'galactic_orbital_station', 'valor_station', 'nis_black_site']);
 const GAR_SHIP_COST_MULTIPLIER = 70;
 const DEBUG_DISABLE_GAR_BUILD_LIMITS = false;
 const MINE_PROJECT_DEFS = {
@@ -272,6 +304,7 @@ const SHIP_CLASS_POOL = {
   haven_medistation: { displayName: 'Haven-Class-Medistation (Hafen-Klasse)', asset: 'assets/gar.svg', faction: 'GAR', canJump: false, buildLocations: 'anyGARPlanet', buildTimeHours: 120, cost: { quadraniumErz: 130, agrinium: 120, tibannaGas: 70, baradium: 90, kavamSalz: 110 } },
   cardan_station: { displayName: 'Cardan-Klasse Raumstation', asset: 'assets/gar.svg', faction: 'GAR', canJump: false, buildLocations: 'anyGARPlanet', buildTimeHours: 132, cost: { quadraniumErz: 150, agrinium: 110, tibannaGas: 80, baradium: 100, kavamSalz: 90 } },
   galactic_orbital_station: { displayName: 'Galaktische Orbital Station', asset: 'assets/gar.svg', faction: 'GAR', canJump: false, buildLocations: 'anyGARPlanet', buildTimeHours: 168, cost: { quadraniumErz: 210, agrinium: 150, tibannaGas: 120, baradium: 110, kavamSalz: 130 } },
+  valor_station: { displayName: 'Raumstation "Valor"', asset: 'assets/gar.svg', faction: 'GAR', canJump: false, buildLocations: 'anyGARPlanet', buildTimeHours: 144, cost: { quadraniumErz: 168, agrinium: 118, tibannaGas: 84, baradium: 106, kavamSalz: 94 } },
   nis_black_site: { displayName: 'NIS Deep Space Black Site', asset: 'assets/gar.svg', faction: 'GAR', canJump: false, buildLocations: 'anyGARPlanet', buildTimeHours: 180, cost: { quadraniumErz: 260, agrinium: 220, tibannaGas: 160, baradium: 140, kavamSalz: 180 } },
   gladiator_sternzerstoerer: { displayName: 'Gladiator-Klasse-Sternzerstörer', asset: 'assets/gar.svg', faction: 'GAR', canJump: true, buildLocations: ['Anaxes', 'Kuat', 'Rothana'], buildTimeHours: 168, cost: { quadraniumErz: 115, agrinium: 80, tibannaGas: 70, baradium: 52, kavamSalz: 48 } },
   victory_i_sternzerstoerer: { displayName: 'Victory-I-Klasse Sternzerstörer', asset: 'assets/gar.svg', faction: 'GAR', canJump: true, buildLocations: ['Anaxes', 'Kuat', 'Rothana'], buildTimeHours: 168, cost: { quadraniumErz: 170, agrinium: 120, tibannaGas: 100, baradium: 80, kavamSalz: 70 } },
@@ -290,6 +323,62 @@ Object.values(SHIP_CLASS_POOL).forEach((shipMeta) => {
     Object.entries(shipMeta.cost).map(([resourceKey, amount]) => [resourceKey, Math.round((Number(amount) || 0) * GAR_SHIP_COST_MULTIPLIER)])
   );
   shipMeta.cost.credits = Object.values(shipMeta.cost).reduce((sum, amount) => sum + Number(amount || 0), 0) * 2;
+});
+const SHIPYARD_LEVEL_REQUIREMENTS = {
+  consular: 1,
+  cr90: 1,
+  dp20: 1,
+  gozanti_frachter: 1,
+  gozanti_kreuzer: 1,
+  ipv_2c_tarnkorvette: 1,
+  carrack: 1,
+  arquitens: 2,
+  dreadnaught: 2,
+  acclamator_i: 2,
+  acclamator_ii: 2,
+  consular_charger_c70: 2,
+  pelta_fregatte: 2,
+  pelta_blockadebreaker: 2,
+  icebreaker_fregatte: 2,
+  venator: 2,
+  invincible_kreuzer: 3,
+  gladiator_sternzerstoerer: 3,
+  victory_i_sternzerstoerer: 3,
+  secutor_sternzerstoerer: 3,
+  praetor_schlachtkreuzer: 4,
+  maelstrom_schlachtkreuzer: 4,
+  mandator_sternzerstoerer: 4
+};
+const SHIPYARD_CAPACITY_COSTS = {
+  consular: 1,
+  cr90: 1,
+  dp20: 1,
+  gozanti_frachter: 1,
+  gozanti_kreuzer: 1,
+  ipv_2c_tarnkorvette: 1,
+  carrack: 2,
+  arquitens: 2,
+  dreadnaught: 3,
+  consular_charger_c70: 3,
+  pelta_fregatte: 3,
+  pelta_blockadebreaker: 3,
+  icebreaker_fregatte: 3,
+  acclamator_i: 4,
+  acclamator_ii: 4,
+  venator: 6,
+  invincible_kreuzer: 7,
+  gladiator_sternzerstoerer: 8,
+  victory_i_sternzerstoerer: 8,
+  secutor_sternzerstoerer: 10,
+  maelstrom_schlachtkreuzer: 11,
+  praetor_schlachtkreuzer: 12,
+  mandator_sternzerstoerer: 16
+};
+Object.entries(SHIP_CLASS_POOL).forEach(([classId, shipMeta]) => {
+  if (!shipMeta || shipMeta.faction !== 'GAR' || STATION_CLASS_IDS.has(classId)) return;
+  shipMeta.buildLocations = GAR_SHIPYARD_ELIGIBLE_PLANET_KEYS.map((planetKey) => planetKey);
+  shipMeta.shipyardLevel = SHIPYARD_LEVEL_REQUIREMENTS[classId] || 1;
+  shipMeta.shipyardCapacityCost = SHIPYARD_CAPACITY_COSTS[classId] || 1;
 });
 const SHIP_CLASS_IMPORT_PATTERNS = [
   { classId: 'venator', patterns: ['venator'] },
@@ -312,6 +401,7 @@ const SHIP_CLASS_IMPORT_PATTERNS = [
   { classId: 'haven_medistation', patterns: ['haven-class-medistation', 'haven class medistation', 'hafen-klasse-medistation', 'hafen klasse medistation'] },
   { classId: 'cardan_station', patterns: ['cardan-klasse raumstation', 'cardan-klasse-raumstation', 'cardan klasse raumstation'] },
   { classId: 'galactic_orbital_station', patterns: ['galaktische orbital station', 'orbital station'] },
+  { classId: 'valor_station', patterns: ['raumstation valor', 'valor station', 'valor raumstation'] },
   { classId: 'nis_black_site', patterns: ['nis deep space black site', 'nis deep space black site', 'black site', 'blacksite'] },
   { classId: 'gladiator_sternzerstoerer', patterns: ['gladiator-klasse-sternzerst', 'gladiator klasse sternzerst'] },
   { classId: 'victory_i_sternzerstoerer', patterns: ['victory-i-klasse sternzerst', 'victory i klasse sternzerst'] },

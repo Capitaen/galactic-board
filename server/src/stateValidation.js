@@ -297,7 +297,7 @@ function validateBuildJobChanges(role, previousState, nextState) {
       return;
     }
     if (role === 'Republic Navy / GAR') {
-      ensure((job.faction || 'GAR') === 'GAR' && job.jobType !== 'mine' && (!before || ((before.faction || 'GAR') === 'GAR' && before.jobType !== 'mine')), 'GAR role may only manage GAR ship projects', { entity: 'buildJob', id: job.id });
+      ensure((job.faction || 'GAR') === 'GAR' && job.jobType !== 'mine' && (!before || ((before.faction || 'GAR') === 'GAR' && before.jobType !== 'mine')), 'GAR role may only manage GAR ship or shipyard projects', { entity: 'buildJob', id: job.id });
       return;
     }
     if (role === 'Eventleiter / KUS') {
@@ -313,7 +313,7 @@ function validateBuildJobChanges(role, previousState, nextState) {
       return;
     }
     if (role === 'Republic Navy / GAR') {
-      ensure((job.faction || 'GAR') === 'GAR' && job.jobType !== 'mine', 'GAR role may only delete GAR ship projects', { entity: 'buildJob', id });
+      ensure((job.faction || 'GAR') === 'GAR' && job.jobType !== 'mine', 'GAR role may only delete GAR ship or shipyard projects', { entity: 'buildJob', id });
       return;
     }
     if (role === 'Eventleiter / KUS') {
@@ -350,7 +350,7 @@ export function validateNextCampaignState(role, previousState, nextState) {
     const addedGarShipJob = (nextState.buildJobs || []).some((job) => (
       !previousJobs.has(job.id)
       && (job.faction || 'GAR') === 'GAR'
-      && job.jobType !== 'mine'
+      && (job.jobType || 'ship') === 'ship'
     ));
     const addedGarShip = (nextState.ships || []).some((ship) => (
       !previousShips.has(ship.id)

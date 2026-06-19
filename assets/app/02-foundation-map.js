@@ -61,6 +61,8 @@ function createBuildJobRecord(data = {}) {
     startedBy: String(data.startedBy || '').trim(),
     status: data.status || 'building',
     producedShipId: data.producedShipId || '',
+    shipyardAction: String(data.shipyardAction || '').trim(),
+    targetShipyardLevel: Math.max(0, Number(data.targetShipyardLevel || 0)),
     completedAt: Number(data.completedAt || 0) || 0
   };
 }

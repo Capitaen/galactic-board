@@ -23,6 +23,7 @@ function renderShipyardView() {
   const locationChoices = getShipyardLocationChoices(selectedClassId);
   const locations = locationChoices.filter((planet) => planet.enabled);
   const selectedLocationId = document.getElementById('shipyardLocation')?.value || locations[0]?.id || locationChoices[0]?.id || '';
+  const selectedLocationChoice = locationChoices.find((planet) => planet.id === selectedLocationId) || null;
   const faction = getActiveShipyardFaction();
   const pool = getFactionResourcePool(faction);
   const selectedLocationPlanet = planetIndex.get(selectedLocationId);
@@ -33,14 +34,17 @@ function renderShipyardView() {
     || (role === 'Eventleiter / KUS' && faction === 'KUS')
   );
   const resourceSummary = RESOURCE_KEYS.map((key) => `<div class="stat-card"><strong>${RESOURCE_LABELS[key]}</strong><span>${formatResourceAmount(pool[key])}</span></div>`).join('');
-  const buildJobs = state.buildJobs.filter((job) => job.faction === faction && job.jobType !== 'mine' && job.status === 'building');
   const visibleBuildJobs = state.buildJobs
-    .filter((job) => job.faction === faction && job.jobType !== 'mine' && job.status === 'building')
+    .filter((job) => job.faction === faction && job.jobType === 'ship' && job.status === 'building')
     .sort((a, b) => Number(a.finishesAt || 0) - Number(b.finishesAt || 0));
   const shipyardActivity = (Array.isArray(state.meta?.buildProjectActivity) ? state.meta.buildProjectActivity : [])
-    .filter((entry) => (entry.faction || 'GAR') === faction && entry.jobType !== 'mine')
+    .filter((entry) => (entry.faction || 'GAR') === faction && entry.jobType === 'ship')
     .slice(0, 18);
   const readyShips = state.ships.filter((ship) => ship.faction === faction && ship.status === 'ready');
+  const selectedShipyardLevel = Number(selectedMeta?.shipyardLevel || 0);
+  const selectedShipyardCapacityCost = Number(selectedMeta?.shipyardCapacityCost || 0);
+  const selectedShipyardFreeCapacity = Number(selectedLocationChoice?.shipyardFreeCapacity || 0);
+  const loreShipyardWorlds = getGarShipyardEligiblePlanets().map((planet) => planet.name).join(', ');
   workspacePanel.innerHTML = `
     <div class="workspace-head">
       <div>
@@ -85,7 +89,7 @@ function renderShipyardView() {
         <div class="form-row">
           <label>Bauort</label>
           <select id="shipyardLocation">
-            ${locationChoices.map((planet) => `<option value="${planet.id}" ${planet.id === selectedLocationId ? 'selected' : ''} ${planet.enabled ? '' : 'disabled'}>${planet.name}${planet.enabled ? '' : ' (nicht unter KUS/GAR-Kontrolle)'}</option>`).join('')}
+            ${locationChoices.map((planet) => `<option value="${planet.id}" ${planet.id === selectedLocationId ? 'selected' : ''} ${planet.enabled ? '' : 'disabled'}>${planet.name}${planet.enabled ? '' : ` (${planet.disabledReason || 'derzeit nicht verfügbar'})`}</option>`).join('')}
           </select>
         </div>
         <div class="workspace-card compact">
@@ -97,13 +101,16 @@ function renderShipyardView() {
             : 'KUS-Bau bleibt sofort verfügbar und ignoriert aktuell Rohstoffkosten.'}</p>
           ${faction === 'GAR' && sectorCostSummary ? `<p><strong>Zentrale Verfügbarkeit:</strong> ${STORAGE_RESOURCE_KEYS.map((key) => `${RESOURCE_LABELS[key]} ${formatResourceAmount(sectorCostSummary.warehouseSummary.resources?.[key]?.stock || 0)}`).join(' • ')}</p>` : ''}
           <p><strong>Bauzeit:</strong> ${faction === 'KUS' || DEBUG_DISABLE_GAR_BUILD_LIMITS ? 'Sofort' : `${selectedMeta?.buildTimeHours || 0}h`}</p>
-          <p><strong>Bauorte:</strong> ${faction === 'KUS' ? 'Geonosis, Muunilinst, Serenno, Raxus' : (selectedMeta?.buildLocations === 'anyGARPlanet' ? 'Jeder GAR-Planet' : (selectedMeta?.buildLocations || []).join(', '))}</p>
+          <p><strong>Bauorte:</strong> ${faction === 'KUS' ? 'Geonosis, Muunilinst, Serenno, Raxus' : (selectedMeta?.buildLocations === 'anyGARPlanet' ? 'Jeder GAR-Planet' : loreShipyardWorlds)}</p>
+          ${faction === 'GAR' && !isStationClass(selectedClassId) ? `<p><strong>Erforderliche Werft:</strong> Stufe ${selectedShipyardLevel} • ${selectedShipyardCapacityCost} Werftplätze</p>` : ''}
+          ${faction === 'GAR' && !isStationClass(selectedClassId) && selectedLocationChoice ? `<p><strong>Standortstatus:</strong> ${selectedLocationChoice.shipyardLevel ? `Stufe ${selectedLocationChoice.shipyardLevel} • ${selectedShipyardFreeCapacity}/${selectedLocationChoice.shipyardCapacity} Plätze frei` : 'Keine Werft gebaut'}</p>` : ''}
         </div>
-        <button class="primary" onclick="startBuildOrder()" ${canBuildAnything && locations.length && (faction === 'KUS' || DEBUG_DISABLE_GAR_BUILD_LIMITS || canAffordSectorShipyardCost(selectedLocationId, selectedMeta?.cost)) ? '' : 'disabled'}>${faction === 'KUS' || DEBUG_DISABLE_GAR_BUILD_LIMITS ? `${faction}-Schiff sofort erzeugen` : 'Bau starten'}</button>
+        <button class="primary" onclick="startBuildOrder()" ${canBuildAnything && locations.length && selectedLocationChoice?.enabled && (faction === 'KUS' || DEBUG_DISABLE_GAR_BUILD_LIMITS || canAffordSectorShipyardCost(selectedLocationId, selectedMeta?.cost)) ? '' : 'disabled'}>${faction === 'KUS' || DEBUG_DISABLE_GAR_BUILD_LIMITS ? `${faction}-Schiff sofort erzeugen` : 'Bau starten'}</button>
       </div>
       <div class="workspace-card">
         <h3>Bauhinweise</h3>
         <p>GAR-Schiffbau nutzt automatisch das zentrale Großlager auf Coruscant.</p>
+        <p class="muted">Neue GAR-Werften und Upgrades werden im Tab <strong>Bauprojekte</strong> unter <strong>Werften</strong> verwaltet.</p>
         <p class="muted">Die stündliche Produktionsübersicht findest du jetzt im Tab <strong>Logistik & Lager</strong> unter Bauprojekte.</p>
       </div>
     </div>
@@ -203,16 +210,24 @@ function renderBuildProjectsView() {
   const canStartMineProject = canBuildMineProjects();
   const canBuildWarehouseInfra = canBuildWarehouses();
   const logisticsProduction = faction === 'GAR' ? getEffectiveFactionProductionRate('GAR') : createEmptyFactionResources();
-  const activeTab = buildProjectsViewTab === 'logistics' ? 'logistics' : 'infrastructure';
+  const shipyardLorePlanets = getGarShipyardEligiblePlanets();
+  const selectedShipyardPlanetId = document.getElementById('shipyardProjectPlanet')?.value || shipyardLorePlanets.find((planet) => planet.owner === 'GAR')?.id || shipyardLorePlanets[0]?.id || '';
+  const selectedShipyardPlanet = shipyardLorePlanets.find((planet) => planet.id === selectedShipyardPlanetId) || shipyardLorePlanets[0] || null;
+  const selectedShipyardFacility = selectedShipyardPlanet ? getShipyardFacilityByPlanet(selectedShipyardPlanet.id) : null;
+  const selectedShipyardTargetLevel = selectedShipyardFacility ? Math.min(selectedShipyardFacility.level + 1, Object.keys(SHIPYARD_LEVEL_DEFS).length) : 1;
+  const selectedShipyardTargetMeta = getShipyardLevelMeta(selectedShipyardTargetLevel);
+  const shipyardProjects = visibleBuildJobs.filter((job) => job.jobType === 'shipyard');
+  const activeTab = ['infrastructure', 'logistics', 'shipyards'].includes(buildProjectsViewTab) ? buildProjectsViewTab : 'infrastructure';
   workspacePanel.innerHTML = `
     <div class="workspace-head">
       <div>
         <h2>Bauprojekte</h2>
-        <p>Schiffs- und Infrastrukturprojekte mit gemeinsamem Ressourcenpool. Senat baut GAR-Infrastruktur, Navy und Eventleitung sehen die laufenden Projekte zur Abstimmung.</p>
+        <p>Schiffs-, Werft- und Infrastrukturprojekte mit gemeinsamem Ressourcenpool. Senat baut GAR-Infrastruktur, die Navy verwaltet Werften und die Eventleitung behält die laufenden Projekte im Blick.</p>
       </div>
       <div class="toolbar-row">
         <button class="mini-btn ${activeTab === 'infrastructure' ? 'active' : ''}" onclick="setBuildProjectsViewTab('infrastructure')">Infrastruktur</button>
         <button class="mini-btn ${activeTab === 'logistics' ? 'active' : ''}" onclick="setBuildProjectsViewTab('logistics')">Logistik & Lager</button>
+        <button class="mini-btn ${activeTab === 'shipyards' ? 'active' : ''}" onclick="setBuildProjectsViewTab('shipyards')">Werften</button>
         <button class="mini-btn" onclick="renderBuildProjectsView()">Aktualisieren</button>
       </div>
     </div>
@@ -315,6 +330,95 @@ function renderBuildProjectsView() {
         <p>Abgeschlossene Bauprojekte bleiben bis zu 48 Stunden in der Projektübersicht sichtbar und wandern zusätzlich dauerhaft in die Aktivitätsliste.</p>
       </div>
     </div>
+    ` : activeTab === 'shipyards' ? `
+    <div class="workspace-section workspace-columns">
+      <div class="workspace-card">
+        <h3>Werftbau & Upgrade</h3>
+        <p>${canManageShipyards() ? 'Die Navy kann auf hinterlegten Lore-Werftwelten neue Werften errichten oder bestehende Werften hochziehen.' : 'Nur Navy und globale Admins dürfen GAR-Werften bauen oder ausbauen.'}</p>
+        <div class="form-row">
+          <label>Werftwelt</label>
+          <select id="shipyardProjectPlanet" ${canManageShipyards() ? '' : 'disabled'} onchange="renderBuildProjectsView()">
+            ${shipyardLorePlanets.map((planet) => {
+              const facility = getShipyardFacilityByPlanet(planet.id);
+              const activeProject = isShipyardProjectUnderConstruction(planet.id);
+              const suffix = facility ? ` • Stufe ${facility.level}` : ' • keine Werft';
+              return `<option value="${planet.id}" ${planet.id === selectedShipyardPlanetId ? 'selected' : ''}>${planet.name} • ${planet.owner}${suffix}${activeProject ? ' • Projekt läuft' : ''}</option>`;
+            }).join('')}
+          </select>
+        </div>
+        <div class="workspace-card compact">
+          <strong>${selectedShipyardPlanet?.name || 'Werftwelt'}</strong>
+          <p><strong>Aktueller Stand:</strong> ${selectedShipyardFacility ? `${getShipyardLevelMeta(selectedShipyardFacility.level).label} (Stufe ${selectedShipyardFacility.level})` : 'Noch keine Werft gebaut'}</p>
+          <p><strong>Nächster Schritt:</strong> ${selectedShipyardTargetMeta.label} • ${selectedShipyardTargetMeta.capacity} Werftplätze</p>
+          <p><strong>Bauzeit:</strong> ${selectedShipyardTargetMeta.buildTimeHours}h</p>
+          <p><strong>Kosten:</strong> ${RESOURCE_KEYS.map((key) => `${RESOURCE_LABELS[key]}: ${formatResourceAmount(selectedShipyardTargetMeta.cost?.[key] || 0)}`).join(' • ')}</p>
+          <p><strong>Status:</strong> ${!selectedShipyardPlanet ? 'Keine Werftwelt gewählt.' : selectedShipyardPlanet.owner !== 'GAR' ? 'Der Planet steht aktuell nicht unter GAR-Kontrolle.' : isShipyardProjectUnderConstruction(selectedShipyardPlanet.id) ? 'Auf diesem Planeten läuft bereits ein Werftprojekt.' : (selectedShipyardFacility && selectedShipyardFacility.level >= Object.keys(SHIPYARD_LEVEL_DEFS).length) ? 'Maximale Werftstufe erreicht.' : 'Bereit für Bau oder Upgrade.'}</p>
+        </div>
+        <button class="primary" onclick="startShipyardProject()" ${(canManageShipyards() && selectedShipyardPlanet && selectedShipyardPlanet.owner === 'GAR' && !isShipyardProjectUnderConstruction(selectedShipyardPlanet.id) && (!selectedShipyardFacility || selectedShipyardFacility.level < Object.keys(SHIPYARD_LEVEL_DEFS).length) && canAffordSectorShipyardCost(selectedShipyardPlanet.id, selectedShipyardTargetMeta.cost || {}, 'GAR')) ? '' : 'disabled'}>${selectedShipyardFacility ? 'Werft upgraden' : 'Werft bauen'}</button>
+      </div>
+      <div class="workspace-card">
+        <h3>Aktive GAR-Werften</h3>
+        ${(ensureShipyardFacilityStore().length
+          ? `<table class="data-table">
+              <thead><tr><th>Planet</th><th>Stufe</th><th>Kapazität</th><th>Belegung</th><th>Aktion</th></tr></thead>
+              <tbody>
+                ${ensureShipyardFacilityStore()
+                  .map((facility) => {
+                    const planet = planetIndex.get(facility.planetId);
+                    if (!planet) return '';
+                    const capacity = Number(getShipyardLevelMeta(facility.level).capacity || 0);
+                    const used = getShipyardCapacityUsage(planet.id);
+                    return `<tr>
+                      <td>${planet.name}</td>
+                      <td>${facility.level}</td>
+                      <td>${capacity}</td>
+                      <td>${used}/${capacity}</td>
+                      <td>${canManageShipyards() && facility.level < Object.keys(SHIPYARD_LEVEL_DEFS).length && planet.owner === 'GAR' && !isShipyardProjectUnderConstruction(planet.id) ? `<button class="mini-btn" onclick="startShipyardProject('${planet.id}')">Upgrade</button>` : '—'}</td>
+                    </tr>`;
+                  })
+                  .join('')}
+              </tbody>
+            </table>`
+          : '<div class="muted-box">Aktuell sind noch keine Werften hinterlegt.</div>')}
+      </div>
+      <div class="workspace-card">
+        <h3>Lore-Werftwelten</h3>
+        <div class="project-grid">
+          ${shipyardLorePlanets.map((planet) => {
+            const facility = getShipyardFacilityByPlanet(planet.id);
+            const capacity = facility ? Number(getShipyardLevelMeta(facility.level).capacity || 0) : 0;
+            return `<div class="project-card">
+              <h4>${planet.name}</h4>
+              <p class="project-meta">${planet.grid || '—'} • ${planet.sector || '—'} • ${planet.owner}</p>
+              <p>${facility ? `${getShipyardLevelMeta(facility.level).label} mit ${capacity} Werftplätzen.` : 'Noch keine Werft errichtet.'}</p>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>
+    </div>
+    <div class="workspace-section workspace-columns">
+      <div class="workspace-card">
+        <h3>Werftprojekte</h3>
+        ${shipyardProjects.length ? `
+          <div class="project-grid">
+            ${shipyardProjects.map((job) => `
+              <div class="project-card">
+                <h4>${getBuildJobDisplayName(job)}</h4>
+                <p class="project-meta">${getBuildJobTypeLabel(job)} • ${getBuildJobLocationName(job)} • Zielstufe ${job.targetShipyardLevel}</p>
+                ${job.startedBy ? `<p class="project-meta">Gestartet von: ${escapeHtml(job.startedBy)}</p>` : ''}
+                ${getBuildJobProgressBar(job)}
+                ${canCancelBuildJob(job) ? `<button class="mini-btn danger" onclick="cancelBuildJob('${job.id}')">Bau abbrechen (90% Rueckgabe)</button>` : ''}
+              </div>
+            `).join('')}
+          </div>
+        ` : '<div class="muted-box">Keine aktiven Werftprojekte vorhanden.</div>'}
+      </div>
+      <div class="workspace-card">
+        <h3>Hinweis</h3>
+        <p>Schiffsklassen im Tab Schiffbau prüfen automatisch Werftstufe und freie Werftplätze. Beispiel: Eine Venator blockiert 6 Plätze der gewählten Werft.</p>
+        <p class="muted">Raumstationen bleiben als eigenständige Orbitalprojekte im Schiffbau auswählbar. Die neue Werftlogik begrenzt vor allem den regulären GAR-Schiffbau.</p>
+      </div>
+    </div>
     ` : `
     <div class="workspace-section workspace-columns">
       <div class="workspace-card">
@@ -392,7 +496,7 @@ function renderBuildProjectsView() {
 }
 
 function setBuildProjectsViewTab(tabId) {
-  buildProjectsViewTab = tabId === 'logistics' ? 'logistics' : 'infrastructure';
+  buildProjectsViewTab = ['infrastructure', 'logistics', 'shipyards'].includes(tabId) ? tabId : 'infrastructure';
   renderBuildProjectsView();
 }
 
