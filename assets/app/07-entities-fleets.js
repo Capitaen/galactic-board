@@ -1766,9 +1766,6 @@ function renderFleetManagementFleetCard(fleet, bucketKey = getFleetOrderBucketKe
   const commandRole = normalizeFleetCommandRole(fleet.commandRole);
   const parentOptions = getFleetParentOptions(fleet, state.fleets);
   const summary = getFleetOperationalSummary(fleet.id);
-  const statLabel = commandRole === 'battle_group'
-    ? 'Gesamtstärke'
-    : 'Zugewiesen';
   const secondaryStat = commandRole === 'battle_group'
     ? `${summary.divisions.length} Division(en) • ${summary.stations.length} Station(en)`
     : `${summary.totalShips} Schiff(e) • ${fleet.assignment || 'ohne Kennung'}`;
@@ -1788,10 +1785,6 @@ function renderFleetManagementFleetCard(fleet, bucketKey = getFleetOrderBucketKe
         <div>
           <h4>${fleet.name}</h4>
           <p><span class="badge ${fleet.faction}">${fleet.faction}</span> • ${getFleetCommandRoleLabel(commandRole)}</p>
-        </div>
-        <div class="fleet-strength-badge">
-          <strong>${summary.totalShips}</strong>
-          <span>${statLabel}</span>
         </div>
       </div>
       <div class="fleet-card-overview">

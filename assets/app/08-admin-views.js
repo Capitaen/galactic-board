@@ -122,10 +122,6 @@ function renderFleetManagementView() {
                   <h4>${category.name}</h4>
                   <p><span class="badge ${category.faction}">${category.faction}</span> • ${categorySummary.groups} Kampfgeschwader • ${categorySummary.divisions} Divisionen • ${categorySummary.stations} Stationen</p>
                 </div>
-                <div class="fleet-category-summary-badge">
-                  <strong>${categorySummary.ships}</strong>
-                  <span>Schiffe gesamt</span>
-                </div>
                 <div class="fleet-category-actions">
                   <button class="mini-btn" onclick="toggleFleetManagementCategory('${category.id}')">${collapsed ? 'Ausklappen' : 'Einklappen'}</button>
                   ${categoryEditable ? `
