@@ -844,12 +844,13 @@ function getPlanetProductionRate(planetId) {
   getPlanetResourceSlots(planetId).forEach((slot) => {
     const building = getMineProjectMeta(slot);
     if (!building) return;
+    const productionPerHour = Math.max(1, Number(building.productionPerHour || 1));
     if (building.category === 'military' && building.productionResource) {
-      base[building.productionResource] += 1;
+      base[building.productionResource] += productionPerHour;
     }
     const civilianYield = CIVILIAN_CREDIT_YIELDS[slot];
     if (civilianYield) {
-      base.credits += civilianYield.credits * (1 + Math.min(MAX_CIVILIAN_PRODUCTION_BONUS, bonuses[civilianYield.resource] || 0));
+      base.credits += (civilianYield.credits * productionPerHour) * (1 + Math.min(MAX_CIVILIAN_PRODUCTION_BONUS, bonuses[civilianYield.resource] || 0));
     }
   });
   const rate = createEmptyFactionResources();

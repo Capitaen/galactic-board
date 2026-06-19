@@ -82,7 +82,7 @@ const RESOURCE_PRODUCTION_TICK_MS = 60 * 60 * 1000;
 const RESOURCE_RESET_VERSION = 'resource_reset_2026_05_01';
 const CAPTURE_REWARD_PER_SLOT = 20;
 const MINE_BUILD_DURATION_HOURS = 30;
-const MAX_CIVILIAN_PRODUCTION_BONUS = 0.30;
+const MAX_CIVILIAN_PRODUCTION_BONUS = 0.60;
 const SECTOR_DOMINANCE_THRESHOLD = 0.5;
 const WAREHOUSE_BASE_CAPACITY = 10000;
 const WAREHOUSE_LEVEL_STEP_CAPACITY = 5000;
@@ -109,95 +109,105 @@ const MINE_PROJECT_DEFS = {
     label: 'Metallmine',
     category: 'military',
     productionResource: 'quadraniumErz',
+    productionPerHour: 5,
     cost: { quadraniumErz: 980, agrinium: 280, tibannaGas: 140, baradium: 210, kavamSalz: 280 }
   },
   agrinium: {
     label: 'Technologie-Komplex',
     category: 'military',
     productionResource: 'agrinium',
+    productionPerHour: 5,
     cost: { quadraniumErz: 420, agrinium: 980, tibannaGas: 280, baradium: 140, kavamSalz: 280 }
   },
   tibannaGas: {
     label: 'Tibanna-Gas-Raffinerie',
     category: 'military',
     productionResource: 'tibannaGas',
+    productionPerHour: 5,
     cost: { quadraniumErz: 350, agrinium: 280, tibannaGas: 980, baradium: 210, kavamSalz: 210 }
   },
   baradium: {
     label: 'Chemiewerk / Baradium-Foerderung',
     category: 'military',
     productionResource: 'baradium',
+    productionPerHour: 5,
     cost: { quadraniumErz: 420, agrinium: 210, tibannaGas: 210, baradium: 980, kavamSalz: 210 }
   },
   kavamSalz: {
     label: 'Versorgungsgueter-Depot',
     category: 'military',
     productionResource: 'kavamSalz',
+    productionPerHour: 5,
     cost: { quadraniumErz: 350, agrinium: 210, tibannaGas: 210, baradium: 140, kavamSalz: 980 }
   },
   civilian_quadraniumErz: {
     label: 'Metallmine',
     category: 'civilian',
     productionResource: 'quadraniumErz',
+    productionPerHour: 5,
     cost: { quadraniumErz: 980, agrinium: 280, tibannaGas: 140, baradium: 210, kavamSalz: 280 }
   },
   civilian_agrinium: {
     label: 'Technologie-Komplex',
     category: 'civilian',
     productionResource: 'agrinium',
+    productionPerHour: 5,
     cost: { quadraniumErz: 420, agrinium: 980, tibannaGas: 280, baradium: 140, kavamSalz: 280 }
   },
   civilian_tibannaGas: {
     label: 'Tibanna-Gas-Raffinerie',
     category: 'civilian',
     productionResource: 'tibannaGas',
+    productionPerHour: 5,
     cost: { quadraniumErz: 350, agrinium: 280, tibannaGas: 980, baradium: 210, kavamSalz: 210 }
   },
   civilian_baradium: {
     label: 'Chemiewerk / Baradium-Foerderung',
     category: 'civilian',
     productionResource: 'baradium',
+    productionPerHour: 5,
     cost: { quadraniumErz: 420, agrinium: 210, tibannaGas: 210, baradium: 980, kavamSalz: 210 }
   },
   civilian_kavamSalz: {
     label: 'Versorgungsgueter-Depot',
     category: 'civilian',
     productionResource: 'kavamSalz',
+    productionPerHour: 5,
     cost: { quadraniumErz: 350, agrinium: 210, tibannaGas: 210, baradium: 140, kavamSalz: 980 }
   },
   civil_trade_center: {
     label: 'Handelszentrum',
     category: 'development',
-    description: '+3 % Produktion auf alle Rohstoffe dieses Planeten',
-    bonuses: { quadraniumErz: 0.03, agrinium: 0.03, tibannaGas: 0.03, baradium: 0.03, kavamSalz: 0.03 },
+    description: '+8 % Produktion auf alle Rohstoffe dieses Planeten',
+    bonuses: { quadraniumErz: 0.08, agrinium: 0.08, tibannaGas: 0.08, baradium: 0.08, kavamSalz: 0.08 },
     cost: { quadraniumErz: 560, agrinium: 420, tibannaGas: 280, baradium: 210, kavamSalz: 490 }
   },
   civil_industrial_complex: {
     label: 'Industriekomplex',
     category: 'development',
-    description: '+6 % Metalle und +4 % Chemikalien',
-    bonuses: { quadraniumErz: 0.06, baradium: 0.04 },
+    description: '+15 % Metalle und +10 % Chemikalien',
+    bonuses: { quadraniumErz: 0.15, baradium: 0.10 },
     cost: { quadraniumErz: 840, agrinium: 350, tibannaGas: 350, baradium: 490, kavamSalz: 420 }
   },
   civil_logistics_center: {
     label: 'Logistikzentrum',
     category: 'development',
-    description: '+6 % Treibstoffe und +3 % auf alle anderen Rohstoffe',
-    bonuses: { quadraniumErz: 0.03, agrinium: 0.03, tibannaGas: 0.06, baradium: 0.03, kavamSalz: 0.03 },
+    description: '+15 % Treibstoffe und +8 % auf alle anderen Rohstoffe',
+    bonuses: { quadraniumErz: 0.08, agrinium: 0.08, tibannaGas: 0.15, baradium: 0.08, kavamSalz: 0.08 },
     cost: { quadraniumErz: 630, agrinium: 420, tibannaGas: 700, baradium: 280, kavamSalz: 560 }
   },
   civil_research_academy: {
     label: 'Forschungsakademie',
     category: 'development',
-    description: '+8 % Technologien',
-    bonuses: { agrinium: 0.08 },
+    description: '+18 % Technologien',
+    bonuses: { agrinium: 0.18 },
     cost: { quadraniumErz: 490, agrinium: 840, tibannaGas: 350, baradium: 350, kavamSalz: 420 }
   },
   civil_orbital_trade_station: {
     label: 'Orbitale Handelsstation',
     category: 'development',
-    description: '+10 % Produktion auf alle Rohstoffe dieses Planeten',
-    bonuses: { quadraniumErz: 0.10, agrinium: 0.10, tibannaGas: 0.10, baradium: 0.10, kavamSalz: 0.10 },
+    description: '+25 % Produktion auf alle Rohstoffe dieses Planeten',
+    bonuses: { quadraniumErz: 0.25, agrinium: 0.25, tibannaGas: 0.25, baradium: 0.25, kavamSalz: 0.25 },
     cost: { quadraniumErz: 1400, agrinium: 1120, tibannaGas: 980, baradium: 840, kavamSalz: 1120 }
   }
 };
