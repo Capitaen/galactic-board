@@ -1233,7 +1233,11 @@ function escapeLoginManagerText(value) {
 function setNavCollapsed(collapsed) {
   navCollapsed = Boolean(collapsed);
   document.body.classList.toggle('nav-collapsed', navCollapsed);
-  if (mainNavToggle) mainNavToggle.textContent = navCollapsed ? '⌃' : '⌄';
+  if (mainNavToggle) {
+    mainNavToggle.textContent = navCollapsed ? '⌃' : '⌄';
+    mainNavToggle.setAttribute('title', navCollapsed ? 'Navigation ausklappen' : 'Navigation einklappen');
+    mainNavToggle.setAttribute('aria-label', navCollapsed ? 'Navigation ausklappen' : 'Navigation einklappen');
+  }
 }
 
 function showLoginModal() {

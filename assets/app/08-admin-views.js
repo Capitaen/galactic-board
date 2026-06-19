@@ -20,11 +20,7 @@ function renderFleetManagementView() {
   const visibleFactions = getFleetManagementVisibleFactions();
   const visibleFleets = state.fleets.filter((fleet) => visibleFactions.has(fleet.faction));
   const visibleCategories = ensureFleetCategoriesStore()
-    .filter((category) => visibleFactions.has(category.faction))
-    .sort((a, b) => {
-      if (a.faction !== b.faction) return a.faction.localeCompare(b.faction, 'de');
-      return a.name.localeCompare(b.name, 'de');
-    });
+    .filter((category) => visibleFactions.has(category.faction));
   const queryValue = fleetManagementSearchQuery || document.getElementById('fleetMgmtSearch')?.value || '';
   const manifestFleet = activeFleetManifestFilterFleetId ? state.fleets.find((fleet) => fleet.id === activeFleetManifestFilterFleetId) : null;
   const manifestQueryValue = fleetManifestSearchQuery || document.getElementById('fleetManifestSearch')?.value || '';

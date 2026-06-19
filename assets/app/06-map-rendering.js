@@ -181,8 +181,12 @@ function updateFleetElement(fleet) {
 
 function isFleetElementVisible(fleet) {
   if (!fleet) return false;
+  const role = currentRole();
   if (fleet.faction === 'GAR') return Boolean(layers.garFleets);
-  if (fleet.faction === 'KUS') return Boolean(layers.kusFleets);
+  if (fleet.faction === 'KUS') {
+    if (!(role === 'Admin' || role === 'Eventleiter / KUS')) return false;
+    return Boolean(layers.kusFleets);
+  }
   return true;
 }
 
