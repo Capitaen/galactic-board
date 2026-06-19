@@ -1261,6 +1261,76 @@ function recordBuildProjectActivity(job, title, details = '', createdAt = Date.n
   state.meta.buildProjectActivity = state.meta.buildProjectActivity.slice(0, 80);
 }
 
+function ensureFleetManagementActivityStore() {
+  state.meta = state.meta || {};
+  state.meta.fleetManagementActivity = Array.isArray(state.meta.fleetManagementActivity) ? state.meta.fleetManagementActivity : [];
+  return state.meta.fleetManagementActivity;
+}
+
+function createFleetManagementActivityEntry(data = {}) {
+  return {
+    id: data.id || `fleetactivity_${Math.random().toString(36).slice(2, 10)}`,
+    createdAt: Number(data.createdAt || Date.now()),
+    faction: data.faction === 'KUS' ? 'KUS' : 'GAR',
+    source: String(data.source || 'fleet').trim() || 'fleet',
+    title: String(data.title || 'Flottenaktivität').trim() || 'Flottenaktivität',
+    details: String(data.details || '').trim(),
+    location: String(data.location || '').trim(),
+    author: String(data.author || '').trim()
+  };
+}
+
+function recordFleetManagementActivity(data = {}) {
+  const store = ensureFleetManagementActivityStore();
+  store.unshift(createFleetManagementActivityEntry(data));
+  state.meta.fleetManagementActivity = store.slice(0, 240);
+}
+
+function getFleetManagementActivityEntries(options = {}) {
+  const query = normalizeSearchText(options.query || '');
+  const sourceFilter = String(options.sourceFilter || 'all');
+  const factionFilter = Array.isArray(options.factions) && options.factions.length
+    ? new Set(options.factions.map((entry) => String(entry).trim()).filter(Boolean))
+    : null;
+  const fleetEntries = ensureFleetManagementActivityStore().map((entry) => ({
+    ...entry,
+    source: entry.source || 'fleet'
+  }));
+  const buildEntries = (Array.isArray(state.meta?.buildProjectActivity) ? state.meta.buildProjectActivity : [])
+    .filter((entry) => ['ship', 'shipyard'].includes(entry.jobType))
+    .map((entry) => ({
+      ...entry,
+      source: entry.jobType === 'shipyard' ? 'shipyard' : 'shipbuild'
+    }));
+  const shipyardLogEntries = getShipyardLogs('GAR').map((entry) => ({
+    id: entry.id,
+    createdAt: Number(entry.createdAt || Date.parse(entry.eventAt || '') || Date.now()),
+    faction: entry.faction || 'GAR',
+    source: 'shipyard_log',
+    title: `Schiffbau-Log: ${entry.subject || 'Eintrag'}`,
+    details: [entry.method, entry.details].filter(Boolean).join(' • '),
+    location: entry.location || '',
+    author: entry.author || ''
+  }));
+  return [...fleetEntries, ...buildEntries, ...shipyardLogEntries]
+    .filter((entry) => !factionFilter || factionFilter.has(String(entry.faction || '').trim()))
+    .filter((entry) => sourceFilter === 'all' || entry.source === sourceFilter)
+    .filter((entry) => {
+      if (!query) return true;
+      const haystack = normalizeSearchText([
+        entry.title,
+        entry.details,
+        entry.location,
+        entry.author,
+        entry.faction,
+        entry.source
+      ].join(' '));
+      return haystack.includes(query);
+    })
+    .sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0))
+    .slice(0, 180);
+}
+
 function ensureShipyardLogStore() {
   state.meta = state.meta || {};
   state.meta.shipyardLogs = Array.isArray(state.meta.shipyardLogs) ? state.meta.shipyardLogs : [];
@@ -1800,6 +1870,12 @@ function startShipyardProject(planetId = '') {
     startedBy: currentAuthenticatedUsername || currentAssignedRole(),
     status: 'building'
   }));
+  recordBuildProjectActivity({
+    faction: 'GAR',
+    jobType: 'shipyard',
+    buildLocationPlanetId: planet.id,
+    startedBy: currentAuthenticatedUsername || currentAssignedRole()
+  }, action === 'upgrade' ? 'Werft-Upgrade gestartet' : 'Werftbau gestartet', `${planet.name} -> ${levelMeta.label}`);
   saveLocal();
   playAudioCue(datapadAcceptAudio);
   if (activeMainTab === 'shipyard') renderShipyardView();

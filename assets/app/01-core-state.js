@@ -811,7 +811,10 @@ let mapImageLoaded = false;
 let buildProjectsViewTab = 'infrastructure';
 let activeMainTab = 'map';
 let activeShipyardFactionOverride = 'GAR';
+let fleetManagementViewTab = 'overview';
 let fleetManagementSearchQuery = '';
+let fleetManagementActivityQuery = '';
+let fleetManagementActivityFilter = 'all';
 let activeFleetManagementHighlightTimer = 0;
 let activeFleetManagementHighlightKey = '';
 let pendingFleetManifestHighlightShipId = '';
@@ -844,6 +847,7 @@ let contextMenuState = null;
 let activeSectorDraft = null;
 const CLIENT_UI_PREFS_KEY = 'gcb_ui_v1';
 let fleetCategoryCollapsedIds = new Set();
+let fleetCommandCollapsedIds = new Set();
 const serverSync = {
   enabled: window.location.protocol.startsWith('http'),
   socket: null,

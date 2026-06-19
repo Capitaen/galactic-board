@@ -1047,6 +1047,14 @@ function deleteFleet(id) {
 function saveFleetManagementFleet(id) {
   const fleet = fleetIndex.get(id) || state.fleets.find((entry) => entry.id === id);
   if (!fleet || !canEditFaction(fleet.faction)) return;
+  const previousState = {
+    name: fleet.name,
+    commander: fleet.commander || fleet.leader || '',
+    assignment: fleet.assignment || '',
+    locationPlanetId: fleet.locationPlanetId || fleet.planetId || '',
+    commandRole: normalizeFleetCommandRole(fleet.commandRole),
+    parentFleetId: fleet.parentFleetId || ''
+  };
   const nameInput = document.getElementById(`fmFleetName_${id}`);
   const commanderInput = document.getElementById(`fmFleetCommander_${id}`);
   const assignmentInput = document.getElementById(`fmFleetAssignment_${id}`);
@@ -1080,6 +1088,23 @@ function saveFleetManagementFleet(id) {
   syncFleetHierarchyCategoryLinks();
   rebuildFleetRenderPositions();
   rebuildIndexes();
+  const locationPlanet = fleet.locationPlanetId ? planetIndex.get(fleet.locationPlanetId) : null;
+  const parentFleet = fleet.parentFleetId ? (fleetIndex.get(fleet.parentFleetId) || state.fleets.find((entry) => entry.id === fleet.parentFleetId)) : null;
+  const changeParts = [];
+  if (previousState.name !== fleet.name) changeParts.push(`Name: ${previousState.name} -> ${fleet.name}`);
+  if (previousState.commander !== (fleet.commander || '')) changeParts.push(`CO: ${previousState.commander || '—'} -> ${fleet.commander || '—'}`);
+  if (previousState.assignment !== (fleet.assignment || '')) changeParts.push(`Kennung: ${previousState.assignment || '—'} -> ${fleet.assignment || '—'}`);
+  if (previousState.commandRole !== normalizeFleetCommandRole(fleet.commandRole)) changeParts.push(`Typ: ${getFleetCommandRoleLabel(previousState.commandRole)} -> ${getFleetCommandRoleLabel(normalizeFleetCommandRole(fleet.commandRole))}`);
+  if (previousState.parentFleetId !== (fleet.parentFleetId || '')) changeParts.push(`Unterstellt: ${(fleetIndex.get(previousState.parentFleetId)?.name || 'Nicht unterstellt')} -> ${(parentFleet?.name || 'Nicht unterstellt')}`);
+  if (previousState.locationPlanetId !== (fleet.locationPlanetId || '')) changeParts.push(`Standort: ${(planetIndex.get(previousState.locationPlanetId)?.name || '—')} -> ${(locationPlanet?.name || '—')}`);
+  recordFleetManagementActivity({
+    faction: fleet.faction,
+    source: 'fleet',
+    title: `Verband gespeichert: ${fleet.name}`,
+    details: changeParts.join(' • ') || 'Verbandsdaten aktualisiert.',
+    location: locationPlanet?.name || '',
+    author: currentAuthenticatedUsername || currentAssignedRole()
+  });
   saveLocal();
   playAudioCue(datapadAcceptAudio);
   render({ positions: true, layers: true });
@@ -1103,6 +1128,14 @@ function createFleetManagementFleet(categoryId = '') {
     categoryId: validCategory?.id || ''
   });
   state.fleets.push(fleet);
+  recordFleetManagementActivity({
+    faction,
+    source: 'fleet',
+    title: `Neuer Verband angelegt: ${fleet.name}`,
+    details: validCategory ? `Kategorie: ${validCategory.name}` : 'Ohne Kategorie angelegt.',
+    location: '',
+    author: currentAuthenticatedUsername || currentAssignedRole()
+  });
   saveLocal();
   playAudioCue(datapadAcceptAudio);
   rebuildIndexes();
@@ -1114,6 +1147,9 @@ function createFleetManagementFleet(categoryId = '') {
 function saveManagedShip(id) {
   const ship = state.ships.find((entry) => entry.id === id);
   if (!ship || !canEditFaction(ship.faction)) return;
+  const previousAssignedFleetId = ship.assignedFleetId || '';
+  const previousLocationPlanetId = ship.locationPlanetId || '';
+  const previousStatus = ship.status || '';
   const station = isStationClass(ship.classId);
   const nameInput = document.getElementById(`shipName_${id}`);
   const commanderInput = document.getElementById(`shipCommander_${id}`);
@@ -1147,6 +1183,20 @@ function saveManagedShip(id) {
     return;
   }
   normalizeFleetShipAssignments();
+  const currentFleet = ship.assignedFleetId ? (fleetIndex.get(ship.assignedFleetId) || state.fleets.find((entry) => entry.id === ship.assignedFleetId)) : null;
+  const previousFleet = previousAssignedFleetId ? (fleetIndex.get(previousAssignedFleetId) || state.fleets.find((entry) => entry.id === previousAssignedFleetId)) : null;
+  recordFleetManagementActivity({
+    faction: ship.faction,
+    source: 'fleet',
+    title: `Schiff gespeichert: ${ship.name}`,
+    details: [
+      previousAssignedFleetId !== (ship.assignedFleetId || '') ? `Verband: ${(previousFleet?.name || 'Nicht zugeteilt')} -> ${(currentFleet?.name || 'Nicht zugeteilt')}` : '',
+      previousLocationPlanetId !== (ship.locationPlanetId || '') ? `Standort: ${(planetIndex.get(previousLocationPlanetId)?.name || '—')} -> ${(planetIndex.get(ship.locationPlanetId)?.name || '—')}` : '',
+      previousStatus !== (ship.status || '') ? `Status: ${previousStatus || '—'} -> ${ship.status || '—'}` : ''
+    ].filter(Boolean).join(' • ') || 'Schiffsdaten aktualisiert.',
+    location: planetIndex.get(ship.locationPlanetId)?.name || '',
+    author: currentAuthenticatedUsername || currentAssignedRole()
+  });
   saveLocal();
   playAudioCue(datapadAcceptAudio);
   rebuildIndexes();
@@ -1159,8 +1209,17 @@ function removeManagedShipFromFleet(id) {
   const ship = state.ships.find((entry) => entry.id === id);
   if (!ship || !canEditFaction(ship.faction)) return;
   if (isStationClass(ship.classId)) return;
+  const previousFleet = ship.assignedFleetId ? (fleetIndex.get(ship.assignedFleetId) || state.fleets.find((entry) => entry.id === ship.assignedFleetId)) : null;
   ship.assignedFleetId = '';
   normalizeFleetShipAssignments();
+  recordFleetManagementActivity({
+    faction: ship.faction,
+    source: 'fleet',
+    title: `Schiff gelöst: ${ship.name}`,
+    details: `${ship.name} wurde aus ${(previousFleet?.name || 'dem Verband')} entfernt.`,
+    location: planetIndex.get(ship.locationPlanetId)?.name || '',
+    author: currentAuthenticatedUsername || currentAssignedRole()
+  });
   saveLocal();
   playAudioCue(datapadDeleteAudio);
   renderFleetManagementView();
@@ -1255,6 +1314,12 @@ function startBuildOrder() {
       setStatus(`${faction}-Schiff konnte nicht erzeugt werden.`);
       return;
     }
+    recordBuildProjectActivity({
+      faction,
+      jobType: 'ship',
+      buildLocationPlanetId: locationPlanetId,
+      startedBy: currentAuthenticatedUsername || currentAssignedRole()
+    }, 'Schiff sofort bereitgestellt', `${ship.name} in ${planet.name}`);
     saveLocal();
     playAudioCue(datapadAcceptAudio);
     renderShipyardView();
@@ -1271,6 +1336,12 @@ function startBuildOrder() {
     faction,
     startedBy: currentAuthenticatedUsername || currentAssignedRole()
   }));
+  recordBuildProjectActivity({
+    faction,
+    jobType: 'ship',
+    buildLocationPlanetId: locationPlanetId,
+    startedBy: currentAuthenticatedUsername || currentAssignedRole()
+  }, 'Schiffbau gestartet', `${shipName || meta.displayName} in ${planet.name}`);
   saveLocal();
   playAudioCue(datapadAcceptAudio);
   renderShipyardView();
@@ -1362,10 +1433,19 @@ function deleteFleetManagementFleet(id) {
   emitLiveSocketEvent('fx:fleet-delete', { fleetId: fleet.id });
   state.fleets = state.fleets.filter((entry) => entry.id !== fleet.id);
   removeFleetFromOrderBuckets(fleet.id);
+  fleetCommandCollapsedIds.delete(fleet.id);
   normalizeFleetShipAssignments();
   syncFleetHierarchyCategoryLinks();
   rebuildFleetRenderPositions();
   rebuildIndexes();
+  recordFleetManagementActivity({
+    faction: fleet.faction,
+    source: 'fleet',
+    title: `Verband gelöscht: ${fleet.name}`,
+    details: `${assignedShips.length} Schiff(e) wurden aus dem Verband gelöst.`,
+    location: getFleetDisplayLocation(fleet),
+    author: currentAuthenticatedUsername || currentAssignedRole()
+  });
   saveLocal();
   playAudioCue(datapadDeleteAudio);
   if (selected?.type === 'fleet' && selected.id === fleet.id) closeInfoPanel();
@@ -1467,7 +1547,16 @@ function saveFleetManagementCategory(id) {
   const category = ensureFleetCategoriesStore().find((entry) => entry.id === id);
   if (!category || !canEditFaction(category.faction)) return;
   const input = document.getElementById(`fleetCategoryName_${id}`);
+  const previousName = category.name;
   if (input) category.name = input.value.trim() || category.name;
+  recordFleetManagementActivity({
+    faction: category.faction,
+    source: 'fleet',
+    title: `Kategorie gespeichert: ${category.name}`,
+    details: previousName !== category.name ? `Name: ${previousName} -> ${category.name}` : 'Kategoriedaten aktualisiert.',
+    location: '',
+    author: currentAuthenticatedUsername || currentAssignedRole()
+  });
   saveLocal();
   playAudioCue(datapadAcceptAudio);
   renderFleetManagementView();
@@ -1477,6 +1566,7 @@ function saveFleetManagementCategory(id) {
 function deleteFleetManagementCategory(id) {
   const category = ensureFleetCategoriesStore().find((entry) => entry.id === id);
   if (!category || !canEditFaction(category.faction)) return;
+  const affectedFleetIds = state.fleets.filter((fleet) => fleet.categoryId === id).map((fleet) => fleet.id);
   state.fleets.forEach((fleet) => {
     if (fleet.categoryId === id) fleet.categoryId = '';
   });
@@ -1484,6 +1574,15 @@ function deleteFleetManagementCategory(id) {
   state.meta.fleetCategories = ensureFleetCategoriesStore().filter((entry) => entry.id !== id);
   delete ensureFleetCardOrderStore()[`category:${id}`];
   fleetCategoryCollapsedIds.delete(id);
+  affectedFleetIds.forEach((fleetId) => fleetCommandCollapsedIds.delete(fleetId));
+  recordFleetManagementActivity({
+    faction: category.faction,
+    source: 'fleet',
+    title: `Kategorie gelöscht: ${category.name}`,
+    details: 'Alle zugeordneten Verbände wurden aus der Kategorie gelöst.',
+    location: '',
+    author: currentAuthenticatedUsername || currentAssignedRole()
+  });
   saveLocal();
   playAudioCue(datapadDeleteAudio);
   renderFleetManagementView();
@@ -1494,6 +1593,25 @@ function toggleFleetManagementCategory(id) {
   if (!id) return;
   if (fleetCategoryCollapsedIds.has(id)) fleetCategoryCollapsedIds.delete(id);
   else fleetCategoryCollapsedIds.add(id);
+  saveClientUiPrefs();
+  renderFleetManagementView();
+}
+
+function setFleetManagementViewTab(tab) {
+  fleetManagementViewTab = tab === 'activity' ? 'activity' : 'overview';
+  renderFleetManagementView();
+}
+
+function applyFleetManagementActivityFilters() {
+  fleetManagementActivityQuery = document.getElementById('fleetActivitySearch')?.value || '';
+  fleetManagementActivityFilter = document.getElementById('fleetActivityFilter')?.value || 'all';
+  renderFleetManagementView();
+}
+
+function toggleFleetCommandChildrenCollapse(id) {
+  if (!id) return;
+  if (fleetCommandCollapsedIds.has(id)) fleetCommandCollapsedIds.delete(id);
+  else fleetCommandCollapsedIds.add(id);
   saveClientUiPrefs();
   renderFleetManagementView();
 }
@@ -1769,6 +1887,7 @@ function renderFleetHierarchyColumns(fleets, bucketKeyPrefix = 'category') {
     const children = childrenMap.get(fleet.id) || [];
     const stations = children.filter((entry) => normalizeFleetCommandRole(entry.commandRole) === 'station');
     const divisions = children.filter((entry) => normalizeFleetCommandRole(entry.commandRole) === 'battle_division');
+    const divisionsCollapsed = fleetCommandCollapsedIds.has(fleet.id);
     const bucketKey = bucketKeyPrefix.startsWith('category:') || bucketKeyPrefix.startsWith('ungrouped:')
       ? bucketKeyPrefix
       : `${bucketKeyPrefix}:${fleet.categoryId || fleet.faction}`;
@@ -1782,9 +1901,14 @@ function renderFleetHierarchyColumns(fleets, bucketKeyPrefix = 'category') {
             : '<div class="fleet-category-empty">Keine Raumstation zugeordnet.</div>'}
         </div>
         <div class="fleet-command-child-block">
-          <div class="fleet-command-child-title">Schlachtdivisionen</div>
+          <div class="fleet-command-child-title fleet-command-child-header">
+            <span>Schlachtdivisionen</span>
+            ${divisions.length ? `<button class="mini-btn" onclick="toggleFleetCommandChildrenCollapse('${fleet.id}')">${divisionsCollapsed ? 'Ausklappen' : 'Einklappen'}</button>` : ''}
+          </div>
           ${divisions.length
-            ? `<div class="fleet-command-child-list">${divisions.map((entry) => renderFleetManagementFleetCard(entry, bucketKey, { compact: true, inHierarchy: true, subordinate: true })).join('')}</div>`
+            ? (divisionsCollapsed
+              ? `<div class="fleet-command-collapsed-list">${divisions.map((entry) => `<div class="fleet-command-collapsed-item"><span>${escapeHtml(entry.assignment || entry.name)}</span></div>`).join('')}</div>`
+              : `<div class="fleet-command-child-list">${divisions.map((entry) => renderFleetManagementFleetCard(entry, bucketKey, { compact: true, inHierarchy: true, subordinate: true })).join('')}</div>`)
             : '<div class="fleet-category-empty">Keine Schlachtdivision zugeordnet.</div>'}
         </div>
       </div>

@@ -19,6 +19,11 @@ function renderFleetManagementView() {
     return;
   }
   const visibleFactions = getFleetManagementVisibleFactions();
+  const fleetActivityEntries = getFleetManagementActivityEntries({
+    factions: [...visibleFactions],
+    query: fleetManagementActivityQuery,
+    sourceFilter: fleetManagementActivityFilter
+  });
   const visibleFleets = state.fleets.filter((fleet) => visibleFactions.has(fleet.faction));
   const visibleCategories = ensureFleetCategoriesStore()
     .filter((category) => visibleFactions.has(category.faction));
@@ -67,11 +72,43 @@ function renderFleetManagementView() {
             <option value="KUS" ${fleetManagementFactionFilter === 'KUS' ? 'selected' : ''}>Nur KUS</option>
           </select>
         ` : ''}
-        <button class="mini-btn primary" onclick="createFleetManagementFleet()">Neuen Verband anlegen</button>
-        ${role !== 'Viewer' && !isUnderworldRole(role) ? '<button class="mini-btn" onclick="createFleetManagementCategory()">Neue Kategorie</button>' : ''}
-        ${role === 'Admin' ? '<button class="mini-btn" onclick="triggerTrelloImport()">Trello JSON importieren</button>' : ''}
+        <button class="mini-btn ${fleetManagementViewTab === 'overview' ? 'active' : ''}" onclick="setFleetManagementViewTab('overview')">Verbände</button>
+        <button class="mini-btn ${fleetManagementViewTab === 'activity' ? 'active' : ''}" onclick="setFleetManagementViewTab('activity')">Aktivität</button>
+        ${fleetManagementViewTab === 'overview' ? `
+          <button class="mini-btn primary" onclick="createFleetManagementFleet()">Neuen Verband anlegen</button>
+          ${role !== 'Viewer' && !isUnderworldRole(role) ? '<button class="mini-btn" onclick="createFleetManagementCategory()">Neue Kategorie</button>' : ''}
+          ${role === 'Admin' ? '<button class="mini-btn" onclick="triggerTrelloImport()">Trello JSON importieren</button>' : ''}
+        ` : ''}
       </div>
     </div>
+    ${fleetManagementViewTab === 'activity' ? `
+      <div class="workspace-section">
+        <div class="toolbar-row">
+          <input id="fleetActivitySearch" type="search" placeholder="Aktivität suchen..." value="${escapeLoginManagerText(fleetManagementActivityQuery)}" autocomplete="off">
+          <select id="fleetActivityFilter">
+            <option value="all" ${fleetManagementActivityFilter === 'all' ? 'selected' : ''}>Alle Quellen</option>
+            <option value="fleet" ${fleetManagementActivityFilter === 'fleet' ? 'selected' : ''}>Flottenmanagement</option>
+            <option value="shipyard" ${fleetManagementActivityFilter === 'shipyard' ? 'selected' : ''}>Werftbau</option>
+            <option value="shipbuild" ${fleetManagementActivityFilter === 'shipbuild' ? 'selected' : ''}>Schiffbau</option>
+            <option value="shipyard_log" ${fleetManagementActivityFilter === 'shipyard_log' ? 'selected' : ''}>Manuelle Schiffbau-Logs</option>
+          </select>
+          <button class="mini-btn primary" onclick="applyFleetManagementActivityFilters()">Filter anwenden</button>
+        </div>
+      </div>
+      <div class="workspace-section">
+        <div class="workspace-card">
+          <h3>Aktivitätsliste</h3>
+          ${fleetActivityEntries.length ? fleetActivityEntries.map((entry) => `
+            <div class="project-card">
+              <h4>${escapeLoginManagerText(entry.title || 'Aktivität')}</h4>
+              <p class="project-meta">${escapeLoginManagerText(entry.location || '—')} • ${escapeLoginManagerText(entry.faction || 'GAR')} • ${escapeLoginManagerText(entry.source || 'fleet')}</p>
+              <p>${escapeLoginManagerText(entry.details || 'Keine Zusatzdetails.')}</p>
+              <small>${formatMarketDateTime(entry.createdAt)}${entry.author ? ` • ${escapeLoginManagerText(entry.author)}` : ''}</small>
+            </div>
+          `).join('') : '<div class="muted-box">Noch keine passenden Aktivitäten gefunden.</div>'}
+        </div>
+      </div>
+    ` : `
     <div class="workspace-section">
       <div class="toolbar-row">
         <div class="inline-search-wrap fleet-mgmt-search-wrap">
@@ -207,6 +244,7 @@ function renderFleetManagementView() {
         ${state.importWarnings.length ? `<ul class="warning-list">${state.importWarnings.map((warning) => `<li>${warning}</li>`).join('')}</ul>` : '<div class="muted-box">Keine Import-Warnungen vorhanden.</div>'}
       </div>
     </div>
+    `}
   `;
   const searchInput = document.getElementById('fleetMgmtSearch');
   if (searchInput) {

@@ -102,6 +102,7 @@ function saveClientUiPrefs() {
     panY,
     viewMode,
     fleetCategoryCollapsedIds: Array.from(fleetCategoryCollapsedIds),
+    fleetCommandCollapsedIds: Array.from(fleetCommandCollapsedIds),
     audioMuted
   };
   localStorage.setItem(CLIENT_UI_PREFS_KEY, JSON.stringify(prefs));
@@ -121,6 +122,7 @@ function loadClientUiPrefs() {
     if (Number.isFinite(raw.panX)) panX = raw.panX;
     if (Number.isFinite(raw.panY)) panY = raw.panY;
     if (Array.isArray(raw.fleetCategoryCollapsedIds)) fleetCategoryCollapsedIds = new Set(raw.fleetCategoryCollapsedIds.map((entry) => String(entry)));
+    if (Array.isArray(raw.fleetCommandCollapsedIds)) fleetCommandCollapsedIds = new Set(raw.fleetCommandCollapsedIds.map((entry) => String(entry)));
     audioMuted = Boolean(raw.audioMuted);
   } catch (error) {
     console.warn('UI prefs could not be restored', error);

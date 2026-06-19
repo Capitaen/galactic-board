@@ -1605,7 +1605,10 @@ body.nav-collapsed #mainNavToggle {
 .fleet-command-column { display:flex; flex-direction:column; gap:10px; padding:12px; border-radius:16px; background:rgba(255,255,255,.025); border:1px solid rgba(255,255,255,.08); box-shadow:inset 0 0 0 1px rgba(255,255,255,.015); }
 .fleet-command-child-block { display:flex; flex-direction:column; gap:8px; }
 .fleet-command-child-title { padding:0 2px; color:#9bc6d7; font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; }
+.fleet-command-child-header { display:flex; align-items:center; justify-content:space-between; gap:10px; }
 .fleet-command-child-list { display:flex; flex-direction:column; gap:8px; }
+.fleet-command-collapsed-list { display:flex; flex-direction:column; gap:6px; }
+.fleet-command-collapsed-item { display:flex; align-items:center; justify-content:space-between; min-height:40px; padding:10px 12px; border-radius:12px; background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.08); color:#eef8ff; font-size:13px; }
 .fleet-command-unassigned { margin-top:14px; padding:12px; border-radius:16px; background:rgba(255,255,255,.02); border:1px dashed rgba(255,255,255,.12); }
 .fleet-command-unassigned h5 { margin:0 0 10px; font-size:14px; color:#d8f6ff; }
 .fleet-card.compact { padding:12px; }
@@ -1646,6 +1649,7 @@ body.nav-collapsed #mainNavToggle {
 }
 .mini-btn { background:linear-gradient(180deg, rgba(23,35,50,.95), rgba(12,18,27,.96)); color:#eefbff; border:1px solid rgba(109,234,255,.16); border-radius:12px; padding:8px 11px; cursor:pointer; }
 .mini-btn.primary { background:linear-gradient(180deg, rgba(47,139,255,.96), rgba(24,88,194,.96)); border-color:rgba(129,232,255,.45); }
+.mini-btn.active { background:linear-gradient(180deg, rgba(47,139,255,.96), rgba(24,88,194,.96)); border-color:rgba(129,232,255,.45); box-shadow:0 0 0 1px rgba(129,232,255,.18), 0 8px 22px rgba(34,96,202,.28); }
 .mini-btn.danger { background:linear-gradient(180deg, rgba(111,34,38,.96), rgba(72,20,24,.96)); border-color:#884248; }
 .split-inline { display:flex; gap:10px; flex-wrap:wrap; }
 .split-inline > * { flex:1 1 180px; }
