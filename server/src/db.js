@@ -3010,11 +3010,19 @@ export function createUser(db, { username, passwordHash, role, canCoordinate4thF
 
 export function updateUser(db, id, { username, passwordHash, role, canCoordinate4thFleet = false, senatePosition = '' }) {
   const now = new Date().toISOString();
+  if (typeof passwordHash === 'string' && passwordHash) {
+    db.prepare(`
+      UPDATE users
+      SET username = ?, password_hash = ?, role = ?, can_coordinate_4th_fleet = ?, senate_position = ?, updated_at = ?
+      WHERE id = ?
+    `).run(username, passwordHash, role, canCoordinate4thFleet ? 1 : 0, senatePosition, now, id);
+    return;
+  }
   db.prepare(`
     UPDATE users
-    SET username = ?, password_hash = ?, role = ?, can_coordinate_4th_fleet = ?, senate_position = ?, updated_at = ?
+    SET username = ?, role = ?, can_coordinate_4th_fleet = ?, senate_position = ?, updated_at = ?
     WHERE id = ?
-  `).run(username, passwordHash, role, canCoordinate4thFleet ? 1 : 0, senatePosition, now, id);
+  `).run(username, role, canCoordinate4thFleet ? 1 : 0, senatePosition, now, id);
 }
 
 export function deleteUser(db, id) {

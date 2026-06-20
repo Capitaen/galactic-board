@@ -1916,7 +1916,7 @@ app.patch('/api/admin/users/:id', requireAuth, requireLoginManager, async (req, 
   }
 
   try {
-    const { username, password, role, canCoordinate4thFleet, senatePosition } = validateAdminUserInput(req.body);
+    const { username, password, role, canCoordinate4thFleet, senatePosition } = validateAdminUserInput(req.body, { requirePassword: false });
     const targetUser = listUsers(db).find((user) => user.id === userId);
     if (!canActorManageUser(req.user, targetUser) || !canActorAssignRole(req.user, role)) {
       return res.status(403).json({ error: 'Diesen Login darfst du nicht bearbeiten.', users: listUsersForActor(req.user) });
