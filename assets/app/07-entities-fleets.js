@@ -1692,6 +1692,11 @@ function openFleetManifestInManagement(fleetId) {
   });
 }
 
+function openFleetStackEntry(fleetId) {
+  if (!fleetId) return;
+  openFleet(fleetId);
+}
+
 function clearFleetManifestFilter() {
   activeFleetManifestFilterFleetId = '';
   fleetManifestSearchQuery = '';

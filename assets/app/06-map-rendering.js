@@ -249,37 +249,19 @@ function renderFleetStackPanel() {
     <h3>Einheiten bei ${escapeHtml(cluster.planet?.name || 'Sammelpunkt')}</h3>
     <div class="fleet-stack-list">
       ${cluster.fleets.map((fleet) => `
-        <div class="fleet-stack-entry" data-fleet-id="${fleet.id}" role="button" tabindex="0">
+        <div class="fleet-stack-entry" data-fleet-id="${fleet.id}" role="button" tabindex="0" onclick="openFleetStackEntry('${fleet.id}')" onkeydown="if(event.key === 'Enter' || event.key === ' '){ event.preventDefault(); openFleetStackEntry('${fleet.id}'); }">
           <div class="fleet-stack-entry-copy">
             <strong>${escapeHtml(fleet.name)}</strong>
             <small>${escapeHtml(getFleetCommandRoleLabel(normalizeFleetCommandRole(fleet.commandRole)))} • ${escapeHtml(fleet.faction)}${fleet.assignment ? ` • ${escapeHtml(fleet.assignment)}` : ''}</small>
           </div>
-          <button class="mini-btn" type="button" data-fleet-open="${fleet.id}">Öffnen</button>
+          <button class="mini-btn" type="button" onclick="event.stopPropagation(); openFleetStackEntry('${fleet.id}')">Öffnen</button>
         </div>
       `).join('')}
     </div>
     <div class="fleet-stack-actions">
-      <button class="mini-btn" type="button" data-close-fleet-stack>Schließen</button>
+      <button class="mini-btn" type="button" onclick="closeFleetStackPanel()">Schließen</button>
     </div>
   `;
-  fleetStackPanel.querySelectorAll('[data-fleet-id]').forEach((entry) => {
-    const fleetId = entry.getAttribute('data-fleet-id') || '';
-    if (!fleetId) return;
-    entry.addEventListener('click', () => openFleet(fleetId));
-    entry.addEventListener('keydown', (event) => {
-      if (event.key !== 'Enter' && event.key !== ' ') return;
-      event.preventDefault();
-      openFleet(fleetId);
-    });
-  });
-  fleetStackPanel.querySelectorAll('[data-fleet-open]').forEach((button) => {
-    button.addEventListener('click', (event) => {
-      event.stopPropagation();
-      const fleetId = button.getAttribute('data-fleet-open') || '';
-      if (fleetId) openFleet(fleetId);
-    });
-  });
-  fleetStackPanel.querySelector('[data-close-fleet-stack]')?.addEventListener('click', () => closeFleetStackPanel());
 }
 
 function openFleetClusterPanel(clusterKey) {

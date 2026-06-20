@@ -130,6 +130,7 @@ window.focusFleetOnMap = focusFleetOnMap;
 window.focusShipOnMap = focusShipOnMap;
 window.deleteFleetManagementFleet = deleteFleetManagementFleet;
 window.openFleetManifestInManagement = openFleetManifestInManagement;
+window.openFleetStackEntry = openFleetStackEntry;
 window.openFleetInManagement = openFleetInManagement;
 window.clearFleetManifestFilter = clearFleetManifestFilter;
 window.setFleetManifestSearchQuery = setFleetManifestSearchQuery;
