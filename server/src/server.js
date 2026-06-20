@@ -1174,7 +1174,8 @@ function canActorManageUser(actor, targetUser) {
   return Boolean(targetUser && canActorAssignRole(actor, targetUser.role));
 }
 
-function validateAdminUserInput(body) {
+function validateAdminUserInput(body, options = {}) {
+  const requirePassword = options.requirePassword !== false;
   const username = String(body?.username || '').trim();
   const password = String(body?.password || '');
   const role = sanitizeAdminRole(body?.role);
@@ -1192,7 +1193,7 @@ function validateAdminUserInput(body) {
     throw error;
   }
 
-  if (!password) {
+  if (requirePassword && !password) {
     const error = new Error('Passwort darf nicht leer sein.');
     error.status = 400;
     throw error;
@@ -1889,7 +1890,7 @@ app.post('/api/auth/logout', (req, res) => {
 
 app.post('/api/admin/users', requireAuth, requireLoginManager, async (req, res) => {
   try {
-    const { username, password, role, canCoordinate4thFleet, senatePosition } = validateAdminUserInput(req.body);
+    const { username, password, role, canCoordinate4thFleet, senatePosition } = validateAdminUserInput(req.body, { requirePassword: false });
     if (!canActorAssignRole(req.user, role)) {
       return res.status(403).json({ error: 'Diese Rolle darfst du nicht vergeben.', users: listUsersForActor(req.user) });
     }
@@ -1924,8 +1925,11 @@ app.patch('/api/admin/users/:id', requireAuth, requireLoginManager, async (req, 
     if (existing && existing.id !== userId) {
       return res.status(409).json({ error: 'Dieser Benutzername existiert bereits.', users: listUsersForActor(req.user) });
     }
-    const passwordHash = await bcrypt.hash(password, 10);
-    updateUser(db, userId, { username, passwordHash, role, canCoordinate4thFleet, senatePosition });
+    const updatePatch = { username, role, canCoordinate4thFleet, senatePosition };
+    if (password) {
+      updatePatch.passwordHash = await bcrypt.hash(password, 10);
+    }
+    updateUser(db, userId, updatePatch);
     refreshUserSessions(userId, { username, role, canCoordinate4thFleet, senatePosition });
     res.json({ ok: true, users: listUsersForActor(req.user) });
   } catch (error) {
