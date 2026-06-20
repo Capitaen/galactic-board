@@ -1601,7 +1601,8 @@ function deleteFleetManagementFleet(id) {
   emitLiveSocketEvent('fx:fleet-delete', { fleetId: fleet.id });
   state.fleets = state.fleets.filter((entry) => entry.id !== fleet.id);
   removeFleetFromOrderBuckets(fleet.id);
-  fleetCommandCollapsedIds.delete(fleet.id);
+  fleetCommandCollapsedIds.delete(getFleetCommandCollapseKey(fleet.id, 'divisions'));
+  fleetCommandCollapsedIds.delete(getFleetCommandCollapseKey(fleet.id, 'stations'));
   normalizeFleetShipAssignments();
   syncFleetHierarchyCategoryLinks();
   rebuildFleetRenderPositions();
@@ -1697,6 +1698,10 @@ function clearFleetManifestFilter() {
   renderFleetManagementView();
 }
 
+function getFleetCommandCollapseKey(id, section = 'divisions') {
+  return section === 'stations' ? `${id}:stations` : String(id);
+}
+
 function createFleetManagementCategory() {
   const role = currentRole();
   if (role === 'Viewer' || role === 'Senat' || isUnderworldRole(role)) return;
@@ -1742,7 +1747,10 @@ function deleteFleetManagementCategory(id) {
   state.meta.fleetCategories = ensureFleetCategoriesStore().filter((entry) => entry.id !== id);
   delete ensureFleetCardOrderStore()[`category:${id}`];
   fleetCategoryCollapsedIds.delete(id);
-  affectedFleetIds.forEach((fleetId) => fleetCommandCollapsedIds.delete(fleetId));
+  affectedFleetIds.forEach((fleetId) => {
+    fleetCommandCollapsedIds.delete(getFleetCommandCollapseKey(fleetId, 'divisions'));
+    fleetCommandCollapsedIds.delete(getFleetCommandCollapseKey(fleetId, 'stations'));
+  });
   recordFleetManagementActivity({
     faction: category.faction,
     source: 'fleet',
@@ -1776,10 +1784,11 @@ function applyFleetManagementActivityFilters() {
   renderFleetManagementView();
 }
 
-function toggleFleetCommandChildrenCollapse(id) {
+function toggleFleetCommandChildrenCollapse(id, section = 'divisions') {
   if (!id) return;
-  if (fleetCommandCollapsedIds.has(id)) fleetCommandCollapsedIds.delete(id);
-  else fleetCommandCollapsedIds.add(id);
+  const collapseKey = getFleetCommandCollapseKey(id, section);
+  if (fleetCommandCollapsedIds.has(collapseKey)) fleetCommandCollapsedIds.delete(collapseKey);
+  else fleetCommandCollapsedIds.add(collapseKey);
   saveClientUiPrefs();
   renderFleetManagementView();
 }
@@ -2055,7 +2064,8 @@ function renderFleetHierarchyColumns(fleets, bucketKeyPrefix = 'category') {
     const children = childrenMap.get(fleet.id) || [];
     const stations = children.filter((entry) => normalizeFleetCommandRole(entry.commandRole) === 'station');
     const divisions = children.filter((entry) => normalizeFleetCommandRole(entry.commandRole) === 'battle_division');
-    const divisionsCollapsed = fleetCommandCollapsedIds.has(fleet.id);
+    const stationsCollapsed = fleetCommandCollapsedIds.has(getFleetCommandCollapseKey(fleet.id, 'stations'));
+    const divisionsCollapsed = fleetCommandCollapsedIds.has(getFleetCommandCollapseKey(fleet.id, 'divisions'));
     const bucketKey = bucketKeyPrefix.startsWith('category:') || bucketKeyPrefix.startsWith('ungrouped:')
       ? bucketKeyPrefix
       : `${bucketKeyPrefix}:${fleet.categoryId || fleet.faction}`;
@@ -2063,15 +2073,20 @@ function renderFleetHierarchyColumns(fleets, bucketKeyPrefix = 'category') {
       <div class="fleet-command-column">
         ${renderFleetManagementFleetCard(fleet, bucketKey, { compact: true, inHierarchy: true })}
         <div class="fleet-command-child-block">
-          <div class="fleet-command-child-title">Raumstationen</div>
+          <div class="fleet-command-child-title fleet-command-child-header">
+            <span>Raumstationen</span>
+            ${stations.length ? `<button class="mini-btn" onclick="toggleFleetCommandChildrenCollapse('${fleet.id}', 'stations')">${stationsCollapsed ? 'Ausklappen' : 'Einklappen'}</button>` : ''}
+          </div>
           ${stations.length
-            ? `<div class="fleet-command-child-list">${stations.map((entry) => renderFleetManagementFleetCard(entry, bucketKey, { compact: true, inHierarchy: true, subordinate: true })).join('')}</div>`
+            ? (stationsCollapsed
+              ? `<div class="fleet-command-collapsed-list">${stations.map((entry) => `<div class="fleet-command-collapsed-item"><span>${escapeHtml(entry.assignment || entry.name)}</span></div>`).join('')}</div>`
+              : `<div class="fleet-command-child-list">${stations.map((entry) => renderFleetManagementFleetCard(entry, bucketKey, { compact: true, inHierarchy: true, subordinate: true })).join('')}</div>`)
             : '<div class="fleet-category-empty">Keine Raumstation zugeordnet.</div>'}
         </div>
         <div class="fleet-command-child-block">
           <div class="fleet-command-child-title fleet-command-child-header">
             <span>Schlachtdivisionen</span>
-            ${divisions.length ? `<button class="mini-btn" onclick="toggleFleetCommandChildrenCollapse('${fleet.id}')">${divisionsCollapsed ? 'Ausklappen' : 'Einklappen'}</button>` : ''}
+            ${divisions.length ? `<button class="mini-btn" onclick="toggleFleetCommandChildrenCollapse('${fleet.id}', 'divisions')">${divisionsCollapsed ? 'Ausklappen' : 'Einklappen'}</button>` : ''}
           </div>
           ${divisions.length
             ? (divisionsCollapsed
