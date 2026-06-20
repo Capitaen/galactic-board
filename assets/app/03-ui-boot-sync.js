@@ -262,7 +262,9 @@ function setLayerPreference(layerId, enabled, renderAfter = true) {
   const affectsTacticalCanvas = ['grid', 'hyperlanes', 'sectorLabels'].includes(layerId);
   const affectsInfluence = layerId === 'sectorLabels' || layerId === 'conflictPulse';
   const affectsRouteNetwork = layerId === 'hyperlanes';
+  const affectsFleetMarkers = layerId === 'garFleets' || layerId === 'kusFleets';
   markDirty({
+    positions: affectsFleetMarkers,
     layers: true,
     tacticalBase: affectsTacticalCanvas,
     influence: affectsInfluence,

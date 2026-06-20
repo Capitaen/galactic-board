@@ -907,14 +907,15 @@ function savePlanet(id) {
   setStatus(rewardText ? `Planet gespeichert: ${p.name} • Capture Reward: ${rewardText}` : 'Planet gespeichert: ' + p.name);
 }
 
-function openFleet(id) {
+function openFleet(id, options = {}) {
   const f = fleetIndex.get(id);
   if (!f) return;
   selected = { type: 'fleet', id };
   refreshFleetSelectionState();
   refreshRouteSelectionState();
   const clusterKey = fleetClusterMembership.get(id);
-  if (clusterKey) openFleetClusterPanel(clusterKey);
+  if (options?.suppressClusterPanel) closeFleetStackPanel();
+  else if (clusterKey) openFleetClusterPanel(clusterKey);
   else closeFleetStackPanel();
   const disabled = canEditFaction(f.faction) ? '' : 'disabled';
   const planet = planetIndex.get(f.locationPlanetId || f.planetId);
@@ -1694,7 +1695,7 @@ function openFleetManifestInManagement(fleetId) {
 
 function openFleetStackEntry(fleetId) {
   if (!fleetId) return;
-  openFleet(fleetId);
+  openFleet(fleetId, { suppressClusterPanel: true });
 }
 
 function clearFleetManifestFilter() {
