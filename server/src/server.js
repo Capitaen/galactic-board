@@ -1890,7 +1890,7 @@ app.post('/api/auth/logout', (req, res) => {
 
 app.post('/api/admin/users', requireAuth, requireLoginManager, async (req, res) => {
   try {
-    const { username, password, role, canCoordinate4thFleet, senatePosition } = validateAdminUserInput(req.body, { requirePassword: false });
+    const { username, password, role, canCoordinate4thFleet, senatePosition } = validateAdminUserInput(req.body);
     if (!canActorAssignRole(req.user, role)) {
       return res.status(403).json({ error: 'Diese Rolle darfst du nicht vergeben.', users: listUsersForActor(req.user) });
     }
