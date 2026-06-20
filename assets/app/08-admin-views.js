@@ -546,13 +546,12 @@ async function saveLoginManagerUser(id) {
   const passwordInput = document.getElementById(`authPass_${id}`)?.value || '';
   const role = document.getElementById(`authRole_${id}`)?.value || 'Viewer';
   const roleDefinition = LOGIN_ROLE_DEFINITIONS[role];
-  const password = passwordInput || user.password || '';
   const canCoordinate4thFleetValue = roleDefinition?.faction === 'navy'
     && Boolean(document.getElementById(`authFleetCoord_${id}`)?.checked);
   const senatePosition = roleDefinition?.faction === 'senate'
     ? (document.getElementById(`authSenatePosition_${id}`)?.value || '')
     : '';
-  if (!username || (user.isDraft && !password)) {
+  if (!username || (user.isDraft && !passwordInput)) {
     setStatus('Login-Name und Passwort dürfen nicht leer sein.');
     return;
   }
@@ -562,17 +561,18 @@ async function saveLoginManagerUser(id) {
     return;
   }
   try {
+    const requestBody = {
+      username,
+      role: LOGIN_ROLES.includes(role) ? role : 'Viewer',
+      canCoordinate4thFleet: canCoordinate4thFleetValue,
+      senatePosition
+    };
+    if (user.isDraft || passwordInput) requestBody.password = passwordInput;
     const response = await fetch(user.isDraft ? '/api/admin/users' : `/api/admin/users/${id}`, {
       method: user.isDraft ? 'POST' : 'PATCH',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        username,
-        password,
-        role: LOGIN_ROLES.includes(role) ? role : 'Viewer',
-        canCoordinate4thFleet: canCoordinate4thFleetValue,
-        senatePosition
-      })
+      body: JSON.stringify(requestBody)
     });
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.error || 'Login konnte nicht gespeichert werden.');
