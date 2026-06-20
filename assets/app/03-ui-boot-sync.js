@@ -168,7 +168,8 @@ function queueHoverStateUpdate(event) {
     pendingHoverUpdate = null;
     if (!pointer || activeInteraction) return;
     const worldPos = eventToWorld(pointer);
-    const hoveredPlanet = nearestDisplayedPlanet(worldPos.x, worldPos.y, 18);
+    const hoveredCluster = nearestDisplayedFleetCluster(worldPos.x, worldPos.y, 24);
+    const hoveredPlanet = hoveredCluster ? null : nearestDisplayedPlanet(worldPos.x, worldPos.y, 18);
     const hoveredRoute = hoveredPlanet ? null : nearestDisplayedRoute(worldPos.x, worldPos.y, 8);
     queueHoveredRoute(hoveredRoute?.id || null);
     const nextHoveredZone = nearestDisplayedZone(worldPos.x, worldPos.y);

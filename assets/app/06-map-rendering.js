@@ -269,6 +269,21 @@ function openFleetClusterPanel(clusterKey) {
   renderFleetStackPanel();
 }
 
+function nearestDisplayedFleetCluster(x, y, radius = 26) {
+  let best = null;
+  let bestDistanceSq = radius * radius;
+  fleetClusterGroups.forEach((group, key) => {
+    if (!group?.position) return;
+    const dx = Number(group.position.x || 0) - x;
+    const dy = Number(group.position.y || 0) - y;
+    const distanceSq = (dx * dx) + (dy * dy);
+    if (distanceSq > bestDistanceSq) return;
+    bestDistanceSq = distanceSq;
+    best = { ...group, key };
+  });
+  return best;
+}
+
 function ensureFleetClusterElements() {
   const seen = new Set();
   const frag = document.createDocumentFragment();

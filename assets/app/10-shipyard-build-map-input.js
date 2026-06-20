@@ -681,6 +681,13 @@ viewport.addEventListener('pointerdown', (event) => {
     handleSectorDraftMapClick(worldPos);
     return;
   }
+  const clickedCluster = nearestDisplayedFleetCluster(worldPos.x, worldPos.y, 24);
+  if (clickedCluster) {
+    event.preventDefault();
+    event.stopPropagation();
+    openFleetClusterPanel(clickedCluster.key);
+    return;
+  }
   const clickedPlanet = nearestDisplayedPlanet(worldPos.x, worldPos.y, 22);
   if (clickedPlanet) {
     if (currentRole() === 'Admin' && event.altKey) {
