@@ -873,6 +873,15 @@ const serverSync = {
   transport: ['localhost', '127.0.0.1'].includes(window.location.hostname) ? 'socket' : 'polling'
 };
 let fleetManagementFactionFilter = 'all';
+let managedShipDraft = {
+  faction: 'GAR',
+  classId: '',
+  name: '',
+  commander: '',
+  locationPlanetId: '',
+  assignedFleetId: '',
+  status: 'active'
+};
 let searchResultsState = [];
 let activeSearchResultIndex = -1;
 let fleetJumpSearchState = { fleetId: null, results: [], activeIndex: -1, selectedPlanetId: null };

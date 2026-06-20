@@ -1,4 +1,4 @@
-ï»¿// Generated from app-shell.js: resources, warehouses, logistics, build prerequisites
+// Generated from app-shell.js: resources, warehouses, logistics, build prerequisites
 
 function getFactionResourcePool(faction = 'GAR') {
   state.resources = state.resources || {};
@@ -526,7 +526,7 @@ function getInfoPanelHeader(title) {
   return `
     <div class="panel-head">
       <h2>${title}</h2>
-      <button class="panel-close" onclick="closeInfoPanel()" aria-label="Card schlieÃŸen">x</button>
+      <button class="panel-close" onclick="closeInfoPanel()" aria-label="Card schließen">x</button>
     </div>
   `;
 }
@@ -535,7 +535,7 @@ function getOwnerLabel(owner) {
   if (owner === 'GAR') return 'Republik';
   if (owner === 'KUS') return 'KUS';
   if (owner === 'HUTT') return 'Hutten';
-  return 'UnabhÃ¤ngig / Neutral';
+  return 'Unabhängig / Neutral';
 }
 
 function getRegionLabel(region) {
@@ -565,7 +565,7 @@ function getPlanetOwnerControlLabel(planet) {
   if (planet.owner === 'GAR') return '100,0% Republik';
   if (planet.owner === 'KUS') return '100,0% KUS';
   if (planet.owner === 'HUTT') return '100,0% Hutten';
-  return '50,0% Neutral / umkÃ¤mpft';
+  return '50,0% Neutral / umkämpft';
 }
 
 function sanitizePlanetInfoText(value, fallback = PLANET_INFO_PLACEHOLDER) {
@@ -588,7 +588,7 @@ function buildPlanetIntelText(planet, info) {
   if (localNote !== PLANET_INFO_PLACEHOLDER) return localNote;
   if (remoteNote !== PLANET_INFO_PLACEHOLDER) return remoteNote;
   if (!planet) return PLANET_INFO_PLACEHOLDER;
-  return `${planet.name} gehÃ¶rt aktuell zur Region ${sanitizePlanetInfoText(getRegionLabel(planet.region), 'Unbekannte Region')}, liegt im Sektor ${sanitizePlanetInfoText(planet.sector, 'Unbekannter Sektor')} auf Raster ${sanitizePlanetInfoText(planet.grid, 'â€”')} und steht unter ${getOwnerLabel(planet.owner)}-Kontrolle. Aktuell bestehen ${routeCount} Hyperraum-Verbindung${routeCount === 1 ? '' : 'en'}${routeNames.length ? ` Ã¼ber ${routeNames.join(', ')}` : ''}. Infrastrukturbelegung: ${slotUsage.used}/${slotUsage.total} Slots.`;
+  return `${planet.name} gehört aktuell zur Region ${sanitizePlanetInfoText(getRegionLabel(planet.region), 'Unbekannte Region')}, liegt im Sektor ${sanitizePlanetInfoText(planet.sector, 'Unbekannter Sektor')} auf Raster ${sanitizePlanetInfoText(planet.grid, '—')} und steht unter ${getOwnerLabel(planet.owner)}-Kontrolle. Aktuell bestehen ${routeCount} Hyperraum-Verbindung${routeCount === 1 ? '' : 'en'}${routeNames.length ? ` über ${routeNames.join(', ')}` : ''}. Infrastrukturbelegung: ${slotUsage.used}/${slotUsage.total} Slots.`;
 }
 
 function buildPlanetCardInfo(planet, info = {}) {
@@ -601,7 +601,7 @@ function buildPlanetCardInfo(planet, info = {}) {
     climate: sanitizePlanetInfoText(localOverride.climate || (hyperlaneStatus.isLogisticsHub ? 'Logistik-Knoten' : (hyperlaneStatus.isRoutePlanet ? 'Routenanbindung vorhanden' : 'Isolierte Versorgungslage'))),
     population: demographicProfile.currentPopulationLabel,
     lorePopulation: sanitizePlanetInfoText(`${slotUsage.used}/10 Infrastruktur-Slots belegt`),
-    strategic: sanitizePlanetInfoText(localOverride.strategic || `${routeNames.length || hyperlaneStatus.degree} Hyperraum-Verbindung${(routeNames.length || hyperlaneStatus.degree) === 1 ? '' : 'en'}` || (planet.isCoreWorld ? 'Hauptplanet' : 'RegulÃ¤r')),
+    strategic: sanitizePlanetInfoText(localOverride.strategic || `${routeNames.length || hyperlaneStatus.degree} Hyperraum-Verbindung${(routeNames.length || hyperlaneStatus.degree) === 1 ? '' : 'en'}` || (planet.isCoreWorld ? 'Hauptplanet' : 'Regulär')),
     description: sanitizePlanetInfoText(planet.description || localOverride.description || info.description),
     image: normalizePlanetImageUrl(info.image || localOverride.image || planet.image),
     demographicProfile
@@ -946,7 +946,7 @@ function resourceDeltaToText(delta) {
   return RESOURCE_KEYS
     .filter((key) => delta[key] > 0)
     .map((key) => `+${delta[key]} ${RESOURCE_LABELS[key]}`)
-    .join(' â€¢ ');
+    .join(' • ');
 }
 
 function getShipClassOptions() {
@@ -1044,7 +1044,7 @@ function getShipyardCapacityFree(planetId) {
 
 function getShipyardBuildEligibility(planet, classId) {
   const meta = getShipClassMeta(classId);
-  if (!planet || !meta || (meta.faction || 'GAR') !== 'GAR') return { enabled: false, reason: 'Klasse nicht verfÃ¼gbar.' };
+  if (!planet || !meta || (meta.faction || 'GAR') !== 'GAR') return { enabled: false, reason: 'Klasse nicht verfügbar.' };
   if (isStationClass(classId)) {
     return planet.owner === 'GAR'
       ? { enabled: true, reason: '' }
@@ -1054,12 +1054,12 @@ function getShipyardBuildEligibility(planet, classId) {
   if (planet.owner !== 'GAR') return { enabled: false, reason: 'Planet ist nicht unter GAR-Kontrolle.' };
   if (!facility) return { enabled: false, reason: 'Keine Werft vorhanden.' };
   if (facility.level < Number(meta.shipyardLevel || 1)) {
-    return { enabled: false, reason: `Mindestens Werftstufe ${Number(meta.shipyardLevel || 1)} benÃ¶tigt.` };
+    return { enabled: false, reason: `Mindestens Werftstufe ${Number(meta.shipyardLevel || 1)} benötigt.` };
   }
   const freeCapacity = getShipyardCapacityFree(planet.id);
   const requiredCapacity = Number(meta.shipyardCapacityCost || 0);
   if (freeCapacity < requiredCapacity) {
-    return { enabled: false, reason: `Zu wenig WerftplÃ¤tze frei (${freeCapacity}/${requiredCapacity}).` };
+    return { enabled: false, reason: `Zu wenig Werftplätze frei (${freeCapacity}/${requiredCapacity}).` };
   }
   return { enabled: true, reason: '' };
 }
@@ -1157,12 +1157,12 @@ function spendSectorShipyardCost(planetId, cost = {}, faction = 'GAR') {
 
 function getShipDisplayLocation(ship) {
   const planet = ship.locationPlanetId ? planetIndex.get(ship.locationPlanetId) : null;
-  return planet ? planet.name : 'â€”';
+  return planet ? planet.name : '—';
 }
 
 function getFleetDisplayLocation(fleet) {
   const planet = (fleet.locationPlanetId || fleet.planetId) ? planetIndex.get(fleet.locationPlanetId || fleet.planetId) : null;
-  return planet ? planet.name : 'â€”';
+  return planet ? planet.name : '—';
 }
 
 function createFleetRecord(data = {}) {
@@ -1197,7 +1197,9 @@ function createShipRecord(data = {}) {
     locationPlanetId: data.locationPlanetId || '',
     assignedFleetId: data.assignedFleetId || '',
     canJump: typeof data.canJump === 'boolean' ? data.canJump : (meta?.canJump ?? true),
-    createdFrom: data.createdFrom || 'manual'
+    createdFrom: data.createdFrom || 'manual',
+    createdAt: Number(data.createdAt || Date.now()) || Date.now(),
+    commissionedAt: Number(data.commissionedAt || data.createdAt || Date.now()) || Date.now()
   };
 }
 
@@ -1273,7 +1275,7 @@ function createFleetManagementActivityEntry(data = {}) {
     createdAt: Number(data.createdAt || Date.now()),
     faction: data.faction === 'KUS' ? 'KUS' : 'GAR',
     source: String(data.source || 'fleet').trim() || 'fleet',
-    title: String(data.title || 'FlottenaktivitÃ¤t').trim() || 'FlottenaktivitÃ¤t',
+    title: String(data.title || 'Flottenaktivität').trim() || 'Flottenaktivität',
     details: String(data.details || '').trim(),
     location: String(data.location || '').trim(),
     author: String(data.author || '').trim()
@@ -1308,7 +1310,7 @@ function getFleetManagementActivityEntries(options = {}) {
     faction: entry.faction || 'GAR',
     source: 'shipyard_log',
     title: `Schiffbau-Log: ${entry.subject || 'Eintrag'}`,
-    details: [entry.method, entry.details].filter(Boolean).join(' â€¢ '),
+    details: [entry.method, entry.details].filter(Boolean).join(' • '),
     location: entry.location || '',
     author: entry.author || ''
   }));
@@ -1387,6 +1389,54 @@ function refundShipBuildCostToGar(job, refund) {
   if (Number(refund?.credits || 0) > 0) getFactionResourcePool('GAR').credits = Number(getFactionResourcePool('GAR').credits || 0) + Number(refund.credits || 0);
 }
 
+function getShipLifetimeMonths(ship) {
+  const referenceAt = Number(ship?.commissionedAt || ship?.createdAt || 0);
+  if (!referenceAt) return null;
+  return Math.max(0, (Date.now() - referenceAt) / (1000 * 60 * 60 * 24 * 30));
+}
+
+function getShipScrapRefundRatio(ship) {
+  const lifetimeMonths = getShipLifetimeMonths(ship);
+  if (lifetimeMonths === null) return 0.7;
+  if (lifetimeMonths < 1) return 0.9;
+  if (lifetimeMonths < 3) return 0.82;
+  if (lifetimeMonths < 6) return 0.76;
+  if (lifetimeMonths < 12) return 0.7;
+  if (lifetimeMonths < 24) return 0.55;
+  return 0.35;
+}
+
+function getShipScrapRefund(ship) {
+  const meta = getShipClassMeta(ship?.classId);
+  if (!meta) return createEmptyFactionResources();
+  const ratio = getShipScrapRefundRatio(ship);
+  return RESOURCE_KEYS.reduce((refund, resourceKey) => {
+    const value = Number(meta.cost?.[resourceKey] || 0);
+    refund[resourceKey] = value > 0 ? Math.round(value * ratio) : 0;
+    return refund;
+  }, createEmptyFactionResources());
+}
+
+function refundScrappedShipResources(ship, refund) {
+  if (!ship || !refund) return;
+  if ((ship.faction || 'GAR') === 'GAR') {
+    const shipPlanet = ship.locationPlanetId ? planetIndex.get(ship.locationPlanetId) : null;
+    const sectorInfo = shipPlanet ? getOperationalSectorInfoForPlanet(shipPlanet) : null;
+    STORAGE_RESOURCE_KEYS.forEach((resourceKey) => {
+      const amount = Number(refund?.[resourceKey] || 0);
+      if (amount <= 0) return;
+      const stored = sectorInfo ? addStockToSectorWarehouses(sectorInfo.id, resourceKey, amount) : 0;
+      const remaining = amount - stored;
+      if (remaining > 0) getFactionResourcePool('GAR')[resourceKey] = Number(getFactionResourcePool('GAR')[resourceKey] || 0) + remaining;
+    });
+    if (Number(refund?.credits || 0) > 0) {
+      getFactionResourcePool('GAR').credits = Number(getFactionResourcePool('GAR').credits || 0) + Number(refund.credits || 0);
+    }
+    return;
+  }
+  addFactionResources(ship.faction || 'KUS', refund);
+}
+
 function canCancelBuildJob(job) {
   if (!job || job.status !== 'building') return false;
   const role = currentRole();
@@ -1420,17 +1470,17 @@ function cancelBuildJob(jobId) {
   const refundLabel = RESOURCE_KEYS
     .filter((resourceKey) => Number(refund[resourceKey] || 0) > 0)
     .map((resourceKey) => `${RESOURCE_LABELS[resourceKey]} ${formatResourceAmount(refund[resourceKey])}`)
-    .join(' â€¢ ');
+    .join(' • ');
   recordBuildProjectActivity(
     job,
     'Bau abgebrochen',
-    `${getBuildJobDisplayName(job)} wurde abgebrochen. RÃ¼ckerstattung: ${refundLabel || 'Keine Ressourcen'}.`
+    `${getBuildJobDisplayName(job)} wurde abgebrochen. Rückerstattung: ${refundLabel || 'Keine Ressourcen'}.`
   );
   saveLocal();
   playAudioCue(datapadDeleteAudio);
   if (activeMainTab === 'shipyard') renderShipyardView();
   if (activeMainTab === 'buildProjects') renderBuildProjectsView();
-  setStatus(`${getBuildJobDisplayName(job)} abgebrochen. 90% der Ressourcen wurden zurÃ¼ckerstattet.`);
+  setStatus(`${getBuildJobDisplayName(job)} abgebrochen. 90% der Ressourcen wurden zurückerstattet.`);
 }
 
 function processBuildJobs(now = Date.now()) {
@@ -1503,7 +1553,7 @@ function processBuildJobs(now = Date.now()) {
       recordBuildProjectActivity(
         job,
         job.shipyardAction === 'upgrade' ? 'Werft-Upgrade abgeschlossen' : 'Werftbau abgeschlossen',
-        `${planet.name} verfÃ¼gt jetzt Ã¼ber ${getShipyardLevelMeta(facility.level).label} (Stufe ${facility.level}).`,
+        `${planet.name} verfügt jetzt über ${getShipyardLevelMeta(facility.level).label} (Stufe ${facility.level}).`,
         now
       );
       changed = true;
@@ -1580,7 +1630,7 @@ function renderResourcePills(slots) {
     const building = getMineProjectMeta(slot);
     const category = building.category === 'development'
       ? 'Entwicklungszentrum'
-      : (building.category === 'civilian' ? 'Zivil' : (building.category === 'storage' ? 'Lager' : 'MilitÃ¤risch'));
+      : (building.category === 'civilian' ? 'Zivil' : (building.category === 'storage' ? 'Lager' : 'Militärisch'));
     return `<span class="resource-pill">${category}: ${building.label}</span>`;
   }).join('');
 }
@@ -1614,7 +1664,7 @@ function getBuildJobDisplayName(job) {
 }
 
 function getBuildJobLocationName(job) {
-  return planetIndex.get(job?.buildLocationPlanetId)?.name || 'â€”';
+  return planetIndex.get(job?.buildLocationPlanetId)?.name || '—';
 }
 
 function getSectorDisplayName(sectorId) {
@@ -1627,7 +1677,7 @@ function getBuildJobTypeLabel(job) {
   const category = getMineProjectMeta(job.buildingKey || job.resourceKey)?.category;
   if (category === 'development') return 'Wirtschafts- und Entwicklungszentrum';
   if (category === 'storage') return 'Lagerbau';
-  return category === 'civilian' ? 'Zivile Infrastruktur' : 'MilitÃ¤rische Infrastruktur';
+  return category === 'civilian' ? 'Zivile Infrastruktur' : 'Militärische Infrastruktur';
 }
 
 function getBuildJobProgressBar(job) {
@@ -1637,13 +1687,13 @@ function getBuildJobProgressBar(job) {
     <div class="project-progress">
       <div class="${fillClass}" style="width:${progress}%"></div>
     </div>
-    <div class="project-meta">${progress}% â€¢ ${job.status === 'building' ? formatDuration((job.finishesAt || 0) - Date.now()) : (job.status === 'completed' ? 'Abgeschlossen' : job.status === 'ready' ? 'Abholbereit' : 'Abgebrochen')}</div>
+    <div class="project-meta">${progress}% • ${job.status === 'building' ? formatDuration((job.finishesAt || 0) - Date.now()) : (job.status === 'completed' ? 'Abgeschlossen' : job.status === 'ready' ? 'Abholbereit' : 'Abgebrochen')}</div>
   `;
 }
 
 function startMineBuildProject() {
   if (!canBuildMineProjects()) {
-    setStatus('Nur Senats-Admins oder globale Admins kÃ¶nnen Infrastrukturprojekte starten.');
+    setStatus('Nur Senats-Admins oder globale Admins können Infrastrukturprojekte starten.');
     return;
   }
   const planetId = document.getElementById('mineBuildPlanet')?.value || '';
@@ -1652,21 +1702,21 @@ function startMineBuildProject() {
   const planet = planetIndex.get(planetId);
   const project = getMineProjectMeta(buildingKey);
   if (!planet || planet.owner !== 'GAR') {
-    setStatus('Infrastrukturbau ist nur auf republikanischen Planeten mÃ¶glich.');
+    setStatus('Infrastrukturbau ist nur auf republikanischen Planeten möglich.');
     return;
   }
   if (!project || !INFRASTRUCTURE_KEYS.includes(buildingKey)) {
-    setStatus('Bitte einen gÃ¼ltigen GebÃ¤udetyp wÃ¤hlen.');
+    setStatus('Bitte einen gültigen Gebäudetyp wählen.');
     return;
   }
   if (project.category === 'storage' && !isWarehousePlanetEligible(planetId)) {
-    setStatus('Ressourcenlager nur auf Hyperraum-Routen-Planeten mÃ¶glich.');
+    setStatus('Ressourcenlager nur auf Hyperraum-Routen-Planeten möglich.');
     renderBuildProjectsView();
     return;
   }
   const slots = getPlanetResourceSlots(planetId);
   if (!Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex >= slots.length) {
-    setStatus('Bitte einen freien Infrastruktur-Slot wÃ¤hlen.');
+    setStatus('Bitte einen freien Infrastruktur-Slot wählen.');
     return;
   }
   if (isMineSlotUnderConstruction(planetId, slotIndex)) {
@@ -1675,7 +1725,7 @@ function startMineBuildProject() {
     return;
   }
   if (slots[slotIndex]) {
-    setStatus('Der gewÃ¤hlte Infrastruktur-Slot ist bereits belegt.');
+    setStatus('Der gewählte Infrastruktur-Slot ist bereits belegt.');
     return;
   }
   const warehouseCompliance = getMineWarehouseCompliance(planet, project);
@@ -1685,7 +1735,7 @@ function startMineBuildProject() {
     return;
   }
   if (!spendGarInfrastructureCost(project.cost)) {
-    setStatus('Nicht genug GAR-Ressourcen fÃ¼r dieses Infrastrukturprojekt.');
+    setStatus('Nicht genug GAR-Ressourcen für dieses Infrastrukturprojekt.');
     renderBuildProjectsView();
     return;
   }
@@ -1741,23 +1791,23 @@ function saveShipyardLogEntry() {
 
 function startWarehouseBuildProject() {
   if (!canBuildWarehouses()) {
-    setStatus('Nur Senats-Admins oder globale Admins kÃ¶nnen Lager bauen.');
+    setStatus('Nur Senats-Admins oder globale Admins können Lager bauen.');
     return;
   }
   const planetId = document.getElementById('warehouseBuildPlanet')?.value || '';
   const planet = planetIndex.get(planetId);
   if (!planet || planet.owner !== 'GAR') {
-    setStatus('Lager kÃ¶nnen nur auf republikanischen Planeten gebaut werden.');
+    setStatus('Lager können nur auf republikanischen Planeten gebaut werden.');
     return;
   }
   if (!isWarehousePlanetEligible(planetId)) {
-    setStatus('Lokale Lager dÃ¼rfen nur auf Planeten mit sichtbarer Hyperraumroute gebaut werden.');
+    setStatus('Lokale Lager dürfen nur auf Planeten mit sichtbarer Hyperraumroute gebaut werden.');
     return;
   }
   const availableSlots = getAvailableMineSlots(planetId);
   const slot = availableSlots[0];
   if (!slot) {
-    setStatus('Auf diesem Planeten ist kein freier Slot mehr verfÃ¼gbar.');
+    setStatus('Auf diesem Planeten ist kein freier Slot mehr verfügbar.');
     return;
   }
   if (getPlanetWarehouses(planetId).length) {
@@ -1766,7 +1816,7 @@ function startWarehouseBuildProject() {
   }
   const project = getMineProjectMeta(LOCAL_WAREHOUSE_BUILDING_KEY);
   if (!project || !spendGarInfrastructureCost(project.cost)) {
-    setStatus('Nicht genug GAR-Ressourcen fÃ¼r den Lagerbau.');
+    setStatus('Nicht genug GAR-Ressourcen für den Lagerbau.');
     renderBuildProjectsView();
     return;
   }
@@ -1796,7 +1846,7 @@ function upgradeWarehouse(warehouseId) {
     return;
   }
   if (!canBuildWarehouses()) {
-    setStatus('Nur Senats-Admins oder globale Admins kÃ¶nnen Lager upgraden.');
+    setStatus('Nur Senats-Admins oder globale Admins können Lager upgraden.');
     return;
   }
   if (warehouse.level >= WAREHOUSE_MAX_LEVEL) {
@@ -1805,7 +1855,7 @@ function upgradeWarehouse(warehouseId) {
   }
   const cost = getWarehouseUpgradeCost(warehouse.level);
   if (!spendGarInfrastructureCost(cost)) {
-    setStatus('Nicht genug GAR-Ressourcen fÃ¼r das Lager-Upgrade.');
+    setStatus('Nicht genug GAR-Ressourcen für das Lager-Upgrade.');
     return;
   }
   warehouse.level += 1;
@@ -1827,13 +1877,13 @@ function isShipyardProjectUnderConstruction(planetId) {
 
 function startShipyardProject(planetId = '') {
   if (!canManageShipyards()) {
-    setStatus('Nur Navy oder globale Admins kÃ¶nnen Werften bauen und ausbauen.');
+    setStatus('Nur Navy oder globale Admins können Werften bauen und ausbauen.');
     return;
   }
   const resolvedPlanetId = planetId || document.getElementById('shipyardProjectPlanet')?.value || '';
   const planet = planetIndex.get(resolvedPlanetId);
   if (!planet || planet.owner !== 'GAR') {
-    setStatus('Werften kÃ¶nnen nur auf republikanisch kontrollierten Werftwelten gebaut werden.');
+    setStatus('Werften können nur auf republikanisch kontrollierten Werftwelten gebaut werden.');
     return;
   }
   if (!(GAR_SHIPYARD_ELIGIBLE_PLANET_KEYS || []).includes(normalizePlanetKey(planet.id || planet.name))) {
@@ -1841,19 +1891,19 @@ function startShipyardProject(planetId = '') {
     return;
   }
   if (isShipyardProjectUnderConstruction(planet.id)) {
-    setStatus('Auf diesem Planeten lÃ¤uft bereits ein Werftprojekt.');
+    setStatus('Auf diesem Planeten läuft bereits ein Werftprojekt.');
     return;
   }
   const facility = getShipyardFacilityByPlanet(planet.id);
   const maxLevel = Object.keys(SHIPYARD_LEVEL_DEFS).length;
   if (facility && facility.level >= maxLevel) {
-    setStatus('Diese Werft hat bereits die hÃ¶chste Ausbaustufe erreicht.');
+    setStatus('Diese Werft hat bereits die höchste Ausbaustufe erreicht.');
     return;
   }
   const targetLevel = facility ? facility.level + 1 : 1;
   const levelMeta = getShipyardLevelMeta(targetLevel);
   if (!spendSectorShipyardCost(planet.id, levelMeta.cost || {}, 'GAR')) {
-    setStatus('Nicht genug GAR-Ressourcen fÃ¼r dieses Werftprojekt.');
+    setStatus('Nicht genug GAR-Ressourcen für dieses Werftprojekt.');
     renderBuildProjectsView();
     return;
   }
@@ -1903,11 +1953,11 @@ function renderMineBuildPlanetResults() {
     const row = document.createElement('div');
     row.className = 'search-result' + (index === mineBuildPlanetSearchState.activeIndex ? ' active' : '');
     const storageBlocked = category === 'storage' && !planet.storageEligible;
-    row.innerHTML = `<strong>${planet.name}</strong><small>${planet.grid || 'â€”'} â€¢ ${planet.sector || 'â€”'} â€¢ ${planet.region || 'Unknown Region'}${storageBlocked ? ' â€¢ Keine Hyperraum-Anbindung' : ''}</small>`;
+    row.innerHTML = `<strong>${planet.name}</strong><small>${planet.grid || '—'} • ${planet.sector || '—'} • ${planet.region || 'Unknown Region'}${storageBlocked ? ' • Keine Hyperraum-Anbindung' : ''}</small>`;
     row.addEventListener('mousedown', (event) => {
       event.preventDefault();
       if (storageBlocked) {
-        setStatus('Ressourcenlager nur auf Hyperraum-Routen-Planeten mÃ¶glich.');
+        setStatus('Ressourcenlager nur auf Hyperraum-Routen-Planeten möglich.');
         return;
       }
       chooseMineBuildPlanet(planet.id);
@@ -1943,7 +1993,7 @@ function chooseMineBuildPlanet(planetId) {
   const hidden = document.getElementById('mineBuildPlanet');
   if (!planet || !input || !hidden) return;
   if (category === 'storage' && !planet.storageEligible) {
-    setStatus('Ressourcenlager nur auf Hyperraum-Routen-Planeten mÃ¶glich.');
+    setStatus('Ressourcenlager nur auf Hyperraum-Routen-Planeten möglich.');
     return;
   }
   input.value = planet.name;
@@ -2126,7 +2176,7 @@ function getFleetManagementSearchCandidates() {
         type: 'fleet',
         id: fleet.id,
         label: fleet.name,
-        meta: `${fleet.faction} â€¢ ${getFleetCommandRoleLabel(fleet.commandRole)} â€¢ ${fleet.assignment || 'ohne Zuordnung'} â€¢ ${fleet.commander || fleet.leader || 'kein CO'} â€¢ ${getFleetDisplayLocation(fleet)}`,
+        meta: `${fleet.faction} • ${getFleetCommandRoleLabel(fleet.commandRole)} • ${fleet.assignment || 'ohne Zuordnung'} • ${fleet.commander || fleet.leader || 'kein CO'} • ${getFleetDisplayLocation(fleet)}`,
         search: normalizeSearchText(`${fleet.name} ${fleet.commander || fleet.leader || ''} ${fleet.assignment || ''} ${getFleetDisplayLocation(fleet)}`)
       }));
   const shipCandidates = state.ships
@@ -2137,7 +2187,7 @@ function getFleetManagementSearchCandidates() {
         type: 'ship',
         id: ship.id,
         label: ship.name,
-        meta: `${ship.faction} â€¢ ${getShipClassMeta(ship.classId)?.displayName || ship.classId} â€¢ ${fleet?.name || 'Nicht zugeteilt'}`,
+        meta: `${ship.faction} • ${getShipClassMeta(ship.classId)?.displayName || ship.classId} • ${fleet?.name || 'Nicht zugeteilt'}`,
         search: normalizeSearchText(`${ship.name} ${getShipClassMeta(ship.classId)?.displayName || ''} ${ship.commander || ''} ${fleet?.name || ''}`)
       };
     });

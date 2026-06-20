@@ -924,11 +924,20 @@ function openFleet(id) {
   const isBattleGroup = summary.role === 'battle_group';
   const classSummary = summary.classSummary;
   const activeShips = summary.activeShips;
+  const canManageShips = canEditFaction(f.faction);
   const shipManifest = activeShips.length
     ? activeShips.map((ship) => {
         const classMeta = getShipClassMeta(ship.classId);
         const isHighlighted = pendingFleetManifestHighlightShipId === ship.id;
-        return `<div data-manifest-ship-id="${ship.id}" class="${isHighlighted ? 'focus-highlight' : ''}"><strong>${ship.name}</strong><br><small>${classMeta?.displayName || ship.classId}${ship.commander ? ` • CO ${ship.commander}` : ''}</small></div>`;
+        const refundRatio = Math.round(getShipScrapRefundRatio(ship) * 100);
+        return `<div data-manifest-ship-id="${ship.id}" class="${isHighlighted ? 'focus-highlight' : ''}">
+          <strong>${ship.name}</strong><br>
+          <small>${classMeta?.displayName || ship.classId}${ship.commander ? ` • CO ${ship.commander}` : ''}${ship.status ? ` • ${ship.status}` : ''}</small>
+          ${canManageShips ? `<div class="toolbar-row" style="margin-top:6px">
+            <button class="mini-btn danger" onclick="scrapManagedShip('${ship.id}')">Verschrotten (${refundRatio}%)</button>
+            <button class="mini-btn" onclick="focusShipOnMap('${ship.id}')">Auf Map</button>
+          </div>` : ''}
+        </div>`;
       }).join('')
     : '<span class="muted">Dieser Flotte sind aktuell keine einzelnen Schiffe zugewiesen.</span>';
   const subordinateInfo = summary.role === 'battle_group'
@@ -1232,6 +1241,156 @@ function removeManagedShipFromFleet(id) {
   saveLocal();
   playAudioCue(datapadDeleteAudio);
   renderFleetManagementView();
+}
+
+function deleteManagedShip(id) {
+  const ship = state.ships.find((entry) => entry.id === id);
+  if (!ship || !canEditFaction(ship.faction)) return;
+  if (!window.confirm(`Soll ${ship.name} wirklich vollständig gelöscht werden?`)) return;
+  const shipIndex = state.ships.findIndex((entry) => entry.id === id);
+  if (shipIndex < 0) return;
+  const previousFleet = ship.assignedFleetId ? (fleetIndex.get(ship.assignedFleetId) || state.fleets.find((entry) => entry.id === ship.assignedFleetId)) : null;
+  const locationName = planetIndex.get(ship.locationPlanetId)?.name || '';
+  state.ships.splice(shipIndex, 1);
+  normalizeFleetShipAssignments();
+  recordFleetManagementActivity({
+    faction: ship.faction,
+    source: 'fleet',
+    title: `Schiff gelöscht: ${ship.name}`,
+    details: `${ship.name} (${getShipClassMeta(ship.classId)?.displayName || ship.classId}) wurde entfernt.${previousFleet ? ` Vorheriger Verband: ${previousFleet.name}.` : ''}`,
+    location: locationName,
+    author: currentAuthenticatedUsername || currentAssignedRole()
+  });
+  saveLocal();
+  playAudioCue(datapadDeleteAudio);
+  rebuildIndexes();
+  render({ positions: true, layers: true });
+  if (activeMainTab === 'fleetManagement') renderFleetManagementView();
+  if (selected?.type === 'fleet') openFleet(selected.id);
+  setStatus(`Schiff gelöscht: ${ship.name}`);
+}
+
+function scrapManagedShip(id) {
+  const ship = state.ships.find((entry) => entry.id === id);
+  if (!ship || !canEditFaction(ship.faction)) return;
+  const refundRatio = Math.round(getShipScrapRefundRatio(ship) * 100);
+  const refund = getShipScrapRefund(ship);
+  const refundLabel = RESOURCE_KEYS
+    .filter((resourceKey) => Number(refund[resourceKey] || 0) > 0)
+    .map((resourceKey) => `${RESOURCE_LABELS[resourceKey]} ${formatResourceAmount(refund[resourceKey])}`)
+    .join(' • ');
+  if (!window.confirm(`${ship.name} wirklich verschrotten?\n\nRückerstattung: ${refundRatio}%\n${refundLabel || 'Keine Ressourcen'}`)) return;
+  refundScrappedShipResources(ship, refund);
+  const shipIndex = state.ships.findIndex((entry) => entry.id === id);
+  if (shipIndex < 0) return;
+  const locationName = planetIndex.get(ship.locationPlanetId)?.name || '';
+  const previousFleet = ship.assignedFleetId ? (fleetIndex.get(ship.assignedFleetId) || state.fleets.find((entry) => entry.id === ship.assignedFleetId)) : null;
+  state.ships.splice(shipIndex, 1);
+  normalizeFleetShipAssignments();
+  recordFleetManagementActivity({
+    faction: ship.faction,
+    source: 'shipbuild',
+    title: `Schiff verschrottet: ${ship.name}`,
+    details: `${ship.name} (${getShipClassMeta(ship.classId)?.displayName || ship.classId}) wurde verschrottet. Rückerstattung: ${refundLabel || 'Keine Ressourcen'}.${previousFleet ? ` Verband: ${previousFleet.name}.` : ''}`,
+    location: locationName,
+    author: currentAuthenticatedUsername || currentAssignedRole()
+  });
+  saveLocal();
+  playAudioCue(datapadDeleteAudio);
+  rebuildIndexes();
+  render({ positions: true, layers: true });
+  if (activeMainTab === 'fleetManagement') renderFleetManagementView();
+  if (selected?.type === 'fleet') openFleet(selected.id);
+  setStatus(`${ship.name} verschrottet. ${refundRatio}% der Baukosten wurden zurückgeführt.`);
+}
+
+function getManagedShipDraftClassOptions(faction = 'GAR') {
+  return Object.entries(SHIP_CLASS_POOL)
+    .filter(([, meta]) => (meta.faction || 'GAR') === faction)
+    .map(([id, meta]) => ({ id, ...meta }))
+    .sort((a, b) => String(a.displayName || a.id).localeCompare(String(b.displayName || b.id), 'de'));
+}
+
+function syncManagedShipDraft() {
+  const visibleFactions = getFleetManagementVisibleFactions();
+  if (!visibleFactions.has(managedShipDraft.faction)) managedShipDraft.faction = visibleFactions.has('GAR') ? 'GAR' : [...visibleFactions][0] || 'GAR';
+  const classOptions = getManagedShipDraftClassOptions(managedShipDraft.faction);
+  if (!classOptions.some((entry) => entry.id === managedShipDraft.classId)) managedShipDraft.classId = classOptions[0]?.id || '';
+  const fleetOptions = getAssignableFleetOptionsForShip({ faction: managedShipDraft.faction, classId: managedShipDraft.classId });
+  if (!fleetOptions.some((fleet) => fleet.id === managedShipDraft.assignedFleetId)) managedShipDraft.assignedFleetId = '';
+  if (!state.planets.some((planet) => planet.id === managedShipDraft.locationPlanetId)) managedShipDraft.locationPlanetId = '';
+}
+
+function updateManagedShipDraftField(field, value) {
+  managedShipDraft[field] = value;
+  syncManagedShipDraft();
+  renderFleetManagementView();
+}
+
+function createManagedShip() {
+  syncManagedShipDraft();
+  const faction = managedShipDraft.faction || 'GAR';
+  if (!canEditFaction(faction)) {
+    setStatus('Mit deiner Rolle kannst du für diese Fraktion kein Schiff anlegen.');
+    return;
+  }
+  const classId = managedShipDraft.classId;
+  const meta = getShipClassMeta(classId);
+  if (!meta) {
+    setStatus('Bitte zuerst eine gültige Schiffsklasse auswählen.');
+    return;
+  }
+  const station = isStationClass(classId);
+  const name = String(managedShipDraft.name || '').trim() || meta.displayName;
+  const commander = String(managedShipDraft.commander || '').trim();
+  const locationPlanetId = String(managedShipDraft.locationPlanetId || '').trim();
+  const assignedFleetId = station ? '' : String(managedShipDraft.assignedFleetId || '').trim();
+  const assignedFleet = assignedFleetId ? state.fleets.find((fleet) => fleet.id === assignedFleetId) : null;
+  const finalLocationPlanetId = locationPlanetId || assignedFleet?.locationPlanetId || assignedFleet?.planetId || '';
+  if (!finalLocationPlanetId || !planetIndex.get(finalLocationPlanetId)) {
+    setStatus('Bitte eine gültige Position für das Schiff auswählen.');
+    return;
+  }
+  if (assignedFleet && assignedFleet.faction !== faction) {
+    setStatus('Das Schiff kann nur einem Verband derselben Fraktion zugeordnet werden.');
+    return;
+  }
+  const ship = createShipRecord({
+    classId,
+    name,
+    commander,
+    faction,
+    status: managedShipDraft.status || 'active',
+    locationPlanetId: finalLocationPlanetId,
+    assignedFleetId,
+    createdFrom: 'admin_custom',
+    commissionedAt: Date.now()
+  });
+  state.ships.push(ship);
+  normalizeFleetShipAssignments();
+  recordFleetManagementActivity({
+    faction: ship.faction,
+    source: 'fleet',
+    title: `Custom-Schiff angelegt: ${ship.name}`,
+    details: `${getShipClassMeta(ship.classId)?.displayName || ship.classId}${assignedFleet ? ` • Verband: ${assignedFleet.name}` : ''}`,
+    location: planetIndex.get(ship.locationPlanetId)?.name || '',
+    author: currentAuthenticatedUsername || currentAssignedRole()
+  });
+  managedShipDraft = {
+    faction,
+    classId,
+    name: '',
+    commander: '',
+    locationPlanetId: finalLocationPlanetId,
+    assignedFleetId: '',
+    status: 'active'
+  };
+  saveLocal();
+  playAudioCue(datapadAcceptAudio);
+  rebuildIndexes();
+  render({ positions: true, layers: true });
+  renderFleetManagementView();
+  setStatus(`Custom-Schiff angelegt: ${ship.name}`);
 }
 
 function showManagedShipOnMap(id) {

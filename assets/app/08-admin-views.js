@@ -58,6 +58,13 @@ function renderFleetManagementView() {
     const haystack = normalizeSearchText([ship.name, classLabel, ship.commander, fleetName, location, ship.status].join(' '));
     return haystack.includes(normalizedManifestQuery);
   });
+  syncManagedShipDraft();
+  const canCreateCustomShips = canEditFaction(managedShipDraft.faction);
+  const managedShipClassOptions = getManagedShipDraftClassOptions(managedShipDraft.faction);
+  const managedShipFleetOptions = getAssignableFleetOptionsForShip({ faction: managedShipDraft.faction, classId: managedShipDraft.classId });
+  const managedShipLocationOptions = state.planets
+    .filter((planet) => managedShipDraft.faction === 'GAR' ? planet.owner === 'GAR' : planet.owner !== 'GAR')
+    .sort((a, b) => String(a.name).localeCompare(String(b.name), 'de'));
   workspacePanel.innerHTML = `
     <div class="workspace-head">
       <div>
@@ -183,6 +190,54 @@ function renderFleetManagementView() {
         <input id="fleetManifestSearch" type="search" placeholder="Manifest durchsuchen..." value="${escapeLoginManagerText(manifestQueryValue)}" oninput="setFleetManifestSearchQuery(this.value)" autocomplete="off">
         ${manifestFleet ? '<button class="mini-btn" onclick="clearFleetManifestFilter()">Manifest-Filter schließen</button>' : ''}
       </div>
+      <div class="workspace-card" style="margin-top:12px">
+        <h4>Custom-Schiff hinzufügen</h4>
+        <div class="workspace-grid compact-grid">
+          <div class="form-row">
+            <label>Fraktion</label>
+            <select onchange="updateManagedShipDraftField('faction', this.value)">
+              ${[...visibleFactions].map((faction) => `<option value="${faction}" ${managedShipDraft.faction === faction ? 'selected' : ''}>${faction}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-row">
+            <label>Klasse</label>
+            <select onchange="updateManagedShipDraftField('classId', this.value)">
+              ${managedShipClassOptions.map((entry) => `<option value="${entry.id}" ${managedShipDraft.classId === entry.id ? 'selected' : ''}>${entry.displayName}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-row">
+            <label>Name</label>
+            <input value="${escapeLoginManagerText(managedShipDraft.name || '')}" oninput="updateManagedShipDraftField('name', this.value)" placeholder="Eigener Schiffsname">
+          </div>
+          <div class="form-row">
+            <label>CO</label>
+            <input value="${escapeLoginManagerText(managedShipDraft.commander || '')}" oninput="updateManagedShipDraftField('commander', this.value)" placeholder="Leitung / CO">
+          </div>
+          <div class="form-row">
+            <label>Status</label>
+            <select onchange="updateManagedShipDraftField('status', this.value)">
+              ${['active', 'ready', 'building', 'damaged', 'lost'].map((status) => `<option value="${status}" ${managedShipDraft.status === status ? 'selected' : ''}>${status}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-row">
+            <label>Position</label>
+            <select onchange="updateManagedShipDraftField('locationPlanetId', this.value)">
+              <option value="">Planet wählen</option>
+              ${managedShipLocationOptions.map((planet) => `<option value="${planet.id}" ${managedShipDraft.locationPlanetId === planet.id ? 'selected' : ''}>${planet.name}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-row">
+            <label>Verband</label>
+            <select onchange="updateManagedShipDraftField('assignedFleetId', this.value)" ${isStationClass(managedShipDraft.classId) ? 'disabled' : ''}>
+              <option value="">Nicht zugeteilt</option>
+              ${managedShipFleetOptions.map((fleet) => `<option value="${fleet.id}" ${managedShipDraft.assignedFleetId === fleet.id ? 'selected' : ''}>${fleet.name}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+        <div class="toolbar-row" style="margin-top:10px">
+          <button class="mini-btn primary" onclick="createManagedShip()" ${canCreateCustomShips ? '' : 'disabled'}>Schiff anlegen</button>
+        </div>
+      </div>
       <div class="workspace-card">
         <table class="data-table">
           <thead>
@@ -219,6 +274,8 @@ function renderFleetManagementView() {
                 const actions = `
                   <button class="mini-btn primary" onclick="saveManagedShip('${ship.id}')">Speichern</button>
                   ${station ? '' : `<button class="mini-btn" onclick="removeManagedShipFromFleet('${ship.id}')">Lösen</button>`}
+                  <button class="mini-btn danger" onclick="scrapManagedShip('${ship.id}')">Verschrotten</button>
+                  <button class="mini-btn danger" onclick="deleteManagedShip('${ship.id}')">Löschen</button>
                   ${ship.locationPlanetId ? `<button class="mini-btn" onclick="focusShipOnMap('${ship.id}')">Auf Map</button>` : ''}
                 `;
                 return `
