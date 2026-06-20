@@ -24,7 +24,7 @@ function renderBaseThenDeferHeavy() {
 
 function refreshFleetSelectionState() {
   state.fleets.forEach((fleet) => updateFleetElement(fleet));
-  if (typeof ensureFleetClusterElements === 'function') ensureFleetClusterElements();
+  if (typeof refreshFleetClusterSelectionState === 'function') refreshFleetClusterSelectionState();
 }
 
 function openRoute(id) {

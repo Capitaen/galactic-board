@@ -308,6 +308,16 @@ function ensureFleetClusterElements() {
   if (activeFleetClusterKey) renderFleetStackPanel();
 }
 
+function refreshFleetClusterSelectionState() {
+  for (const [clusterKey, el] of fleetClusterElements.entries()) {
+    const group = fleetClusterGroups.get(clusterKey);
+    if (!group) continue;
+    const isSelected = selected?.type === 'fleet' && group.fleets.some((fleet) => fleet.id === selected.id);
+    el.classList.toggle('selected', isSelected);
+  }
+  if (activeFleetClusterKey) renderFleetStackPanel();
+}
+
 function ensurePlanetElements() {
   const seen = new Set();
   const frag = document.createDocumentFragment();

@@ -82,7 +82,7 @@ function getFleetDisplayPosition(fleet) {
 
 function saveLocal() {
   saveClientUiPrefs();
-  localStorage.setItem(LOCAL_STATE_STORAGE_KEY, JSON.stringify(makeLocalCampaignSnapshot(state)));
+  queueLocalCampaignSnapshot();
   if (!serverSync.enabled) {
     return;
   }
@@ -92,6 +92,25 @@ function saveLocal() {
   }
   if (!serverSyncReady) return;
   queueCampaignSync();
+}
+
+function persistLocalCampaignSnapshot(force = false) {
+  saveLocalStatePending = false;
+  if (applyingRemoteState) return;
+  const snapshot = JSON.stringify(makeLocalCampaignSnapshot(state));
+  if (!force && snapshot === lastLocalCampaignSnapshot) return;
+  lastLocalCampaignSnapshot = snapshot;
+  localStorage.setItem(LOCAL_STATE_STORAGE_KEY, snapshot);
+}
+
+function queueLocalCampaignSnapshot() {
+  saveLocalStatePending = true;
+  if (saveLocalStateTimer) return;
+  saveLocalStateTimer = window.setTimeout(() => {
+    saveLocalStateTimer = null;
+    if (!saveLocalStatePending) return;
+    persistLocalCampaignSnapshot();
+  }, 180);
 }
 
 function saveClientUiPrefs() {
