@@ -1519,6 +1519,8 @@ function refreshRoleChrome() {
   updateSectorDrawButton();
   document.querySelector('[data-main-tab="fleetManagement"]')?.classList.toggle('hidden', currentRole() === 'Senat');
   document.querySelector('[data-main-tab="shipyard"]')?.classList.toggle('hidden', currentRole() === 'Senat');
+  const kusFleetLayerRow = document.querySelector('[data-layer="kusFleets"]')?.closest('.layer-row');
+  if (kusFleetLayerRow) kusFleetLayerRow.classList.toggle('hidden', !(currentRole() === 'Admin' || currentRole() === 'Eventleiter / KUS'));
   roleSelect.disabled = true;
   updateSessionDisplay();
   syncSettingsModalState();

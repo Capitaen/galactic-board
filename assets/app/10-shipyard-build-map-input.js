@@ -673,7 +673,7 @@ viewport.addEventListener('pointerdown', (event) => {
   }
   if (event.button !== 0) return;
   closeContextMenu();
-  if (event.target.closest('.planet, .marker, .fleet, #infoPanel, #legendPanel, #layersPanel, #topbar, .toolstack, #homeBtn, #muteBtn, #contextMenu')) return;
+  if (event.target.closest('.planet, .marker, .fleet, #infoPanel, #fleetStackPanel, #legendPanel, #layersPanel, #topbar, .toolstack, #homeBtn, #muteBtn, #contextMenu')) return;
   const worldPos = eventToWorld(event);
   if (isAdminRole() && activeSectorDraft) {
     event.preventDefault();
@@ -932,6 +932,7 @@ document.addEventListener('pointerdown', (event) => {
   closeFleetJumpResults();
   closeFleetManagementSearchResults(false);
   if (!event.target.closest('#contextMenu')) closeContextMenu();
+  if (!event.target.closest('#fleetStackPanel') && !event.target.closest('.fleet-cluster')) closeFleetStackPanel();
 });
 document.addEventListener('click', (event) => {
   const closeTrigger = event.target.closest('[data-close-modal]');

@@ -85,6 +85,7 @@ window.deleteManualSector = deleteManualSector;
 window.saveFleet = saveFleet;
 window.deleteFleet = deleteFleet;
 window.closeInfoPanel = closeInfoPanel;
+window.closeFleetStackPanel = closeFleetStackPanel;
 window.saveRoute = saveRoute;
 window.addRouteConnection = addRouteConnection;
 window.removeRouteConnection = removeRouteConnection;
