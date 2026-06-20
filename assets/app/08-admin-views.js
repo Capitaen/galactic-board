@@ -194,7 +194,7 @@ function renderFleetManagementView() {
         <input id="fleetManifestSearch" type="search" placeholder="Manifest durchsuchen..." value="${escapeLoginManagerText(manifestQueryValue)}" oninput="setFleetManifestSearchQuery(this.value)" autocomplete="off">
         ${manifestFleet ? '<button class="mini-btn" onclick="clearFleetManifestFilter()">Manifest-Filter schließen</button>' : ''}
       </div>
-      <div class="workspace-card" style="margin-top:12px">
+      ${isAdminRole() ? `<div class="workspace-card" style="margin-top:12px">
         <h4>Custom-Schiff hinzufügen</h4>
         <div class="workspace-grid compact-grid">
           <div class="form-row">
@@ -241,7 +241,7 @@ function renderFleetManagementView() {
         <div class="toolbar-row" style="margin-top:10px">
           <button class="mini-btn primary" onclick="createManagedShip()" ${canCreateCustomShips ? '' : 'disabled'}>Schiff anlegen</button>
         </div>
-      </div>
+      </div>` : ''}
       <div class="workspace-card">
         <table class="data-table">
           <thead>
