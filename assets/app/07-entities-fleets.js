@@ -24,7 +24,6 @@ function renderBaseThenDeferHeavy() {
 
 function refreshFleetSelectionState() {
   state.fleets.forEach((fleet) => updateFleetElement(fleet));
-  if (typeof refreshFleetClusterSelectionState === 'function') refreshFleetClusterSelectionState();
 }
 
 function openRoute(id) {
@@ -913,10 +912,7 @@ function openFleet(id, options = {}) {
   selected = { type: 'fleet', id };
   refreshFleetSelectionState();
   refreshRouteSelectionState();
-  const clusterKey = fleetClusterMembership.get(id);
-  if (options?.suppressClusterPanel) closeFleetStackPanel();
-  else if (clusterKey) openFleetClusterPanel(clusterKey);
-  else closeFleetStackPanel();
+  closeFleetStackPanel();
   const disabled = canEditFaction(f.faction) ? '' : 'disabled';
   const planet = planetIndex.get(f.locationPlanetId || f.planetId);
   const travel = fleetTravelState.get(f.id);

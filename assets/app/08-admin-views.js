@@ -59,6 +59,10 @@ function renderFleetManagementView() {
     return haystack.includes(normalizedManifestQuery);
   });
   syncManagedShipDraft();
+  const managedShipFactionOptions = isAdminRole()
+    ? [...new Set(Object.values(SHIP_CLASS_POOL).map((meta) => meta.faction || 'GAR'))].sort((a, b) => String(a).localeCompare(String(b), 'de'))
+    : [...visibleFactions];
+  if (!managedShipFactionOptions.includes(managedShipDraft.faction)) managedShipDraft.faction = managedShipFactionOptions[0] || 'GAR';
   const canCreateCustomShips = canEditFaction(managedShipDraft.faction);
   const managedShipClassOptions = getManagedShipDraftClassOptions(managedShipDraft.faction);
   const managedShipFleetOptions = getAssignableFleetOptionsForShip({ faction: managedShipDraft.faction, classId: managedShipDraft.classId });
@@ -196,7 +200,7 @@ function renderFleetManagementView() {
           <div class="form-row">
             <label>Fraktion</label>
             <select onchange="updateManagedShipDraftField('faction', this.value)">
-              ${[...visibleFactions].map((faction) => `<option value="${faction}" ${managedShipDraft.faction === faction ? 'selected' : ''}>${faction}</option>`).join('')}
+              ${managedShipFactionOptions.map((faction) => `<option value="${faction}" ${managedShipDraft.faction === faction ? 'selected' : ''}>${faction}</option>`).join('')}
             </select>
           </div>
           <div class="form-row">
@@ -539,15 +543,16 @@ async function saveLoginManagerUser(id) {
   const user = state.authUsers.find((entry) => entry.id === id);
   if (!user) return;
   const username = document.getElementById(`authUser_${id}`)?.value.trim() || '';
-  const password = document.getElementById(`authPass_${id}`)?.value || '';
+  const passwordInput = document.getElementById(`authPass_${id}`)?.value || '';
   const role = document.getElementById(`authRole_${id}`)?.value || 'Viewer';
   const roleDefinition = LOGIN_ROLE_DEFINITIONS[role];
+  const password = passwordInput || user.password || '';
   const canCoordinate4thFleetValue = roleDefinition?.faction === 'navy'
     && Boolean(document.getElementById(`authFleetCoord_${id}`)?.checked);
   const senatePosition = roleDefinition?.faction === 'senate'
     ? (document.getElementById(`authSenatePosition_${id}`)?.value || '')
     : '';
-  if (!username || !password) {
+  if (!username || (user.isDraft && !password)) {
     setStatus('Login-Name und Passwort dürfen nicht leer sein.');
     return;
   }
@@ -676,7 +681,7 @@ function renderLoginManagerView() {
     return `
       <tr>
         <td><input id="authUser_${user.id}" value="${escapeLoginManagerText(user.username)}" placeholder="z.B. benutzer" autocomplete="off" ${editable ? 'required' : 'disabled'}></td>
-        <td><input id="authPass_${user.id}" type="text" value="${user.password || ''}" placeholder="${editable ? 'Neues Passwort' : 'Nicht bearbeitbar'}" autocomplete="off" ${editable ? 'required' : 'disabled'}></td>
+        <td><input id="authPass_${user.id}" type="text" value="" placeholder="${editable ? (user.isDraft ? 'Passwort erforderlich' : 'Leer lassen = unverändert') : 'Nicht bearbeitbar'}" autocomplete="off" ${user.isDraft && editable ? 'required' : ''} ${editable ? '' : 'disabled'}></td>
         <td>
           <select id="authRole_${user.id}" ${editable ? '' : 'disabled'}>
             ${roleOptions.map((role) => `<option value="${role}" ${user.role === role ? 'selected' : ''}>${LOGIN_ROLE_DEFINITIONS[role]?.label || role}</option>`).join('')}

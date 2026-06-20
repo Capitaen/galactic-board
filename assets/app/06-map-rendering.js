@@ -206,26 +206,6 @@ function getFleetClusterSource(fleets) {
 function rebuildFleetClusterState() {
   fleetClusterMembership.clear();
   fleetClusterGroups.clear();
-  const visibleGroups = new Map();
-  state.fleets.forEach((fleet) => {
-    if (!isFleetElementVisible(fleet)) return;
-    if (fleetTravelState.get(fleet.id)?.currentPosition) return;
-    const planetId = fleet.locationPlanetId || fleet.planetId;
-    if (!planetId) return;
-    const planet = planetIndex.get(planetId);
-    if (!planet) return;
-    const key = `planet:${planetId}`;
-    if (!visibleGroups.has(key)) visibleGroups.set(key, { key, planetId, planet, fleets: [] });
-    visibleGroups.get(key).fleets.push(fleet);
-  });
-  visibleGroups.forEach((group) => {
-    if (group.fleets.length < 2) return;
-    group.fleets.sort((left, right) => String(left.assignment || left.name).localeCompare(String(right.assignment || right.name), 'de', { sensitivity: 'base', numeric: true }));
-    group.source = getFleetClusterSource(group.fleets);
-    group.position = getPlanetDisplayPosition(group.planet);
-    fleetClusterGroups.set(group.key, group);
-    group.fleets.forEach((fleet) => fleetClusterMembership.set(fleet.id, group.key));
-  });
 }
 
 function closeFleetStackPanel() {
@@ -237,103 +217,28 @@ function closeFleetStackPanel() {
 }
 
 function renderFleetStackPanel() {
-  if (!fleetStackPanel) return;
-  const cluster = fleetClusterGroups.get(activeFleetClusterKey);
-  if (!cluster) {
-    closeFleetStackPanel();
-    return;
-  }
-  fleetStackPanel.classList.add('active');
-  fleetStackPanel.style.display = 'block';
-  fleetStackPanel.innerHTML = `
-    <h3>Einheiten bei ${escapeHtml(cluster.planet?.name || 'Sammelpunkt')}</h3>
-    <div class="fleet-stack-list">
-      ${cluster.fleets.map((fleet) => `
-        <div class="fleet-stack-entry" data-fleet-id="${fleet.id}" role="button" tabindex="0" onclick="openFleetStackEntry('${fleet.id}')" onkeydown="if(event.key === 'Enter' || event.key === ' '){ event.preventDefault(); openFleetStackEntry('${fleet.id}'); }">
-          <div class="fleet-stack-entry-copy">
-            <strong>${escapeHtml(fleet.name)}</strong>
-            <small>${escapeHtml(getFleetCommandRoleLabel(normalizeFleetCommandRole(fleet.commandRole)))} • ${escapeHtml(fleet.faction)}${fleet.assignment ? ` • ${escapeHtml(fleet.assignment)}` : ''}</small>
-          </div>
-          <button class="mini-btn" type="button" onclick="event.stopPropagation(); openFleetStackEntry('${fleet.id}')">Öffnen</button>
-        </div>
-      `).join('')}
-    </div>
-    <div class="fleet-stack-actions">
-      <button class="mini-btn" type="button" onclick="closeFleetStackPanel()">Schließen</button>
-    </div>
-  `;
+  closeFleetStackPanel();
 }
 
 function openFleetClusterPanel(clusterKey) {
-  activeFleetClusterKey = clusterKey || '';
-  renderFleetStackPanel();
+  activeFleetClusterKey = '';
+  closeFleetStackPanel();
 }
 
 function nearestDisplayedFleetCluster(x, y, radius = 26) {
-  let best = null;
-  let bestDistanceSq = radius * radius;
-  fleetClusterGroups.forEach((group, key) => {
-    if (!group?.position) return;
-    const dx = Number(group.position.x || 0) - x;
-    const dy = Number(group.position.y || 0) - y;
-    const distanceSq = (dx * dx) + (dy * dy);
-    if (distanceSq > bestDistanceSq) return;
-    bestDistanceSq = distanceSq;
-    best = { ...group, key };
-  });
-  return best;
+  return null;
 }
 
 function ensureFleetClusterElements() {
-  const seen = new Set();
-  const frag = document.createDocumentFragment();
-  fleetClusterGroups.forEach((group, clusterKey) => {
-    seen.add(clusterKey);
-    if (!fleetClusterElements.has(clusterKey)) {
-      const el = document.createElement('div');
-      el.className = 'fleet fleet-cluster';
-      el.dataset.clusterKey = clusterKey;
-      el.innerHTML = `<img alt=""><div class="fleet-cluster-count"></div>`;
-      el.addEventListener('pointerdown', (event) => {
-        event.stopPropagation();
-      });
-      el.addEventListener('click', (event) => {
-        event.stopPropagation();
-        openFleetClusterPanel(clusterKey);
-      });
-      fleetClusterElements.set(clusterKey, el);
-      frag.appendChild(el);
-    }
-    const el = fleetClusterElements.get(clusterKey);
-    const isSelected = selected?.type === 'fleet' && group.fleets.some((fleet) => fleet.id === selected.id);
-    el.className = `fleet fleet-cluster ${group.source === 'mixed' ? 'fleet-cluster-mixed' : ''}${isSelected ? ' selected' : ''}`;
-    el.style.left = `${group.position.x}px`;
-    el.style.top = `${group.position.y}px`;
-    el.style.pointerEvents = 'auto';
-    el.title = `${group.fleets.length} Einheiten bei ${group.planet?.name || 'Sammelpunkt'}`;
-    el.querySelector('img').src = group.source === 'KUS' ? 'assets/kus.svg' : 'assets/gar.svg';
-    el.querySelector('.fleet-cluster-count').textContent = String(group.fleets.length);
-    el.classList.toggle('hidden', false);
-  });
-  if (frag.childNodes.length) fleetLayer.appendChild(frag);
   for (const [clusterKey, el] of fleetClusterElements.entries()) {
-    if (!seen.has(clusterKey)) {
-      el.remove();
-      fleetClusterElements.delete(clusterKey);
-      if (activeFleetClusterKey === clusterKey) closeFleetStackPanel();
-    }
+    el.remove();
+    fleetClusterElements.delete(clusterKey);
   }
-  if (activeFleetClusterKey) renderFleetStackPanel();
+  closeFleetStackPanel();
 }
 
 function refreshFleetClusterSelectionState() {
-  for (const [clusterKey, el] of fleetClusterElements.entries()) {
-    const group = fleetClusterGroups.get(clusterKey);
-    if (!group) continue;
-    const isSelected = selected?.type === 'fleet' && group.fleets.some((fleet) => fleet.id === selected.id);
-    el.classList.toggle('selected', isSelected);
-  }
-  if (activeFleetClusterKey) renderFleetStackPanel();
+  closeFleetStackPanel();
 }
 
 function ensurePlanetElements() {
