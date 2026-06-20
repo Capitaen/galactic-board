@@ -1325,12 +1325,12 @@ function updateManagedShipDraftField(field, value) {
 }
 
 function createManagedShip() {
-  syncManagedShipDraft();
-  const faction = managedShipDraft.faction || 'GAR';
-  if (!canEditFaction(faction)) {
-    setStatus('Mit deiner Rolle kannst du für diese Fraktion kein Schiff anlegen.');
+  if (!isAdminRole()) {
+    setStatus('Custom-Schiffe können nur von Globalen Admins angelegt werden.');
     return;
   }
+  syncManagedShipDraft();
+  const faction = managedShipDraft.faction || 'GAR';
   const classId = managedShipDraft.classId;
   const meta = getShipClassMeta(classId);
   if (!meta) {

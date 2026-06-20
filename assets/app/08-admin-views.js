@@ -63,7 +63,7 @@ function renderFleetManagementView() {
     ? [...new Set(Object.values(SHIP_CLASS_POOL).map((meta) => meta.faction || 'GAR'))].sort((a, b) => String(a).localeCompare(String(b), 'de'))
     : [...visibleFactions];
   if (!managedShipFactionOptions.includes(managedShipDraft.faction)) managedShipDraft.faction = managedShipFactionOptions[0] || 'GAR';
-  const canCreateCustomShips = canEditFaction(managedShipDraft.faction);
+  const canCreateCustomShips = isAdminRole();
   const managedShipClassOptions = getManagedShipDraftClassOptions(managedShipDraft.faction);
   const managedShipFleetOptions = getAssignableFleetOptionsForShip({ faction: managedShipDraft.faction, classId: managedShipDraft.classId });
   const managedShipLocationOptions = state.planets
