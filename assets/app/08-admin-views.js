@@ -86,7 +86,6 @@ function renderFleetManagementView() {
         <button class="mini-btn ${fleetManagementViewTab === 'overview' ? 'active' : ''}" onclick="setFleetManagementViewTab('overview')">Verbände</button>
         <button class="mini-btn ${fleetManagementViewTab === 'activity' ? 'active' : ''}" onclick="setFleetManagementViewTab('activity')">Aktivität</button>
         ${fleetManagementViewTab === 'overview' ? `
-          <button class="mini-btn primary" onclick="createFleetManagementFleet()">Neuen Verband anlegen</button>
           ${role !== 'Viewer' && !isUnderworldRole(role) ? '<button class="mini-btn" onclick="createFleetManagementCategory()">Neue Kategorie</button>' : ''}
           ${role === 'Admin' ? '<button class="mini-btn" onclick="triggerTrelloImport()">Trello JSON importieren</button>' : ''}
         ` : ''}

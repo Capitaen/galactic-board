@@ -912,7 +912,7 @@ function openFleet(id, options = {}) {
   selected = { type: 'fleet', id };
   refreshFleetSelectionState();
   refreshRouteSelectionState();
-  closeFleetStackPanel();
+  if (!options.suppressClusterPanel) closeFleetStackPanel();
   const disabled = canEditFaction(f.faction) ? '' : 'disabled';
   const planet = planetIndex.get(f.locationPlanetId || f.planetId);
   const travel = fleetTravelState.get(f.id);
@@ -1309,8 +1309,12 @@ function getManagedShipDraftClassOptions(faction = 'GAR') {
 }
 
 function syncManagedShipDraft() {
-  const visibleFactions = getFleetManagementVisibleFactions();
-  if (!visibleFactions.has(managedShipDraft.faction)) managedShipDraft.faction = visibleFactions.has('GAR') ? 'GAR' : [...visibleFactions][0] || 'GAR';
+  const availableFactions = isAdminRole()
+    ? [...new Set(Object.values(SHIP_CLASS_POOL).map((meta) => meta.faction || 'GAR'))]
+    : [...getFleetManagementVisibleFactions()];
+  if (!availableFactions.includes(managedShipDraft.faction)) {
+    managedShipDraft.faction = availableFactions.includes('GAR') ? 'GAR' : availableFactions[0] || 'GAR';
+  }
   const classOptions = getManagedShipDraftClassOptions(managedShipDraft.faction);
   if (!classOptions.some((entry) => entry.id === managedShipDraft.classId)) managedShipDraft.classId = classOptions[0]?.id || '';
   const fleetOptions = getAssignableFleetOptionsForShip({ faction: managedShipDraft.faction, classId: managedShipDraft.classId });

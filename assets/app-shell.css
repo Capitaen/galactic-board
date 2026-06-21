@@ -356,8 +356,11 @@ body {
 .layer-row .handle { color:#7a8291; font-size:19px; }
 #addPanel { top:75px; left:75px; width:330px; display:none; padding:14px; }
 #infoPanel { top:85px; right:20px; width:360px; max-height:calc(100vh - 120px); overflow:auto; display:none; padding:16px; }
-#fleetStackPanel { top:85px; right:392px; width:290px; max-height:calc(100vh - 120px); overflow:auto; display:none; padding:14px; z-index:57; }
+#fleetStackPanel { top:85px; left:20px; width:320px; max-height:calc(100vh - 120px); overflow:auto; display:none; padding:14px; z-index:57; }
 #fleetStackPanel.active { display:block; }
+.fleet-stack-panel-head { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:12px; }
+.fleet-stack-panel-head h3 { margin:0 0 4px; }
+.fleet-stack-panel-head p { margin:0; color:#8fb8c8; }
 .fleet-stack-list { display:flex; flex-direction:column; gap:8px; }
 .fleet-stack-entry { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:10px 12px; border-radius:12px; background:rgba(255,255,255,.035); border:1px solid rgba(255,255,255,.08); }
 .fleet-stack-entry-copy { display:flex; flex-direction:column; gap:4px; min-width:0; }
@@ -365,6 +368,7 @@ body {
 .fleet-stack-entry-copy small { overflow-wrap:anywhere; }
 .fleet-stack-entry-copy small { color:#8fb8c8; }
 .fleet-stack-entry .mini-btn { flex:0 0 auto; }
+.fleet-stack-entry-actions { display:flex; align-items:center; gap:6px; }
 .fleet-stack-actions { display:flex; justify-content:flex-end; margin-top:10px; }
 #legendPanel {
   left:22px;
