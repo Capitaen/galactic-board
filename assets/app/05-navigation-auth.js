@@ -1215,16 +1215,21 @@ function isUnderworldRole(role = currentRole()) {
 }
 
 function canManageLogins() {
-  return ['global', 'admin', 'faction-admin'].includes(LOGIN_ROLE_DEFINITIONS[currentAssignedRole()]?.level);
+  return ['super-global', 'global', 'admin', 'faction-admin'].includes(LOGIN_ROLE_DEFINITIONS[currentAssignedRole()]?.level);
 }
 
 function canManageRadioCommands() {
-  return currentAssignedRole() === 'Admin' || currentAssignedRole() === 'Republic Navy Admin';
+  return ['Superadministrator', 'Admin', 'Republic Navy Admin'].includes(currentAssignedRole());
+}
+
+function canViewAuditLogs() {
+  return ['super-global', 'global'].includes(LOGIN_ROLE_DEFINITIONS[currentAssignedRole()]?.level);
 }
 
 function getManageableLoginRoles() {
   const actor = LOGIN_ROLE_DEFINITIONS[currentAssignedRole()];
-  if (actor?.level === 'global') return LOGIN_ROLES;
+  if (actor?.level === 'super-global') return LOGIN_ROLES;
+  if (actor?.level === 'global') return LOGIN_ROLES.filter((role) => !['Superadministrator', 'Admin'].includes(role));
   const faction = LOGIN_FACTIONS.find((entry) => entry.id === actor?.faction);
   if (!faction) return [];
   if (actor.level === 'admin' || actor.level === 'faction-admin') return [faction.adminRole, faction.memberRole];

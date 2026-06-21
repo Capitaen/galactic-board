@@ -552,7 +552,7 @@ async function fetchFirstAvailableServerReloadEndpoint(endpoints, options = {}) 
 }
 
 function canManageServerReload() {
-  return LOGIN_ROLE_DEFINITIONS[currentAssignedRole()]?.level === 'global';
+  return LOGIN_ROLE_DEFINITIONS[currentAssignedRole()]?.level === 'super-global';
 }
 
 function clearServerReloadPollTimer() {
@@ -760,7 +760,7 @@ function renderLoginManagerView() {
     serverReloadAdminState.startedAt ? `Start: ${new Date(serverReloadAdminState.startedAt).toLocaleString('de-DE')}` : '',
     serverReloadAdminState.finishedAt ? `Ende: ${new Date(serverReloadAdminState.finishedAt).toLocaleString('de-DE')}` : ''
   ].filter(Boolean).join(' • ');
-  const serverReloadPanel = actorDefinition.level === 'global' ? `
+  const serverReloadPanel = actorDefinition.level === 'super-global' ? `
     <div class="workspace-section">
       <div class="workspace-card">
         <div class="workspace-head compact">
@@ -793,7 +793,7 @@ function renderLoginManagerView() {
     const userFaction = LOGIN_FACTIONS.find((faction) => faction.id === userDefinition?.faction);
     const categoryRoles = userFaction
       ? [userFaction.adminRole, userFaction.memberRole]
-      : ['Admin', 'Viewer'];
+      : ['Superadministrator', 'Admin', 'Viewer'];
     const roleOptions = actorDefinition.level === 'global'
       ? categoryRoles
       : (user.isDraft || manageableRoles.includes(user.role) ? manageableRoles : [user.role]);
@@ -864,7 +864,7 @@ function renderLoginManagerView() {
       ${actorDefinition.level === 'global' ? `
       <div class="workspace-card">
         <div class="login-faction-head">
-          <div><h3>System / Global</h3><p>Globale Admins und reine Viewer.</p></div>
+          <div><h3>System / Global</h3><p>Superadministratoren, globale Admins und reine Viewer.</p></div>
           <button class="mini-btn primary" onclick="createLoginManagerUser('Viewer')">Login anlegen</button>
         </div>
         <div class="login-manager-grid login-manager-head">
@@ -926,7 +926,7 @@ function createRadioPermissionDraft() {
 }
 
 function getDerivedRadioPermissionRole(permission) {
-  return permission?.linkedUserRole === 'Admin' || permission?.linkedUserRole === 'Republic Navy Admin'
+  return ['Superadministrator', 'Admin', 'Republic Navy Admin'].includes(permission?.linkedUserRole)
     ? 'admiralty'
     : 'fleet_officer';
 }

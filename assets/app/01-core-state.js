@@ -618,6 +618,8 @@ const settingsModal = document.getElementById('settingsModal');
 const settingsModalContent = document.getElementById('settingsModalContent');
 const adminControlModal = document.getElementById('adminControlModal');
 const adminControlModalContent = document.getElementById('adminControlModalContent');
+const auditLogModal = document.getElementById('auditLogModal');
+const auditLogModalContent = document.getElementById('auditLogModalContent');
 const creditsModal = document.getElementById('creditsModal');
 const creditsModalContent = document.getElementById('creditsModalContent');
 const tutorialModal = document.getElementById('tutorialModal');
@@ -728,6 +730,7 @@ let PLANET_DEMOGRAPHIC_CATALOG = window.PLANET_DEMOGRAPHICS || {};
 const planetInfoCardCache = new Map();
 let activePlanetInfoRequestId = 0;
 const LOGIN_ROLE_DEFINITIONS = {
+  Superadministrator: { label: 'Superadministrator', baseRole: 'Admin', faction: 'system', level: 'super-global' },
   Admin: { label: 'Globaler Admin', baseRole: 'Admin', faction: 'system', level: 'global' },
   'Republic Navy Admin': { label: 'Republic Navy Admin', baseRole: 'Republic Navy / GAR', faction: 'navy', level: 'admin' },
   'Republic Navy / GAR': { label: 'Republic Navy', baseRole: 'Republic Navy / GAR', faction: 'navy', level: 'member' },
@@ -851,6 +854,11 @@ let radioCommandAdminState = {
   radioConfig: null,
   fleetSearch: {},
   loading: false
+};
+let auditLogAdminState = {
+  entries: [],
+  loading: false,
+  limit: 300
 };
 let currentAuthenticatedUsername = '';
 let viewerModeActive = true;

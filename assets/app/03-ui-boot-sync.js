@@ -186,6 +186,7 @@ function queueHoverStateUpdate(event) {
 function getOverlayModalById(modalId) {
   if (modalId === 'settingsModal') return settingsModal;
   if (modalId === 'adminControlModal') return adminControlModal;
+  if (modalId === 'auditLogModal') return auditLogModal;
   if (modalId === 'creditsModal') return creditsModal;
   if (modalId === 'tutorialModal') return tutorialModal;
   if (modalId === 'loginCreateModal') return loginCreateModal;
@@ -352,6 +353,63 @@ function syncViewsAfterAdminControlSave() {
   if (activeMainTab === 'fleetManagement') renderFleetManagementView();
   if (activeMainTab === 'buildProjects') renderBuildProjectsView();
   if (activeMainTab === 'economy') renderEconomyView();
+}
+
+async function fetchAuditLog(options = {}) {
+  if (!canViewAuditLogs()) return;
+  const { silent = false } = options;
+  if (!silent) {
+    auditLogAdminState.loading = true;
+    if (auditLogModal?.classList.contains('active')) renderAuditLogModal();
+  }
+  try {
+    const response = await fetch(`/api/admin/audit-log?limit=${encodeURIComponent(auditLogAdminState.limit || 300)}`, {
+      credentials: 'include'
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || 'Logs konnten nicht geladen werden.');
+    auditLogAdminState.entries = Array.isArray(payload.entries) ? payload.entries : [];
+    auditLogAdminState.loading = false;
+    if (auditLogModal?.classList.contains('active')) renderAuditLogModal();
+  } catch (error) {
+    auditLogAdminState.loading = false;
+    setStatus(`Logs laden fehlgeschlagen: ${error.message}`);
+    if (auditLogModal?.classList.contains('active')) renderAuditLogModal();
+  }
+}
+
+function renderAuditLogModal() {
+  if (!auditLogModalContent || !canViewAuditLogs()) return;
+  const logCards = auditLogAdminState.entries.length
+    ? auditLogAdminState.entries.map((entry) => `
+      <article class="project-card">
+        <h4>${escapeHtml(entry.action || 'audit.entry')}</h4>
+        <p>${escapeHtml(entry.actorUsername || 'System')} • ${escapeHtml(entry.actorRole || 'Unbekannt')} • ${new Date(entry.createdAt || Date.now()).toLocaleString('de-DE')}</p>
+        <p class="project-meta">${escapeHtml(entry.entityType || 'entity')} • ${escapeHtml(entry.entityId || '—')}</p>
+        <pre class="server-reload-console" style="min-height:0;max-height:220px;margin-top:10px">${escapeHtml(JSON.stringify(entry.payload || {}, null, 2))}</pre>
+      </article>
+    `).join('')
+    : '<div class="muted-box">Noch keine Logs vorhanden.</div>';
+  auditLogModalContent.innerHTML = `
+    <div class="overlay-panel">
+      <div class="overlay-panel-head">
+        <div class="overlay-panel-title">
+          <h2 id="auditLogModalTitle">System-Logs</h2>
+          <p>Zentrale Übersicht für Login Manager, Flottenmanagement, Schiffbau, Bauprojekte und weitere Admin-Aktionen.</p>
+        </div>
+        <div class="toolbar-row end">
+          <button type="button" class="mini-btn" id="refreshAuditLogBtn" ${auditLogAdminState.loading ? 'disabled' : ''}>Aktualisieren</button>
+          <button type="button" class="secondary overlay-panel-close" data-close-modal="auditLogModal" aria-label="Logs schließen">×</button>
+        </div>
+      </div>
+      <section class="overlay-section">
+        ${auditLogAdminState.loading ? '<div class="muted-box">Logs werden geladen...</div>' : logCards}
+      </section>
+    </div>
+  `;
+  auditLogModalContent.querySelector('#refreshAuditLogBtn')?.addEventListener('click', () => {
+    void fetchAuditLog();
+  });
 }
 
 function renderAdminControlModal() {
@@ -599,6 +657,7 @@ function renderSettingsModal() {
           </div>
           <div class="toolbar-row" style="margin-top:12px">
             <button type="button" class="mini-btn primary" id="openAdminControlCenter">Globales Kontrollzentrum öffnen</button>
+            ${canViewAuditLogs() ? '<button type="button" class="mini-btn" id="openAuditLogCenter">Logs öffnen</button>' : ''}
           </div>
         </section>
       ` : ''}
@@ -629,6 +688,11 @@ function renderSettingsModal() {
   settingsModalContent.querySelector('#openAdminControlCenter')?.addEventListener('click', () => {
     renderAdminControlModal();
     openOverlayModal('adminControlModal');
+  });
+  settingsModalContent.querySelector('#openAuditLogCenter')?.addEventListener('click', () => {
+    renderAuditLogModal();
+    openOverlayModal('auditLogModal');
+    void fetchAuditLog();
   });
   settingsModalContent.querySelector('#openPasswordChangeFromSettings')?.addEventListener('click', () => {
     renderPasswordChangeModal();

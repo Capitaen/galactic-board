@@ -18,6 +18,7 @@ import {
   getConsumerNextPurchaseAt,
   listEconomySectors,
   listRadioCommandLogs,
+  listAuditLog,
   listRadioCommandPermissions,
   listUsers,
   purchaseMarketDemand,
@@ -126,6 +127,7 @@ const RESOURCE_PRODUCTION_TICK_MS = 60 * 60 * 1000;
 const RESOURCE_RESET_VERSION = 'resource_reset_2026_05_01';
 const OWNER_FRONTLINE_PASS_VERSION = 'excel_owner_visibility_v2';
 const LOGIN_ROLE_DEFINITIONS = {
+  Superadministrator: { faction: 'system', level: 'super-global' },
   Admin: { faction: 'system', level: 'global' },
   'Republic Navy Admin': { faction: 'navy', level: 'admin' },
   'Republic Navy / GAR': { faction: 'navy', level: 'member' },
@@ -512,20 +514,29 @@ function completeTutorialForRequest(req, action = 'completed') {
 }
 
 function canManageLogins(role) {
-  return ['global', 'admin', 'faction-admin'].includes(LOGIN_ROLE_DEFINITIONS[role]?.level);
+  return ['super-global', 'global', 'admin', 'faction-admin'].includes(LOGIN_ROLE_DEFINITIONS[role]?.level);
 }
 
 function canManageRadioPermissions(role) {
-  if (role === 'Admin') return true;
+  if (role === 'Superadministrator' || role === 'Admin') return true;
   return role === 'Republic Navy Admin';
+}
+
+function canViewAuditLogs(role) {
+  return ['super-global', 'global'].includes(LOGIN_ROLE_DEFINITIONS[role]?.level);
 }
 
 function listUsersForActor(actor) {
   const users = listUsers(db);
   const actorDefinition = LOGIN_ROLE_DEFINITIONS[actor?.role];
-  if (actorDefinition?.level === 'global') return users;
+  if (actorDefinition?.level === 'super-global' || actorDefinition?.level === 'global') return users;
   if (!canManageLogins(actor?.role)) return [];
   return users.filter((user) => LOGIN_ROLE_DEFINITIONS[user.role]?.faction === actorDefinition.faction);
+}
+
+function listAuditEntriesForActor(actor, limit = 300) {
+  if (!canViewAuditLogs(actor?.role)) return [];
+  return listAuditLog(db, limit);
 }
 
 function listRadioPermissionsForActor(actor) {
@@ -945,8 +956,22 @@ function requireLoginManager(req, res, next) {
 }
 
 function requireGlobalAdmin(req, res, next) {
-  if (!req.user || req.user.role !== 'Admin') {
+  if (!req.user || !['Superadministrator', 'Admin'].includes(req.user.role)) {
     return res.status(403).json({ error: 'Nur globale Admins dürfen den Server-Reload auslösen.' });
+  }
+  next();
+}
+
+function requireSuperAdmin(req, res, next) {
+  if (!req.user || req.user.role !== 'Superadministrator') {
+    return res.status(403).json({ error: 'Nur Superadministratoren dürfen diese Aktion ausführen.' });
+  }
+  next();
+}
+
+function requireAuditLogViewer(req, res, next) {
+  if (!req.user || !canViewAuditLogs(req.user.role)) {
+    return res.status(403).json({ error: 'Forbidden' });
   }
   next();
 }
@@ -959,7 +984,7 @@ function requireRadioPermissionManager(req, res, next) {
 }
 
 function requireSenateEconomyManager(req, res, next) {
-  if (!req.user || !['Admin', 'Galaktischer Senats Admin'].includes(req.user.role)) {
+  if (!req.user || !['Superadministrator', 'Admin', 'Galaktischer Senats Admin'].includes(req.user.role)) {
     return res.status(403).json({ error: 'Nur Senats-Admins oder globale Admins dürfen den GAR-Haushalt verwalten.' });
   }
   next();
@@ -967,7 +992,7 @@ function requireSenateEconomyManager(req, res, next) {
 
 function canBuySectorCivilianResources(user) {
   if (!user?.id) return false;
-  return ['Admin', 'Republic Navy Admin', 'Galaktischer Senats Admin', 'Senat'].includes(user.role);
+  return ['Superadministrator', 'Admin', 'Republic Navy Admin', 'Galaktischer Senats Admin', 'Senat'].includes(user.role);
 }
 
 function requireSectorCivilianBuyer(req, res, next) {
@@ -978,7 +1003,7 @@ function requireSectorCivilianBuyer(req, res, next) {
 }
 
 function requireSectorEmbargoManager(req, res, next) {
-  if (!req.user || req.user.role !== 'Admin') {
+  if (!req.user || !['Superadministrator', 'Admin'].includes(req.user.role)) {
     return res.status(403).json({ error: 'Nur globale Admins dürfen Sektor-Embargos setzen.' });
   }
   next();
@@ -1167,7 +1192,10 @@ function canActorAssignRole(actor, role) {
   const actorDefinition = LOGIN_ROLE_DEFINITIONS[actor?.role];
   const roleDefinition = LOGIN_ROLE_DEFINITIONS[role];
   if (!actorDefinition || !roleDefinition) return false;
-  if (actorDefinition.level === 'global') return true;
+  if (actorDefinition.level === 'super-global') return true;
+  if (actorDefinition.level === 'global') {
+    return !['super-global', 'global'].includes(roleDefinition.level);
+  }
   if (actorDefinition.faction !== roleDefinition.faction) return false;
   return ['admin', 'faction-admin'].includes(actorDefinition.level)
     && ['admin', 'faction-admin', 'member'].includes(roleDefinition.level);
@@ -1234,7 +1262,7 @@ function validateRadioPermissionInput(body) {
     throw error;
   }
 
-  const permissionRole = ['Admin', 'Republic Navy Admin'].includes(linkedUser?.role)
+  const permissionRole = ['Superadministrator', 'Admin', 'Republic Navy Admin'].includes(linkedUser?.role)
     ? 'admiralty'
     : 'fleet_officer';
 
@@ -1351,6 +1379,237 @@ function buildFleetAuditEntries(previousState, nextState, actor) {
   }
 
   return auditEntries;
+}
+
+function buildFleetManagementAuditEntries(previousState, nextState, actor) {
+  const previousFleets = new Map((Array.isArray(previousState?.fleets) ? previousState.fleets : []).map((fleet) => [fleet.id, fleet]));
+  const nextFleets = new Map((Array.isArray(nextState?.fleets) ? nextState.fleets : []).map((fleet) => [fleet.id, fleet]));
+  const entries = [];
+  nextFleets.forEach((fleet, fleetId) => {
+    const previousFleet = previousFleets.get(fleetId);
+    if (!previousFleet) {
+      entries.push({
+        actorUserId: actor.id,
+        actorUsername: actor.username,
+        actorRole: actor.role,
+        action: 'fleet.created',
+        entityType: 'fleet',
+        entityId: fleetId,
+        payload: {
+          name: fleet.name || fleet.assignment || fleetId,
+          faction: fleet.faction || '',
+          commandRole: fleet.commandRole || '',
+          locationPlanetId: getFleetPlanetId(fleet)
+        }
+      });
+      return;
+    }
+    const changedFields = {};
+    ['name', 'assignment', 'commander', 'commandRole', 'parentFleetId', 'faction'].forEach((field) => {
+      if (String(previousFleet?.[field] || '') !== String(fleet?.[field] || '')) {
+        changedFields[field] = {
+          from: previousFleet?.[field] || '',
+          to: fleet?.[field] || ''
+        };
+      }
+    });
+    const previousPlanetId = getFleetPlanetId(previousFleet);
+    const nextPlanetId = getFleetPlanetId(fleet);
+    if (previousPlanetId !== nextPlanetId) {
+      changedFields.locationPlanetId = { from: previousPlanetId, to: nextPlanetId };
+    }
+    if (Object.keys(changedFields).length) {
+      entries.push({
+        actorUserId: actor.id,
+        actorUsername: actor.username,
+        actorRole: actor.role,
+        action: 'fleet.updated',
+        entityType: 'fleet',
+        entityId: fleetId,
+        payload: {
+          name: fleet.name || fleet.assignment || fleetId,
+          changedFields
+        }
+      });
+    }
+  });
+  previousFleets.forEach((fleet, fleetId) => {
+    if (nextFleets.has(fleetId)) return;
+    entries.push({
+      actorUserId: actor.id,
+      actorUsername: actor.username,
+      actorRole: actor.role,
+      action: 'fleet.deleted',
+      entityType: 'fleet',
+      entityId: fleetId,
+      payload: {
+        name: fleet.name || fleet.assignment || fleetId,
+        faction: fleet.faction || '',
+        commandRole: fleet.commandRole || ''
+      }
+    });
+  });
+  return entries;
+}
+
+function buildShipAuditEntries(previousState, nextState, actor) {
+  const previousShips = new Map((Array.isArray(previousState?.ships) ? previousState.ships : []).map((ship) => [ship.id, ship]));
+  const nextShips = new Map((Array.isArray(nextState?.ships) ? nextState.ships : []).map((ship) => [ship.id, ship]));
+  const entries = [];
+  nextShips.forEach((ship, shipId) => {
+    const previousShip = previousShips.get(shipId);
+    if (!previousShip) {
+      entries.push({
+        actorUserId: actor.id,
+        actorUsername: actor.username,
+        actorRole: actor.role,
+        action: 'ship.created',
+        entityType: 'ship',
+        entityId: shipId,
+        payload: {
+          name: ship.name || shipId,
+          classId: ship.classId || '',
+          faction: ship.faction || '',
+          assignedFleetId: ship.assignedFleetId || '',
+          locationPlanetId: ship.locationPlanetId || ''
+        }
+      });
+      return;
+    }
+    const changedFields = {};
+    ['name', 'classId', 'commander', 'status', 'assignedFleetId', 'locationPlanetId', 'faction'].forEach((field) => {
+      if (String(previousShip?.[field] || '') !== String(ship?.[field] || '')) {
+        changedFields[field] = {
+          from: previousShip?.[field] || '',
+          to: ship?.[field] || ''
+        };
+      }
+    });
+    if (Object.keys(changedFields).length) {
+      entries.push({
+        actorUserId: actor.id,
+        actorUsername: actor.username,
+        actorRole: actor.role,
+        action: 'ship.updated',
+        entityType: 'ship',
+        entityId: shipId,
+        payload: {
+          name: ship.name || shipId,
+          changedFields
+        }
+      });
+    }
+  });
+  previousShips.forEach((ship, shipId) => {
+    if (nextShips.has(shipId)) return;
+    entries.push({
+      actorUserId: actor.id,
+      actorUsername: actor.username,
+      actorRole: actor.role,
+      action: 'ship.deleted',
+      entityType: 'ship',
+      entityId: shipId,
+      payload: {
+        name: ship.name || shipId,
+        classId: ship.classId || '',
+        faction: ship.faction || ''
+      }
+    });
+  });
+  return entries;
+}
+
+function buildBuildJobAuditEntries(previousState, nextState, actor) {
+  const previousJobs = new Map((Array.isArray(previousState?.buildJobs) ? previousState.buildJobs : []).map((job) => [job.id, job]));
+  const nextJobs = new Map((Array.isArray(nextState?.buildJobs) ? nextState.buildJobs : []).map((job) => [job.id, job]));
+  const entries = [];
+  nextJobs.forEach((job, jobId) => {
+    const previousJob = previousJobs.get(jobId);
+    if (!previousJob) {
+      entries.push({
+        actorUserId: actor.id,
+        actorUsername: actor.username,
+        actorRole: actor.role,
+        action: 'build_job.created',
+        entityType: 'buildJob',
+        entityId: jobId,
+        payload: {
+          label: job.shipName || job.projectName || job.buildingKey || job.classId || jobId,
+          faction: job.faction || '',
+          planetId: job.planetId || '',
+          status: job.status || ''
+        }
+      });
+      return;
+    }
+    const changedFields = {};
+    ['status', 'planetId', 'shipName', 'projectName', 'buildingKey', 'classId', 'faction'].forEach((field) => {
+      if (String(previousJob?.[field] || '') !== String(job?.[field] || '')) {
+        changedFields[field] = {
+          from: previousJob?.[field] || '',
+          to: job?.[field] || ''
+        };
+      }
+    });
+    if (Object.keys(changedFields).length) {
+      entries.push({
+        actorUserId: actor.id,
+        actorUsername: actor.username,
+        actorRole: actor.role,
+        action: 'build_job.updated',
+        entityType: 'buildJob',
+        entityId: jobId,
+        payload: {
+          label: job.shipName || job.projectName || job.buildingKey || job.classId || jobId,
+          changedFields
+        }
+      });
+    }
+  });
+  previousJobs.forEach((job, jobId) => {
+    if (nextJobs.has(jobId)) return;
+    entries.push({
+      actorUserId: actor.id,
+      actorUsername: actor.username,
+      actorRole: actor.role,
+      action: 'build_job.deleted',
+      entityType: 'buildJob',
+      entityId: jobId,
+      payload: {
+        label: job.shipName || job.projectName || job.buildingKey || job.classId || jobId,
+        faction: job.faction || '',
+        status: job.status || ''
+      }
+    });
+  });
+  return entries;
+}
+
+function buildCampaignSummaryAuditEntry(previousState, nextState, actor, changedKeys) {
+  if (!changedKeys.length) return null;
+  return {
+    actorUserId: actor.id,
+    actorUsername: actor.username,
+    actorRole: actor.role,
+    action: 'campaign.state.updated',
+    entityType: 'campaign',
+    entityId: 'main',
+    payload: {
+      changedKeys,
+      fleetCount: {
+        from: Array.isArray(previousState?.fleets) ? previousState.fleets.length : 0,
+        to: Array.isArray(nextState?.fleets) ? nextState.fleets.length : 0
+      },
+      shipCount: {
+        from: Array.isArray(previousState?.ships) ? previousState.ships.length : 0,
+        to: Array.isArray(nextState?.ships) ? nextState.ships.length : 0
+      },
+      buildJobCount: {
+        from: Array.isArray(previousState?.buildJobs) ? previousState.buildJobs.length : 0,
+        to: Array.isArray(nextState?.buildJobs) ? nextState.buildJobs.length : 0
+      }
+    }
+  };
 }
 
 function broadcastCampaignChange(payload) {
@@ -1474,7 +1733,7 @@ app.get('/api/economy/sectors', (req, res) => {
     res.json({
       sectors: listEconomySectors(db, state),
       canBuyResources: canBuySectorCivilianResources(getSession(req)),
-      canManageEmbargo: getSession(req)?.role === 'Admin'
+      canManageEmbargo: ['Superadministrator', 'Admin'].includes(getSession(req)?.role)
     });
   } catch (error) {
     console.error('Sector economy list endpoint failed', error);
@@ -1488,7 +1747,7 @@ app.get('/api/economy/sectors/:sectorId', (req, res) => {
     res.json({
       sector: readEconomySector(db, state, req.params.sectorId),
       canBuyResources: canBuySectorCivilianResources(getSession(req)),
-      canManageEmbargo: getSession(req)?.role === 'Admin'
+      canManageEmbargo: ['Superadministrator', 'Admin'].includes(getSession(req)?.role)
     });
   } catch (error) {
     res.status(error.status || 500).json({ error: error.message || 'Sektor-Wirtschaft konnte nicht geladen werden.' });
@@ -1911,6 +2170,17 @@ app.post('/api/auth/password', requireAuth, async (req, res) => {
       mustChangePassword: false,
       senatePosition: req.user.senatePosition || ''
     });
+    writeAuditLog(db, {
+      actorUserId: req.user.id,
+      actorUsername: req.user.username,
+      actorRole: req.user.role,
+      action: 'auth.password_changed',
+      entityType: 'user',
+      entityId: req.user.id,
+      payload: {
+        username: req.user.username
+      }
+    });
     res.json({
       ok: true,
       user: {
@@ -1929,6 +2199,20 @@ app.post('/api/auth/password', requireAuth, async (req, res) => {
 
 app.post('/api/auth/logout', (req, res) => {
   const token = req.cookies?.[COOKIE_NAME];
+  const session = token ? sessions.get(token) || null : null;
+  if (session) {
+    writeAuditLog(db, {
+      actorUserId: session.id,
+      actorUsername: session.username,
+      actorRole: session.role,
+      action: 'auth.logout',
+      entityType: 'user',
+      entityId: session.id,
+      payload: {
+        username: session.username
+      }
+    });
+  }
   if (token) sessions.delete(token);
   res.clearCookie(COOKIE_NAME, { path: '/' });
   res.json({ ok: true });
@@ -1945,7 +2229,21 @@ app.post('/api/admin/users', requireAuth, requireLoginManager, async (req, res) 
       return res.status(409).json({ error: 'Dieser Benutzername existiert bereits.', users: listUsersForActor(req.user) });
     }
     const passwordHash = await bcrypt.hash(password, 10);
-    createUser(db, { username, passwordHash, role, canCoordinate4thFleet, senatePosition });
+    const createdUserId = createUser(db, { username, passwordHash, role, canCoordinate4thFleet, senatePosition });
+    writeAuditLog(db, {
+      actorUserId: req.user.id,
+      actorUsername: req.user.username,
+      actorRole: req.user.role,
+      action: 'login_manager.user_created',
+      entityType: 'user',
+      entityId: createdUserId,
+      payload: {
+        username,
+        role,
+        canCoordinate4thFleet,
+        senatePosition
+      }
+    });
     res.json({ ok: true, users: listUsersForActor(req.user) });
   } catch (error) {
     res.status(error.status || 500).json({
@@ -1977,6 +2275,21 @@ app.patch('/api/admin/users/:id', requireAuth, requireLoginManager, async (req, 
     }
     updateUser(db, userId, updatePatch);
     refreshUserSessions(userId, { username, role, canCoordinate4thFleet, senatePosition });
+    writeAuditLog(db, {
+      actorUserId: req.user.id,
+      actorUsername: req.user.username,
+      actorRole: req.user.role,
+      action: 'login_manager.user_updated',
+      entityType: 'user',
+      entityId: userId,
+      payload: {
+        username,
+        role,
+        canCoordinate4thFleet,
+        senatePosition,
+        passwordChanged: Boolean(password)
+      }
+    });
     res.json({ ok: true, users: listUsersForActor(req.user) });
   } catch (error) {
     res.status(error.status || 500).json({
@@ -2007,6 +2320,18 @@ app.delete('/api/admin/users/:id', requireAuth, requireLoginManager, (req, res) 
   }
 
   deleteUser(db, userId);
+  writeAuditLog(db, {
+    actorUserId: req.user.id,
+    actorUsername: req.user.username,
+    actorRole: req.user.role,
+    action: 'login_manager.user_deleted',
+    entityType: 'user',
+    entityId: userId,
+    payload: {
+      username: targetUser.username,
+      role: targetUser.role
+    }
+  });
   res.json({ ok: true, users: listUsersForActor(req.user) });
 });
 
@@ -2018,7 +2343,7 @@ app.get('/api/server-reload-status', requireAuth, requireGlobalAdmin, (req, res)
   res.json({ ok: true, ...getServerReloadStatusPayload() });
 });
 
-app.post('/api/admin/server-reload', requireAuth, requireGlobalAdmin, async (req, res) => {
+app.post('/api/admin/server-reload', requireAuth, requireSuperAdmin, async (req, res) => {
   try {
     const currentState = readServerReloadState();
     if (currentState.status === 'queued' || currentState.status === 'running') {
@@ -2052,7 +2377,7 @@ app.post('/api/admin/server-reload', requireAuth, requireGlobalAdmin, async (req
   }
 });
 
-app.post('/api/server-reload', requireAuth, requireGlobalAdmin, async (req, res) => {
+app.post('/api/server-reload', requireAuth, requireSuperAdmin, async (req, res) => {
   try {
     const currentState = readServerReloadState();
     if (currentState.status === 'queued' || currentState.status === 'running') {
@@ -2084,6 +2409,14 @@ app.post('/api/server-reload', requireAuth, requireGlobalAdmin, async (req, res)
       ...getServerReloadStatusPayload()
     });
   }
+});
+
+app.get('/api/admin/audit-log', requireAuth, requireAuditLogViewer, (req, res) => {
+  const limit = Math.max(50, Math.min(1000, Number(req.query?.limit || 300)));
+  res.json({
+    ok: true,
+    entries: listAuditEntriesForActor(req.user, limit)
+  });
 });
 
 app.get('/api/admin/radio-command-center', requireAuth, requireRadioPermissionManager, (req, res) => {
@@ -2169,8 +2502,15 @@ app.put('/api/campaign/state', requireAuth, (req, res) => {
     };
     const resetResult = applyOneTimeResourceReset(mergedState);
     const effectiveMergedState = resetResult.state;
-    const auditEntries = buildFleetAuditEntries(previousState, effectiveMergedState, req.user);
     const changedKeys = detectChangedCampaignKeys(previousState, effectiveMergedState);
+    const auditEntries = [
+      ...buildFleetAuditEntries(previousState, effectiveMergedState, req.user),
+      ...buildFleetManagementAuditEntries(previousState, effectiveMergedState, req.user),
+      ...buildShipAuditEntries(previousState, effectiveMergedState, req.user),
+      ...buildBuildJobAuditEntries(previousState, effectiveMergedState, req.user)
+    ];
+    const summaryAuditEntry = buildCampaignSummaryAuditEntry(previousState, effectiveMergedState, req.user, changedKeys);
+    if (summaryAuditEntry) auditEntries.unshift(summaryAuditEntry);
 
     const nextRevision = revision + 1;
     const updatedAt = db.transaction(() => {

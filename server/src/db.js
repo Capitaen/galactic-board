@@ -3064,6 +3064,35 @@ export function deleteUser(db, id) {
   `).run(id);
 }
 
+export function listAuditLog(db, limit = 300) {
+  const safeLimit = Math.max(1, Math.min(1000, Number(limit) || 300));
+  return db.prepare(`
+    SELECT
+      id,
+      actor_user_id AS actorUserId,
+      actor_username AS actorUsername,
+      actor_role AS actorRole,
+      action,
+      entity_type AS entityType,
+      entity_id AS entityId,
+      payload_json AS payloadJson,
+      created_at AS createdAt,
+      dispatched_at AS dispatchedAt
+    FROM audit_log
+    ORDER BY created_at DESC
+    LIMIT ?
+  `).all(safeLimit).map((entry) => ({
+    ...entry,
+    payload: (() => {
+      try {
+        return entry.payloadJson ? JSON.parse(entry.payloadJson) : {};
+      } catch {
+        return {};
+      }
+    })()
+  }));
+}
+
 export function listRadioCommandPermissions(db) {
   return db.prepare(`
     SELECT
