@@ -915,9 +915,6 @@ document.addEventListener('keydown', (event) => {
         finishTutorialFlow('skipped');
         return;
       }
-      if (activeOverlayModalId === 'passwordChangeModal') {
-        return;
-      }
       if (activeOverlayModalId === 'loginCreateModal') {
         loginManagerCreateDraft = null;
       }

@@ -18,6 +18,7 @@ const STARTUP_LAYERS = {
   conflictPulse: true,
   garFleets: true,
   kusFleets: true,
+  stationMarkers: true,
   grid: true,
   sectorLabels: true,
   legend: true

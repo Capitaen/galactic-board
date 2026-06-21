@@ -255,6 +255,7 @@ function getSettingsToggleDefinitions() {
       setLayerPreference('garFleets', next, false);
       setLayerPreference('kusFleets', next, true);
     }},
+    { id: 'stationMarkers', label: 'Raumstationen', description: 'Blendet Golan-1 und andere Raumstationen separat ein oder aus.' },
     { id: 'tacticalOverlay', label: 'Taktische / schematische Karte', description: 'Wechselt zwischen Bildkarte und schematischer Einsatzdarstellung.', checked: () => viewMode === 'schematic', onToggle: (next) => setViewModePreference(next ? 'schematic' : 'image') }
   ];
 }
@@ -265,7 +266,7 @@ function setLayerPreference(layerId, enabled, renderAfter = true) {
   const affectsTacticalCanvas = ['grid', 'hyperlanes', 'sectorLabels'].includes(layerId);
   const affectsInfluence = layerId === 'sectorLabels' || layerId === 'conflictPulse';
   const affectsRouteNetwork = layerId === 'hyperlanes';
-  const affectsFleetMarkers = layerId === 'garFleets' || layerId === 'kusFleets';
+  const affectsFleetMarkers = layerId === 'garFleets' || layerId === 'kusFleets' || layerId === 'stationMarkers';
   markDirty({
     positions: affectsFleetMarkers,
     layers: true,
@@ -564,7 +565,10 @@ function renderSettingsModal() {
           <h2 id="settingsModalTitle">⚙ Einstellungen</h2>
           <p>Angemeldet als: ${escapeHtml(getCurrentSessionLabel())}</p>
         </div>
-        <button type="button" class="secondary overlay-panel-close" data-close-modal="settingsModal" aria-label="Einstellungen schließen">×</button>
+        <div class="toolbar-row end">
+          ${currentAuthenticatedUsername ? '<button type="button" class="mini-btn" id="openPasswordChangeFromSettings">Passwort ändern</button>' : ''}
+          <button type="button" class="secondary overlay-panel-close" data-close-modal="settingsModal" aria-label="Einstellungen schließen">×</button>
+        </div>
       </div>
       <section class="overlay-section">
         <h3>Kartenanzeige</h3>
@@ -625,6 +629,10 @@ function renderSettingsModal() {
   settingsModalContent.querySelector('#openAdminControlCenter')?.addEventListener('click', () => {
     renderAdminControlModal();
     openOverlayModal('adminControlModal');
+  });
+  settingsModalContent.querySelector('#openPasswordChangeFromSettings')?.addEventListener('click', () => {
+    renderPasswordChangeModal();
+    openOverlayModal('passwordChangeModal');
   });
   settingsModalContent.querySelector('#settingsSoundRange')?.addEventListener('input', (event) => {
     uiSoundVolume = clampUiSoundVolume(event.target.value);
@@ -818,10 +826,6 @@ async function finishTutorialFlow(action) {
   }
   tutorialFlowState.shouldPrompt = false;
   closeOverlayModal('tutorialModal');
-  shouldForcePasswordChange = Boolean(shouldForcePasswordChange || serverSync.session?.mustChangePassword);
-  window.setTimeout(() => {
-    promptPasswordChangeIfNeeded();
-  }, 60);
 }
 
 async function checkTutorialStatus() {
@@ -839,8 +843,6 @@ async function checkTutorialStatus() {
       if (tutorialFlowState.shouldPrompt) {
         renderTutorialModal();
         openOverlayModal('tutorialModal');
-      } else if (shouldForcePasswordChange) {
-        promptPasswordChangeIfNeeded();
       }
       return tutorialFlowState.shouldPrompt;
     } catch (error) {

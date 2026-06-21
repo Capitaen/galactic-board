@@ -1272,9 +1272,10 @@ function renderPasswordChangeModal() {
     <div class="overlay-panel">
       <div class="overlay-panel-head">
         <div class="overlay-panel-title">
-          <h2 id="passwordChangeModalTitle">Passwort festlegen</h2>
-          <p>Beim ersten Login brauchst du nur einmal ein neues Passwort eintragen und speichern.</p>
+          <h2 id="passwordChangeModalTitle">Passwort ändern</h2>
+          <p>Hier kannst du jederzeit ein neues Passwort setzen und direkt speichern.</p>
         </div>
+        <button type="button" class="secondary overlay-panel-close" data-close-modal="passwordChangeModal" aria-label="Passwortfenster schließen">×</button>
       </div>
       <section class="overlay-section">
         <form class="password-change-form" id="passwordChangeForm">
