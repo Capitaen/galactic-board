@@ -369,16 +369,146 @@ function createLoginManagerUser(role = '') {
   if (!canManageLogins()) return;
   const manageableRoles = getManageableLoginRoles();
   const selectedRole = manageableRoles.includes(role) ? role : (manageableRoles[0] || 'Viewer');
-  state.authUsers.push({
-    id: `auth_${Math.random().toString(36).slice(2, 10)}`,
+  loginManagerCreateDraft = {
     username: '',
     password: '',
     role: selectedRole,
     canCoordinate4thFleet: false,
-    senatePosition: '',
-    isDraft: true
+    senatePosition: ''
+  };
+  renderLoginCreateModal();
+  openOverlayModal('loginCreateModal');
+}
+
+function renderLoginCreateExtraField() {
+  const role = document.getElementById('loginCreateRole')?.value || loginManagerCreateDraft?.role || 'Viewer';
+  const roleDefinition = LOGIN_ROLE_DEFINITIONS[role];
+  const target = document.getElementById('loginCreateExtraField');
+  if (!target) return;
+  if (roleDefinition?.faction === 'navy') {
+    target.innerHTML = `
+      <label class="full-span">
+        Zusatzfunktion
+        <span class="login-extra-stack">
+          <label class="layer-row" style="border:0;padding:0">
+            <input id="loginCreateFleetCoord" type="checkbox" ${loginManagerCreateDraft?.canCoordinate4thFleet ? 'checked' : ''}>
+            4th Flottenkoordination
+          </label>
+        </span>
+      </label>
+    `;
+    return;
+  }
+  if (roleDefinition?.faction === 'senate') {
+    target.innerHTML = `
+      <label class="full-span">
+        Zusatzfunktion
+        <select id="loginCreateSenatePosition">
+          <option value="">Keine Senatsfunktion</option>
+          ${SENATE_POSITIONS.map((position) => `<option value="${position}" ${loginManagerCreateDraft?.senatePosition === position ? 'selected' : ''}>${position}</option>`).join('')}
+        </select>
+      </label>
+    `;
+    return;
+  }
+  target.innerHTML = `
+    <label class="full-span">
+      Zusatzfunktion
+      <div class="muted-box">Für diese Rolle ist aktuell keine Zusatzfunktion vorgesehen.</div>
+    </label>
+  `;
+}
+
+function renderLoginCreateModal() {
+  if (!loginCreateModalContent || !loginManagerCreateDraft) return;
+  loginCreateModalContent.innerHTML = `
+    <div class="overlay-panel">
+      <div class="overlay-panel-head">
+        <div class="overlay-panel-title">
+          <h2 id="loginCreateModalTitle">Login anlegen</h2>
+          <p>Lege Benutzername, Startpasswort, Rolle und Zusatzfunktion in einem zentralen Fenster fest.</p>
+        </div>
+        <button type="button" class="secondary overlay-panel-close" data-close-modal="loginCreateModal" aria-label="Fenster schließen">×</button>
+      </div>
+      <section class="overlay-section">
+        <form id="loginCreateForm" class="login-manager-create-grid">
+          <label>
+            Benutzername
+            <input id="loginCreateUser" type="text" value="${escapeLoginManagerText(loginManagerCreateDraft.username)}" placeholder="z.B. Hector_Gray" autocomplete="off">
+          </label>
+          <label>
+            Passwort
+            <input id="loginCreatePassword" type="text" value="" placeholder="Startpasswort" autocomplete="new-password">
+          </label>
+          <label>
+            Rolle
+            <select id="loginCreateRole">
+              ${getManageableLoginRoles().map((entryRole) => `<option value="${entryRole}" ${loginManagerCreateDraft.role === entryRole ? 'selected' : ''}>${LOGIN_ROLE_DEFINITIONS[entryRole]?.label || entryRole}</option>`).join('')}
+            </select>
+          </label>
+          <div id="loginCreateExtraField" class="full-span"></div>
+          <div class="toolbar-row end full-span">
+            <button type="button" class="secondary" data-close-modal="loginCreateModal">Abbrechen</button>
+            <button type="submit" class="primary">Login speichern</button>
+          </div>
+        </form>
+      </section>
+    </div>
+  `;
+  renderLoginCreateExtraField();
+  loginCreateModalContent.querySelector('#loginCreateRole')?.addEventListener('change', () => {
+    loginManagerCreateDraft.role = document.getElementById('loginCreateRole')?.value || loginManagerCreateDraft.role;
+    renderLoginCreateExtraField();
   });
-  renderLoginManagerView();
+  loginCreateModalContent.querySelector('#loginCreateForm')?.addEventListener('submit', (event) => {
+    event.preventDefault();
+    void saveLoginManagerCreateDraft();
+  });
+}
+
+async function saveLoginManagerCreateDraft() {
+  if (!canManageLogins() || !loginManagerCreateDraft) return;
+  const username = document.getElementById('loginCreateUser')?.value.trim() || '';
+  const password = document.getElementById('loginCreatePassword')?.value || '';
+  const role = document.getElementById('loginCreateRole')?.value || 'Viewer';
+  const roleDefinition = LOGIN_ROLE_DEFINITIONS[role];
+  const canCoordinate4thFleet = roleDefinition?.faction === 'navy'
+    && Boolean(document.getElementById('loginCreateFleetCoord')?.checked);
+  const senatePosition = roleDefinition?.faction === 'senate'
+    ? (document.getElementById('loginCreateSenatePosition')?.value || '')
+    : '';
+  if (!username || !password) {
+    setStatus('Benutzername und Passwort dürfen nicht leer sein.');
+    return;
+  }
+  const duplicate = state.authUsers.find((entry) => entry.username.trim().toLowerCase() === username.toLowerCase());
+  if (duplicate) {
+    setStatus('Dieser Login-Name existiert bereits.');
+    return;
+  }
+  try {
+    const response = await fetch('/api/admin/users', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username,
+        password,
+        role: LOGIN_ROLES.includes(role) ? role : 'Viewer',
+        canCoordinate4thFleet,
+        senatePosition
+      })
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || 'Login konnte nicht gespeichert werden.');
+    state.authUsers = payload.users || [];
+    loginManagerCreateDraft = null;
+    closeOverlayModal('loginCreateModal');
+    renderLoginManagerView();
+    setStatus(`Login gespeichert: ${username}`);
+  } catch (error) {
+    setStatus(`Login speichern fehlgeschlagen: ${error.message}`);
+  }
 }
 
 let serverReloadAdminState = {
@@ -542,8 +672,7 @@ async function saveLoginManagerUser(id) {
   if (!canManageLogins()) return;
   const user = state.authUsers.find((entry) => entry.id === id);
   if (!user) return;
-  const username = document.getElementById(`authUser_${id}`)?.value.trim() || '';
-  const passwordInput = document.getElementById(`authPass_${id}`)?.value || '';
+  const username = user.username;
   const role = document.getElementById(`authRole_${id}`)?.value || 'Viewer';
   const roleDefinition = LOGIN_ROLE_DEFINITIONS[role];
   const canCoordinate4thFleetValue = roleDefinition?.faction === 'navy'
@@ -551,15 +680,6 @@ async function saveLoginManagerUser(id) {
   const senatePosition = roleDefinition?.faction === 'senate'
     ? (document.getElementById(`authSenatePosition_${id}`)?.value || '')
     : '';
-  if (!username || (user.isDraft && !passwordInput)) {
-    setStatus('Login-Name und Passwort dürfen nicht leer sein.');
-    return;
-  }
-  const duplicate = state.authUsers.find((entry) => entry.id !== id && entry.username.trim().toLowerCase() === username.toLowerCase());
-  if (duplicate) {
-    setStatus('Dieser Login-Name existiert bereits.');
-    return;
-  }
   try {
     const requestBody = {
       username,
@@ -567,9 +687,8 @@ async function saveLoginManagerUser(id) {
       canCoordinate4thFleet: canCoordinate4thFleetValue,
       senatePosition
     };
-    if (user.isDraft || passwordInput) requestBody.password = passwordInput;
-    const response = await fetch(user.isDraft ? '/api/admin/users' : `/api/admin/users/${id}`, {
-      method: user.isDraft ? 'POST' : 'PATCH',
+    const response = await fetch(`/api/admin/users/${id}`, {
+      method: 'PATCH',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(requestBody)
@@ -582,6 +701,15 @@ async function saveLoginManagerUser(id) {
   } catch (error) {
     setStatus(`Login speichern fehlgeschlagen: ${error.message}`);
   }
+}
+
+function setLoginManagerUserRolePreview(id, role) {
+  const user = state.authUsers.find((entry) => entry.id === id);
+  if (!user) return;
+  user.role = LOGIN_ROLES.includes(role) ? role : user.role;
+  if (LOGIN_ROLE_DEFINITIONS[user.role]?.faction !== 'navy') user.canCoordinate4thFleet = false;
+  if (LOGIN_ROLE_DEFINITIONS[user.role]?.faction !== 'senate') user.senatePosition = '';
+  renderLoginManagerView();
 }
 
 async function deleteLoginManagerUser(id) {
@@ -677,26 +805,28 @@ function renderLoginManagerView() {
             <option value="">Keine Senatsfunktion</option>
             ${SENATE_POSITIONS.map((position) => `<option value="${position}" ${user.senatePosition === position ? 'selected' : ''}>${position}</option>`).join('')}
           </select>`
-        : '<span class="muted">—</span>';
+        : '<span class="muted">Keine Zusatzfunktion</span>';
     return `
-      <tr>
-        <td><input id="authUser_${user.id}" value="${escapeLoginManagerText(user.username)}" placeholder="z.B. benutzer" autocomplete="off" ${editable ? 'required' : 'disabled'}></td>
-        <td><input id="authPass_${user.id}" type="text" value="" placeholder="${editable ? (user.isDraft ? 'Passwort erforderlich' : 'Leer lassen = unverändert') : 'Nicht bearbeitbar'}" autocomplete="off" ${user.isDraft && editable ? 'required' : ''} ${editable ? '' : 'disabled'}></td>
-        <td>
-          <select id="authRole_${user.id}" ${editable ? '' : 'disabled'}>
+      <div class="login-manager-grid login-manager-row">
+        <div class="login-manager-user">
+          <strong>${escapeLoginManagerText(user.username)}</strong>
+          ${user.mustChangePassword ? '<span class="login-badge-pending">Passwortwechsel offen</span>' : `<small>${escapeLoginManagerText(LOGIN_ROLE_DEFINITIONS[user.role]?.label || user.role)}</small>`}
+        </div>
+        <div>
+          <select id="authRole_${user.id}" ${editable ? `onchange="setLoginManagerUserRolePreview('${user.id}', this.value)"` : 'disabled'}>
             ${roleOptions.map((role) => `<option value="${role}" ${user.role === role ? 'selected' : ''}>${LOGIN_ROLE_DEFINITIONS[role]?.label || role}</option>`).join('')}
           </select>
-        </td>
-        <td>${extraField}</td>
-        <td class="actions">
+        </div>
+        <div class="login-manager-extra">${extraField}</div>
+        <div class="login-manager-actions">
           ${editable ? `
             <button class="mini-btn primary" onclick="saveLoginManagerUser('${user.id}')">Speichern</button>
             <button class="mini-btn danger" onclick="deleteLoginManagerUser('${user.id}')">Löschen</button>
           ` : '<span class="muted">Geschützt</span>'}
-        </td>
-      </tr>
+        </div>
+      </div>
     `;
-  }).join('') : '<tr><td colspan="5"><div class="muted-box">Noch keine Logins in dieser Kategorie.</div></td></tr>';
+  }).join('') : '<div class="muted-box">Noch keine Logins in dieser Kategorie.</div>';
   const renderFactionSection = (faction) => {
     const users = state.authUsers.filter((user) => LOGIN_ROLE_DEFINITIONS[user.role]?.faction === faction.id);
     const factionAdmins = users.filter((user) => user.role === faction.adminRole && !user.isDraft);
@@ -710,10 +840,13 @@ function renderLoginManagerView() {
           </div>
           ${createRole ? `<button class="mini-btn primary" onclick="createLoginManagerUser('${createRole}')">Login anlegen</button>` : ''}
         </div>
-        <table class="data-table">
-          <thead><tr><th>Benutzername</th><th>Passwort</th><th>Rolle</th><th>Zusatzfunktion</th><th>Aktionen</th></tr></thead>
-          <tbody>${renderUserRows(users)}</tbody>
-        </table>
+        <div class="login-manager-grid login-manager-head">
+          <div>Benutzername</div>
+          <div>Rolle</div>
+          <div>Zusatzfunktion</div>
+          <div>Aktionen</div>
+        </div>
+        ${renderUserRows(users)}
       </div>
     `;
   };
@@ -734,10 +867,13 @@ function renderLoginManagerView() {
           <div><h3>System / Global</h3><p>Globale Admins und reine Viewer.</p></div>
           <button class="mini-btn primary" onclick="createLoginManagerUser('Viewer')">Login anlegen</button>
         </div>
-        <table class="data-table">
-          <thead><tr><th>Benutzername</th><th>Passwort</th><th>Rolle</th><th>Zusatzfunktion</th><th>Aktionen</th></tr></thead>
-          <tbody>${renderUserRows(systemUsers)}</tbody>
-        </table>
+        <div class="login-manager-grid login-manager-head">
+          <div>Benutzername</div>
+          <div>Rolle</div>
+          <div>Zusatzfunktion</div>
+          <div>Aktionen</div>
+        </div>
+        ${renderUserRows(systemUsers)}
       </div>
       ` : ''}
     </div>

@@ -604,6 +604,10 @@ const guestContinueBtn = document.getElementById('guestContinueBtn');
 const loginModal = document.getElementById('loginModal');
 const loginModalUser = document.getElementById('loginUser');
 const loginModalPassword = document.getElementById('loginPassword');
+const loginCreateModal = document.getElementById('loginCreateModal');
+const loginCreateModalContent = document.getElementById('loginCreateModalContent');
+const passwordChangeModal = document.getElementById('passwordChangeModal');
+const passwordChangeModalContent = document.getElementById('passwordChangeModalContent');
 const restartVerificationSplash = document.getElementById('restartVerificationSplash');
 const bootScreen = document.getElementById('bootScreen');
 const bootProgressFill = document.getElementById('bootProgressFill');
@@ -794,6 +798,8 @@ let tutorialFlowState = {
   stepIndex: -1,
   steps: []
 };
+let shouldForcePasswordChange = false;
+let loginManagerCreateDraft = null;
 const SETTINGS_SOUND_VOLUME_KEY = 'gcb_ui_v1.settings.soundVolume';
 const SETTINGS_ADMIN_MODE_KEY = 'gcb_ui_v1.settings.adminMode';
 const BOOT_MIN_DURATION_MS = 800;
@@ -861,7 +867,7 @@ const serverSync = {
   socket: null,
   revision: 0,
   clockOffsetMs: 0,
-  session: { id: null, username: '', role: 'Viewer' },
+  session: { id: null, username: '', role: 'Viewer', mustChangePassword: false },
   isApplyingRemoteState: false,
   syncQueued: false,
   syncInFlight: false,

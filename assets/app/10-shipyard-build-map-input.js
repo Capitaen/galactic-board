@@ -915,6 +915,12 @@ document.addEventListener('keydown', (event) => {
         finishTutorialFlow('skipped');
         return;
       }
+      if (activeOverlayModalId === 'passwordChangeModal') {
+        return;
+      }
+      if (activeOverlayModalId === 'loginCreateModal') {
+        loginManagerCreateDraft = null;
+      }
       closeOverlayModal(activeOverlayModalId);
       return;
     }
@@ -949,6 +955,9 @@ document.addEventListener('click', (event) => {
   if (modalId === 'tutorialModal' && tutorialFlowState.shouldPrompt) {
     finishTutorialFlow('skipped');
     return;
+  }
+  if (modalId === 'loginCreateModal') {
+    loginManagerCreateDraft = null;
   }
   closeOverlayModal(modalId);
 });

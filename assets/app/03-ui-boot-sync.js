@@ -188,6 +188,8 @@ function getOverlayModalById(modalId) {
   if (modalId === 'adminControlModal') return adminControlModal;
   if (modalId === 'creditsModal') return creditsModal;
   if (modalId === 'tutorialModal') return tutorialModal;
+  if (modalId === 'loginCreateModal') return loginCreateModal;
+  if (modalId === 'passwordChangeModal') return passwordChangeModal;
   return null;
 }
 
@@ -816,6 +818,7 @@ async function finishTutorialFlow(action) {
   }
   tutorialFlowState.shouldPrompt = false;
   closeOverlayModal('tutorialModal');
+  promptPasswordChangeIfNeeded();
 }
 
 async function checkTutorialStatus() {
@@ -826,12 +829,15 @@ async function checkTutorialStatus() {
       const response = await fetch('/api/tutorial/status', { credentials: 'include' });
       const payload = await response.json();
       tutorialFlowState.shouldPrompt = Boolean(payload.shouldShowTutorial);
+      shouldForcePasswordChange = Boolean(payload.shouldForcePasswordChange || serverSync.session?.mustChangePassword);
       tutorialFlowState.started = false;
       tutorialFlowState.stepIndex = -1;
       tutorialFlowState.steps = getTutorialSteps();
       if (tutorialFlowState.shouldPrompt) {
         renderTutorialModal();
         openOverlayModal('tutorialModal');
+      } else if (shouldForcePasswordChange) {
+        promptPasswordChangeIfNeeded();
       }
       return tutorialFlowState.shouldPrompt;
     } catch (error) {
@@ -969,6 +975,7 @@ function syncAuthUsersFromCampaign(campaign) {
       password: String(user.password || ''),
       role: LOGIN_ROLES.includes(user.role) ? user.role : 'Viewer',
       canCoordinate4thFleet: Boolean(user.canCoordinate4thFleet),
+      mustChangePassword: Boolean(user.mustChangePassword),
       senatePosition: SENATE_POSITIONS.includes(user.senatePosition) ? user.senatePosition : ''
     }))
     .filter((user) => user.username);
@@ -998,6 +1005,7 @@ function updateServerSession(me) {
     return;
   }
   serverSync.session = me;
+  shouldForcePasswordChange = Boolean(me.mustChangePassword);
   currentAuthenticatedUsername = incomingUsername;
   if (currentAuthenticatedUsername) viewerModeActive = false;
   roleSelect.value = incomingRole;

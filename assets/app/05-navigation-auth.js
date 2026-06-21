@@ -1266,6 +1266,69 @@ function hideLoginModal() {
   loginModal.setAttribute('aria-hidden', 'true');
 }
 
+function renderPasswordChangeModal() {
+  if (!passwordChangeModalContent) return;
+  passwordChangeModalContent.innerHTML = `
+    <div class="overlay-panel">
+      <div class="overlay-panel-head">
+        <div class="overlay-panel-title">
+          <h2 id="passwordChangeModalTitle">Passwort festlegen</h2>
+          <p>Beim ersten Login brauchst du nur einmal ein neues Passwort eintragen und speichern.</p>
+        </div>
+      </div>
+      <section class="overlay-section">
+        <form class="password-change-form" id="passwordChangeForm">
+          <label>
+            Neues Passwort
+            <input id="passwordChangeInput" type="password" placeholder="Neues Passwort" autocomplete="new-password">
+          </label>
+          <div class="toolbar-row end">
+            <button type="submit" class="primary">Passwort speichern</button>
+          </div>
+        </form>
+      </section>
+    </div>
+  `;
+  passwordChangeModalContent.querySelector('#passwordChangeForm')?.addEventListener('submit', (event) => {
+    event.preventDefault();
+    void submitPasswordChange();
+  });
+}
+
+function promptPasswordChangeIfNeeded() {
+  if (!currentAuthenticatedUsername || !shouldForcePasswordChange) return;
+  if (tutorialFlowState.shouldPrompt || activeOverlayModalId === 'tutorialModal') return;
+  renderPasswordChangeModal();
+  openOverlayModal('passwordChangeModal');
+}
+
+async function submitPasswordChange() {
+  const password = document.getElementById('passwordChangeInput')?.value || '';
+  if (!password.trim()) {
+    setStatus('Bitte gib ein neues Passwort ein.');
+    return;
+  }
+  try {
+    const response = await fetch('/api/auth/password', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password })
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || 'Passwort konnte nicht gespeichert werden.');
+    shouldForcePasswordChange = false;
+    updateServerSession(payload.user || {
+      ...serverSync.session,
+      mustChangePassword: false
+    });
+    closeOverlayModal('passwordChangeModal');
+    setStatus('Passwort erfolgreich gespeichert.');
+  } catch (error) {
+    setStatus(`Passwort speichern fehlgeschlagen: ${error.message}`);
+  }
+}
+
 function updateSessionDisplay() {
   if (!sessionUserDisplay) return;
   const role = currentRole();
@@ -1337,7 +1400,7 @@ async function finalizeSuccessfulLogin(payload) {
   viewerModeActive = false;
   pendingLoginAttempt = null;
   setAppEntrySessionActive(true);
-  serverSync.session = payload.user || { id: null, username: '', role: 'Viewer' };
+  serverSync.session = payload.user || { id: null, username: '', role: 'Viewer', mustChangePassword: false };
   currentAuthenticatedUsername = payload.user?.username || '';
   if (roleSelect) roleSelect.value = payload.user?.role || 'Viewer';
   if (loginModalPassword) loginModalPassword.value = '';
@@ -1354,7 +1417,7 @@ async function finalizeSuccessfulLogin(payload) {
         const response = await fetch('/api/bootstrap', { credentials: 'include' });
         if (response.ok) {
           const bootstrapPayload = await response.json();
-          updateServerSession(bootstrapPayload.me || payload.user || { id: null, username: '', role: 'Viewer' });
+          updateServerSession(bootstrapPayload.me || payload.user || { id: null, username: '', role: 'Viewer', mustChangePassword: false });
           const nextRevision = Number(bootstrapPayload.revision || 0);
           if (nextRevision > serverRevision) {
             applyServerCampaign(bootstrapPayload.campaign || DEFAULT_DATA, nextRevision, { playOwnerEffects: true, updatedAt: bootstrapPayload.updatedAt });
@@ -1397,7 +1460,8 @@ function restoreLoginAfterFailure(message) {
   viewerModeActive = false;
   setAppEntrySessionActive(false);
   currentAuthenticatedUsername = '';
-  serverSync.session = { id: null, username: '', role: 'Viewer' };
+  shouldForcePasswordChange = false;
+  serverSync.session = { id: null, username: '', role: 'Viewer', mustChangePassword: false };
   if (roleSelect) roleSelect.value = 'Viewer';
   safeRefreshRoleChrome();
   showLoginModal();
@@ -1438,11 +1502,13 @@ function continueAsGuest() {
   pendingLoginAttempt = null;
   setAppEntrySessionActive(true);
   currentAuthenticatedUsername = '';
-  serverSync.session = { id: null, username: '', role: 'Viewer' };
+  shouldForcePasswordChange = false;
+  serverSync.session = { id: null, username: '', role: 'Viewer', mustChangePassword: false };
   if (roleSelect) roleSelect.value = 'Viewer';
   hideLoginModal();
   tutorialFlowState.shouldPrompt = false;
   closeOverlayModal('tutorialModal', { restoreFocus: false });
+  closeOverlayModal('passwordChangeModal', { restoreFocus: false });
   safeRefreshRoleChrome();
   if (!hasLoadedCampaignState()) {
     void beginAppLoadSequence();
@@ -1469,11 +1535,13 @@ async function logoutCurrentUser() {
   pendingLoginAttempt = null;
   setAppEntrySessionActive(false);
   currentAuthenticatedUsername = '';
-  serverSync.session = { id: null, username: '', role: 'Viewer' };
+  shouldForcePasswordChange = false;
+  serverSync.session = { id: null, username: '', role: 'Viewer', mustChangePassword: false };
   if (roleSelect) roleSelect.value = 'Viewer';
   safeRefreshRoleChrome();
   tutorialFlowState.shouldPrompt = false;
   closeOverlayModal('tutorialModal', { restoreFocus: false });
+  closeOverlayModal('passwordChangeModal', { restoreFocus: false });
   showLoginModal();
   setStatus('Du wurdest ausgeloggt.');
 }
@@ -1500,7 +1568,8 @@ function applyDefaultAnonymousRole() {
   if (currentAuthenticatedUsername) return;
   viewerModeActive = false;
   pendingLoginAttempt = null;
-  serverSync.session = { id: null, username: '', role: 'Viewer' };
+  shouldForcePasswordChange = false;
+  serverSync.session = { id: null, username: '', role: 'Viewer', mustChangePassword: false };
   if (roleSelect) roleSelect.value = 'Viewer';
 }
 

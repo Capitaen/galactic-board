@@ -1549,6 +1549,23 @@ body.nav-collapsed #mainNavToggle {
 .login-faction-head h3 { margin:0 0 4px; }
 .login-faction-head p { margin:0; color:var(--muted); font-size:13px; }
 .login-main-admin { color:#d8e7ff; font-size:12px; }
+.overlay-modal-login-admin { max-width:640px; }
+.overlay-modal-password-change { max-width:540px; }
+.login-manager-grid { display:grid; grid-template-columns:minmax(180px, 1.2fr) minmax(200px, 1fr) minmax(200px, 1fr) auto; gap:12px; align-items:center; }
+.login-manager-grid.login-manager-head { padding:0 0 10px; color:#b9c4d6; font-size:12px; letter-spacing:.05em; text-transform:uppercase; }
+.login-manager-grid.login-manager-row { padding:12px 0; border-top:1px solid rgba(255,255,255,.07); }
+.login-manager-user { min-width:0; }
+.login-manager-user strong { display:block; font-size:15px; color:#eef8ff; overflow-wrap:anywhere; }
+.login-manager-user small { display:block; margin-top:4px; color:#89a4bc; font-size:12px; }
+.login-manager-extra { min-height:42px; display:flex; align-items:center; }
+.login-manager-actions { display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
+.login-manager-create-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.login-manager-create-grid .full-span { grid-column:1 / -1; }
+.login-manager-create-grid label,
+.password-change-form label { display:flex; flex-direction:column; gap:6px; color:#dbe7f4; font-size:13px; }
+.password-change-form { display:flex; flex-direction:column; gap:14px; }
+.login-extra-stack { display:flex; flex-direction:column; gap:8px; }
+.login-badge-pending { display:inline-flex; align-items:center; padding:4px 8px; border-radius:999px; background:rgba(255,214,102,.14); border:1px solid rgba(255,214,102,.28); color:#ffe6a3; font-size:11px; font-weight:700; }
 .server-reload-meta { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-bottom:10px; color:#dbe6f8; }
 .server-reload-badge { display:inline-flex; align-items:center; padding:6px 10px; border-radius:999px; border:1px solid rgba(255,255,255,.12); background:rgba(255,255,255,.05); color:#dbe6f8; font-size:12px; font-weight:700; }
 .server-reload-badge.idle { background:rgba(255,255,255,.05); }
@@ -1694,6 +1711,16 @@ a { color:#8bc7ff; }
 .orientation-guard-card p { margin:0 0 16px; color:var(--muted); line-height:1.45; }
 .orientation-guard-actions { display:flex; gap:10px; justify-content:center; flex-wrap:wrap; }
 @media (max-width: 900px) {
+  .login-manager-grid,
+  .login-manager-create-grid {
+    grid-template-columns:1fr;
+  }
+  .login-manager-grid.login-manager-head {
+    display:none;
+  }
+  .login-manager-actions {
+    justify-content:flex-start;
+  }
   body.mobile-device {
     overscroll-behavior:none;
     -webkit-text-size-adjust:100%;

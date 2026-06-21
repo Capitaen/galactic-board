@@ -387,6 +387,7 @@ function readUsersWithSecrets() {
       password_hash AS passwordHash,
       role,
       can_coordinate_4th_fleet AS canCoordinate4thFleet,
+      must_change_password AS mustChangePassword,
       senate_position AS senatePosition,
       created_at AS createdAt,
       updated_at AS updatedAt
@@ -402,6 +403,7 @@ function createSession(user) {
     username: user.username,
     role: user.role,
     canCoordinate4thFleet: Boolean(user.canCoordinate4thFleet),
+    mustChangePassword: Boolean(user.mustChangePassword),
     senatePosition: user.senatePosition || ''
   });
   return token;
@@ -415,6 +417,7 @@ function refreshUserSessions(userId, user) {
       username: user.username,
       role: user.role,
       canCoordinate4thFleet: Boolean(user.canCoordinate4thFleet),
+      ...(typeof user.mustChangePassword === 'boolean' ? { mustChangePassword: user.mustChangePassword } : {}),
       senatePosition: user.senatePosition || ''
     });
   });
@@ -1381,16 +1384,20 @@ app.get('/api/sync/status', (req, res) => {
 app.get('/api/auth/me', (req, res) => {
   const session = getSession(req);
   res.json({
-    user: session || { id: null, username: '', role: 'Viewer', canCoordinate4thFleet: false, senatePosition: '' }
+    user: session || { id: null, username: '', role: 'Viewer', canCoordinate4thFleet: false, mustChangePassword: false, senatePosition: '' }
   });
 });
 
 app.get('/api/tutorial/status', (req, res) => {
   try {
-    res.json({ shouldShowTutorial: shouldShowTutorialForRequest(req) });
+    const session = getSession(req);
+    res.json({
+      shouldShowTutorial: shouldShowTutorialForRequest(req),
+      shouldForcePasswordChange: Boolean(session?.mustChangePassword)
+    });
   } catch (error) {
     console.error('Tutorial status failed', error);
-    res.status(500).json({ error: 'tutorial_status_failed', shouldShowTutorial: false });
+    res.status(500).json({ error: 'tutorial_status_failed', shouldShowTutorial: false, shouldForcePasswordChange: false });
   }
 });
 
@@ -1876,9 +1883,48 @@ app.post('/api/auth/login', async (req, res) => {
       username: user.username,
       role: user.role,
       canCoordinate4thFleet: Boolean(user.canCoordinate4thFleet),
+      mustChangePassword: Boolean(user.mustChangePassword),
       senatePosition: user.senatePosition || ''
     }
   });
+});
+
+app.post('/api/auth/password', requireAuth, async (req, res) => {
+  const nextPassword = String(req.body?.password || '');
+  if (!nextPassword.trim()) {
+    return res.status(400).json({ error: 'Bitte gib ein neues Passwort ein.' });
+  }
+  try {
+    const passwordHash = await bcrypt.hash(nextPassword, 10);
+    updateUser(db, req.user.id, {
+      username: req.user.username,
+      passwordHash,
+      role: req.user.role,
+      canCoordinate4thFleet: Boolean(req.user.canCoordinate4thFleet),
+      mustChangePassword: false,
+      senatePosition: req.user.senatePosition || ''
+    });
+    refreshUserSessions(req.user.id, {
+      username: req.user.username,
+      role: req.user.role,
+      canCoordinate4thFleet: Boolean(req.user.canCoordinate4thFleet),
+      mustChangePassword: false,
+      senatePosition: req.user.senatePosition || ''
+    });
+    res.json({
+      ok: true,
+      user: {
+        id: req.user.id,
+        username: req.user.username,
+        role: req.user.role,
+        canCoordinate4thFleet: Boolean(req.user.canCoordinate4thFleet),
+        mustChangePassword: false,
+        senatePosition: req.user.senatePosition || ''
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message || 'Passwort konnte nicht geändert werden.' });
+  }
 });
 
 app.post('/api/auth/logout', (req, res) => {

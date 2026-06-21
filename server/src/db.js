@@ -838,6 +838,7 @@ export function createDb(projectRoot) {
       password_hash TEXT NOT NULL,
       role TEXT NOT NULL,
       can_coordinate_4th_fleet INTEGER NOT NULL DEFAULT 0,
+      must_change_password INTEGER NOT NULL DEFAULT 1,
       senate_position TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
@@ -1301,6 +1302,9 @@ export function createDb(projectRoot) {
   const userColumns = new Set(db.prepare('PRAGMA table_info(users)').all().map((column) => column.name));
   if (!userColumns.has('can_coordinate_4th_fleet')) {
     db.exec('ALTER TABLE users ADD COLUMN can_coordinate_4th_fleet INTEGER NOT NULL DEFAULT 0');
+  }
+  if (!userColumns.has('must_change_password')) {
+    db.exec('ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 1');
   }
   if (!userColumns.has('senate_position')) {
     db.exec("ALTER TABLE users ADD COLUMN senate_position TEXT NOT NULL DEFAULT ''");
@@ -2972,6 +2976,7 @@ export function listUsers(db) {
       username,
       role,
       can_coordinate_4th_fleet AS canCoordinate4thFleet,
+      must_change_password AS mustChangePassword,
       senate_position AS senatePosition,
       created_at AS createdAt,
       updated_at AS updatedAt
@@ -2987,6 +2992,7 @@ export function findUserByNormalizedUsername(db, username) {
       username,
       role,
       can_coordinate_4th_fleet AS canCoordinate4thFleet,
+      must_change_password AS mustChangePassword,
       senate_position AS senatePosition,
       created_at AS createdAt,
       updated_at AS updatedAt
@@ -3001,21 +3007,47 @@ export function createUser(db, { username, passwordHash, role, canCoordinate4thF
   const id = crypto.randomUUID();
   db.prepare(`
     INSERT INTO users (
-      id, username, password_hash, role, can_coordinate_4th_fleet, senate_position, created_at, updated_at
+      id, username, password_hash, role, can_coordinate_4th_fleet, must_change_password, senate_position, created_at, updated_at
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(id, username, passwordHash, role, canCoordinate4thFleet ? 1 : 0, senatePosition, now, now);
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(id, username, passwordHash, role, canCoordinate4thFleet ? 1 : 0, 1, senatePosition, now, now);
   return id;
 }
 
-export function updateUser(db, id, { username, passwordHash, role, canCoordinate4thFleet = false, senatePosition = '' }) {
+export function updateUser(db, id, {
+  username,
+  passwordHash,
+  role,
+  canCoordinate4thFleet = false,
+  mustChangePassword,
+  senatePosition = ''
+}) {
   const now = new Date().toISOString();
-  if (typeof passwordHash === 'string' && passwordHash) {
+  const hasPasswordHash = typeof passwordHash === 'string' && passwordHash;
+  const hasMustChangePassword = typeof mustChangePassword === 'boolean';
+  const mustChangePasswordValue = hasMustChangePassword ? (mustChangePassword ? 1 : 0) : null;
+  if (hasPasswordHash && hasMustChangePassword) {
+    db.prepare(`
+      UPDATE users
+      SET username = ?, password_hash = ?, role = ?, can_coordinate_4th_fleet = ?, must_change_password = ?, senate_position = ?, updated_at = ?
+      WHERE id = ?
+    `).run(username, passwordHash, role, canCoordinate4thFleet ? 1 : 0, mustChangePasswordValue, senatePosition, now, id);
+    return;
+  }
+  if (hasPasswordHash) {
     db.prepare(`
       UPDATE users
       SET username = ?, password_hash = ?, role = ?, can_coordinate_4th_fleet = ?, senate_position = ?, updated_at = ?
       WHERE id = ?
     `).run(username, passwordHash, role, canCoordinate4thFleet ? 1 : 0, senatePosition, now, id);
+    return;
+  }
+  if (hasMustChangePassword) {
+    db.prepare(`
+      UPDATE users
+      SET username = ?, role = ?, can_coordinate_4th_fleet = ?, must_change_password = ?, senate_position = ?, updated_at = ?
+      WHERE id = ?
+    `).run(username, role, canCoordinate4thFleet ? 1 : 0, mustChangePasswordValue, senatePosition, now, id);
     return;
   }
   db.prepare(`
