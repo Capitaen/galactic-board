@@ -818,7 +818,10 @@ async function finishTutorialFlow(action) {
   }
   tutorialFlowState.shouldPrompt = false;
   closeOverlayModal('tutorialModal');
-  promptPasswordChangeIfNeeded();
+  shouldForcePasswordChange = Boolean(shouldForcePasswordChange || serverSync.session?.mustChangePassword);
+  window.setTimeout(() => {
+    promptPasswordChangeIfNeeded();
+  }, 60);
 }
 
 async function checkTutorialStatus() {

@@ -1296,8 +1296,11 @@ function renderPasswordChangeModal() {
 }
 
 function promptPasswordChangeIfNeeded() {
-  if (!currentAuthenticatedUsername || !shouldForcePasswordChange) return;
+  const mustPrompt = Boolean(shouldForcePasswordChange || serverSync.session?.mustChangePassword);
+  if (!currentAuthenticatedUsername || !mustPrompt) return;
+  shouldForcePasswordChange = mustPrompt;
   if (tutorialFlowState.shouldPrompt || activeOverlayModalId === 'tutorialModal') return;
+  if (activeOverlayModalId === 'passwordChangeModal') return;
   renderPasswordChangeModal();
   openOverlayModal('passwordChangeModal');
 }
