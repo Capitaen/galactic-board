@@ -1600,7 +1600,8 @@ function refreshRoleChrome() {
   radioCommandTabBtn.classList.toggle('hidden', !canManageRadioCommands() || (isAdminRole() && !adminModeEnabled));
   buildProjectsTabBtn.classList.remove('hidden');
   updateSectorDrawButton();
-  document.querySelector('[data-main-tab="fleetManagement"]')?.classList.toggle('hidden', currentRole() === 'Senat');
+  const canSeeGarFleets = currentRole() === 'Admin' || currentRole() === 'Republic Navy / GAR';
+  document.querySelector('[data-main-tab="fleetManagement"]')?.classList.toggle('hidden', !canSeeGarFleets);
   document.querySelector('[data-main-tab="shipyard"]')?.classList.toggle('hidden', currentRole() === 'Senat');
   const kusFleetLayerRow = document.querySelector('[data-layer="kusFleets"]')?.closest('.layer-row');
   if (kusFleetLayerRow) kusFleetLayerRow.classList.toggle('hidden', !(currentRole() === 'Admin' || currentRole() === 'Eventleiter / KUS'));
@@ -1610,7 +1611,8 @@ function refreshRoleChrome() {
   if (!canManageLogins() && activeMainTab === 'loginManager') setMainTab('map');
   if (!canViewAuditLogs() && activeMainTab === 'adminLogs') setMainTab('map');
   if (!canManageRadioCommands() && activeMainTab === 'radioCommandCenter') setMainTab('map');
-  if (currentRole() === 'Senat' && (activeMainTab === 'fleetManagement' || activeMainTab === 'shipyard')) setMainTab('buildProjects');
+  if (!canSeeGarFleets && activeMainTab === 'fleetManagement') setMainTab('map');
+  if (currentRole() === 'Senat' && activeMainTab === 'shipyard') setMainTab('buildProjects');
   const faction = getRoleFaction();
   if (!faction) {
     roleFactionBadge.classList.add('hidden');
@@ -1630,8 +1632,9 @@ function canEditFaction(faction) {
 function getFleetManagementVisibleFactions() {
   const role = currentRole();
   if (role === 'Republic Navy / GAR') return new Set(['GAR']);
-  if (role === 'Senat') return new Set(['GAR']);
+  if (role === 'Senat') return new Set();
   if (role === 'Eventleiter / KUS') return new Set(['KUS']);
+  if (role !== 'Admin') return new Set();
   if (fleetManagementFactionFilter === 'GAR') return new Set(['GAR']);
   if (fleetManagementFactionFilter === 'KUS') return new Set(['KUS']);
   return new Set(['GAR', 'KUS']);

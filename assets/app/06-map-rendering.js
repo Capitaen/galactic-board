@@ -189,7 +189,10 @@ function isFleetElementVisible(fleet) {
   if (!fleet) return false;
   if (normalizeFleetCommandRole(fleet.commandRole) === 'station') return Boolean(layers.stationMarkers);
   const role = currentRole();
-  if (fleet.faction === 'GAR') return Boolean(layers.garFleets);
+  if (fleet.faction === 'GAR') {
+    if (!(role === 'Admin' || role === 'Republic Navy / GAR')) return false;
+    return Boolean(layers.garFleets);
+  }
   if (fleet.faction === 'KUS') {
     if (!(role === 'Admin' || role === 'Eventleiter / KUS')) return false;
     return Boolean(layers.kusFleets);
