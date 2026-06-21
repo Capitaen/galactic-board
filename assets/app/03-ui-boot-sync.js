@@ -379,8 +379,30 @@ async function fetchAuditLog(options = {}) {
 
 function renderAuditLogModal() {
   if (!auditLogModalContent || !canViewAuditLogs()) return;
-  const logCards = auditLogAdminState.entries.length
-    ? auditLogAdminState.entries.map((entry) => `
+  const normalizeAuditSearch = (value) => String(value || '').trim().toLowerCase();
+  const actorOptions = [...new Set(auditLogAdminState.entries.map((entry) => String(entry.actorUsername || 'System').trim() || 'System'))]
+    .sort((left, right) => left.localeCompare(right, 'de', { sensitivity: 'base' }));
+  const actionOptions = [...new Set(auditLogAdminState.entries.map((entry) => String(entry.action || 'audit.entry').trim() || 'audit.entry'))]
+    .sort((left, right) => left.localeCompare(right, 'de', { sensitivity: 'base' }));
+  const filteredEntries = auditLogAdminState.entries.filter((entry) => {
+    const actorUsername = String(entry.actorUsername || 'System').trim() || 'System';
+    const action = String(entry.action || 'audit.entry').trim() || 'audit.entry';
+    if (auditLogAdminState.actorFilter !== 'all' && actorUsername !== auditLogAdminState.actorFilter) return false;
+    if (auditLogAdminState.actionFilter !== 'all' && action !== auditLogAdminState.actionFilter) return false;
+    const query = normalizeAuditSearch(auditLogAdminState.query);
+    if (!query) return true;
+    const haystack = normalizeAuditSearch([
+      actorUsername,
+      entry.actorRole || '',
+      action,
+      entry.entityType || '',
+      entry.entityId || '',
+      JSON.stringify(entry.payload || {})
+    ].join(' '));
+    return haystack.includes(query);
+  });
+  const logCards = filteredEntries.length
+    ? filteredEntries.map((entry) => `
       <article class="project-card">
         <h4>${escapeHtml(entry.action || 'audit.entry')}</h4>
         <p>${escapeHtml(entry.actorUsername || 'System')} • ${escapeHtml(entry.actorRole || 'Unbekannt')} • ${new Date(entry.createdAt || Date.now()).toLocaleString('de-DE')}</p>
@@ -402,12 +424,36 @@ function renderAuditLogModal() {
         </div>
       </div>
       <section class="overlay-section">
+        <div class="toolbar-row" style="margin-bottom:12px">
+          <input id="auditLogSearch" type="search" placeholder="Logs durchsuchen..." value="${escapeHtml(auditLogAdminState.query || '')}" autocomplete="off">
+          <select id="auditLogActorFilter">
+            <option value="all">Alle Personen</option>
+            ${actorOptions.map((actor) => `<option value="${escapeHtml(actor)}" ${auditLogAdminState.actorFilter === actor ? 'selected' : ''}>${escapeHtml(actor)}</option>`).join('')}
+          </select>
+          <select id="auditLogActionFilter">
+            <option value="all">Alle Aktionen</option>
+            ${actionOptions.map((action) => `<option value="${escapeHtml(action)}" ${auditLogAdminState.actionFilter === action ? 'selected' : ''}>${escapeHtml(action)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="muted" style="margin-bottom:10px">${filteredEntries.length} von ${auditLogAdminState.entries.length} Logs sichtbar.</div>
         ${auditLogAdminState.loading ? '<div class="muted-box">Logs werden geladen...</div>' : logCards}
       </section>
     </div>
   `;
   auditLogModalContent.querySelector('#refreshAuditLogBtn')?.addEventListener('click', () => {
     void fetchAuditLog();
+  });
+  auditLogModalContent.querySelector('#auditLogSearch')?.addEventListener('input', (event) => {
+    auditLogAdminState.query = event.target.value || '';
+    renderAuditLogModal();
+  });
+  auditLogModalContent.querySelector('#auditLogActorFilter')?.addEventListener('change', (event) => {
+    auditLogAdminState.actorFilter = event.target.value || 'all';
+    renderAuditLogModal();
+  });
+  auditLogModalContent.querySelector('#auditLogActionFilter')?.addEventListener('change', (event) => {
+    auditLogAdminState.actionFilter = event.target.value || 'all';
+    renderAuditLogModal();
   });
 }
 

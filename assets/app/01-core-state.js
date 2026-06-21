@@ -858,7 +858,10 @@ let radioCommandAdminState = {
 let auditLogAdminState = {
   entries: [],
   loading: false,
-  limit: 300
+  limit: 300,
+  query: '',
+  actorFilter: 'all',
+  actionFilter: 'all'
 };
 let currentAuthenticatedUsername = '';
 let viewerModeActive = true;
