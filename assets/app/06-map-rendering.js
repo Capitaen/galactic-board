@@ -147,12 +147,6 @@ function highlightPlanetSearchFocus(planetId) {
 function updateFleetElement(fleet) {
   const entry = fleetElements.get(fleet.id);
   if (!entry) return;
-  if (fleetClusterMembership.has(fleet.id) && !fleetTravelState.get(fleet.id)?.currentPosition) {
-    entry.classList.add('hidden');
-    entry.style.left = '';
-    entry.style.top = '';
-    return;
-  }
   const isSelected = selected?.type === 'fleet' && selected.id === fleet.id;
   const isMoving = isFleetTraveling(fleet);
   entry.className = 'fleet ' + fleet.faction
@@ -200,206 +194,11 @@ function isFleetElementVisible(fleet) {
   return true;
 }
 
-function getFleetClusterSource(fleets) {
-  const garCount = fleets.filter((fleet) => fleet.faction === 'GAR').length;
-  const kusCount = fleets.filter((fleet) => fleet.faction === 'KUS').length;
-  if (garCount && kusCount) return 'mixed';
-  return garCount ? 'GAR' : 'KUS';
-}
-
-function getFleetClusterKeyForFleet(fleet) {
-  const locationPlanetId = String(fleet?.locationPlanetId || fleet?.planetId || '').trim();
-  if (locationPlanetId) return `planet:${locationPlanetId}`;
-  const renderPosition = fleetRenderPositions.get(fleet?.id);
-  if (!renderPosition) return '';
-  return `pos:${Math.round(renderPosition.baseX || renderPosition.x || 0)}:${Math.round(renderPosition.baseY || renderPosition.y || 0)}`;
-}
-
-function getFleetClusterEligibleFleets() {
-  return state.fleets.filter((fleet) => {
-    if (!fleet || !isFleetElementVisible(fleet)) return false;
-    if (fleetTravelState.get(fleet.id)?.currentPosition) return false;
-    return Boolean(getFleetClusterKeyForFleet(fleet));
-  });
-}
-
-function rebuildFleetClusterState() {
-  fleetClusterMembership.clear();
-  fleetClusterGroups.clear();
-  const grouped = new Map();
-  getFleetClusterEligibleFleets().forEach((fleet) => {
-    const clusterKey = getFleetClusterKeyForFleet(fleet);
-    if (!clusterKey) return;
-    if (!grouped.has(clusterKey)) grouped.set(clusterKey, []);
-    grouped.get(clusterKey).push(fleet);
-  });
-  grouped.forEach((fleets, clusterKey) => {
-    if (fleets.length < 2) return;
-    const anchorFleet = fleets[0];
-    const anchorPosition = fleetRenderPositions.get(anchorFleet.id)
-      || getFleetDisplayPosition(anchorFleet)
-      || { x: anchorFleet.x, y: anchorFleet.y };
-    const orderedFleets = fleets
-      .slice()
-      .sort((left, right) => String(left.name || left.id).localeCompare(String(right.name || right.id), 'de', { sensitivity: 'base', numeric: true }));
-    const cluster = {
-      key: clusterKey,
-      x: Number(anchorPosition.baseX || anchorPosition.x || 0),
-      y: Number(anchorPosition.baseY || anchorPosition.y || 0),
-      source: getFleetClusterSource(orderedFleets),
-      fleets: orderedFleets
-    };
-    fleetClusterGroups.set(clusterKey, cluster);
-    orderedFleets.forEach((fleet) => {
-      fleetClusterMembership.set(fleet.id, clusterKey);
-    });
-  });
-}
-
 function closeFleetStackPanel() {
-  activeFleetClusterKey = '';
   if (!fleetStackPanel) return;
   fleetStackPanel.classList.remove('active');
   fleetStackPanel.style.display = 'none';
   fleetStackPanel.innerHTML = '';
-}
-
-function renderFleetStackPanel() {
-  if (!fleetStackPanel || !activeFleetClusterKey) {
-    closeFleetStackPanel();
-    return;
-  }
-  const cluster = fleetClusterGroups.get(activeFleetClusterKey);
-  if (!cluster?.fleets?.length) {
-    closeFleetStackPanel();
-    return;
-  }
-  const locationPlanetId = cluster.fleets[0]?.locationPlanetId || cluster.fleets[0]?.planetId || '';
-  const planetName = planetIndex.get(locationPlanetId)?.name || 'Unbekannter Standort';
-  fleetStackPanel.innerHTML = `
-    <div class="fleet-stack-panel-head">
-      <div>
-        <h3>Flotten am Standort</h3>
-        <p>${escapeHtml(planetName)} • ${cluster.fleets.length} Verbände</p>
-      </div>
-      <button type="button" class="mini-btn" onclick="closeFleetStackPanel()">Schließen</button>
-    </div>
-    <div class="fleet-stack-list">
-      ${cluster.fleets.map((fleet) => `
-        <article class="fleet-stack-entry" onclick="openFleetStackEntry('${fleet.id}')">
-          <div class="fleet-stack-entry-copy">
-            <strong>${escapeHtml(fleet.name || 'Unbenannter Verband')}</strong>
-            <small>${escapeHtml(fleet.faction || '—')}${fleet.assignment ? ` • ${escapeHtml(fleet.assignment)}` : ''}${fleet.commander || fleet.leader ? ` • ${escapeHtml(fleet.commander || fleet.leader)}` : ''}</small>
-          </div>
-          <div class="fleet-stack-entry-actions">
-            <button type="button" class="mini-btn" onclick="event.stopPropagation(); openFleetInManagement('${fleet.id}')">Management</button>
-          </div>
-        </article>
-      `).join('')}
-    </div>
-  `;
-  fleetStackPanel.classList.add('active');
-  fleetStackPanel.style.display = 'block';
-}
-
-function openFleetClusterPanel(clusterKey) {
-  if (!clusterKey || !fleetClusterGroups.has(clusterKey)) {
-    closeFleetStackPanel();
-    return;
-  }
-  activeFleetClusterKey = clusterKey;
-  renderFleetStackPanel();
-}
-
-function nearestDisplayedFleetCluster(x, y, radius = 26) {
-  let bestCluster = null;
-  let bestDistance = Number.POSITIVE_INFINITY;
-  fleetClusterGroups.forEach((cluster) => {
-    const dx = Number(cluster.x || 0) - Number(x || 0);
-    const dy = Number(cluster.y || 0) - Number(y || 0);
-    const distance = Math.hypot(dx, dy);
-    if (distance <= radius && distance < bestDistance) {
-      bestCluster = cluster;
-      bestDistance = distance;
-    }
-  });
-  return bestCluster;
-}
-
-function resolveWorldPointFromClient(clientX, clientY) {
-  const rect = world?.getBoundingClientRect?.();
-  if (!rect || !rect.width || !rect.height) return null;
-  return {
-    x: clamp(((clientX - rect.left) / rect.width) * WORLD_SIZE, 0, WORLD_SIZE),
-    y: clamp(((clientY - rect.top) / rect.height) * WORLD_SIZE, 0, WORLD_SIZE)
-  };
-}
-
-function handleFleetLayerClusterClick(event) {
-  const clusterTrigger = event.target.closest('[data-cluster-key]');
-  if (clusterTrigger?.dataset?.clusterKey) {
-    openFleetClusterPanel(clusterTrigger.dataset.clusterKey);
-    return;
-  }
-  if (event.target.closest('.fleet') && !event.target.closest('.fleet-cluster')) return;
-  const point = resolveWorldPointFromClient(event.clientX, event.clientY);
-  if (!point) return;
-  const nearestCluster = nearestDisplayedFleetCluster(point.x, point.y, 34);
-  if (!nearestCluster?.key) return;
-  openFleetClusterPanel(nearestCluster.key);
-}
-
-function ensureFleetClusterElements() {
-  const seen = new Set();
-  const frag = document.createDocumentFragment();
-  fleetClusterGroups.forEach((cluster, clusterKey) => {
-    seen.add(clusterKey);
-    let el = fleetClusterElements.get(clusterKey);
-    if (!el) {
-      el = document.createElement('button');
-      el.type = 'button';
-      el.dataset.clusterKey = clusterKey;
-      el.className = 'fleet fleet-cluster';
-      el.innerHTML = '<img src="" alt=""><div class="fleet-cluster-count"></div>';
-      el.addEventListener('pointerdown', (event) => {
-        if (event.button !== 0) return;
-        event.preventDefault();
-        event.stopPropagation();
-        openFleetClusterPanel(el.dataset.clusterKey || clusterKey);
-      });
-      el.addEventListener('click', (event) => {
-        event.stopPropagation();
-        openFleetClusterPanel(clusterKey);
-      });
-      fleetClusterElements.set(clusterKey, el);
-      frag.appendChild(el);
-    }
-    el.className = `fleet fleet-cluster${cluster.source === 'mixed' ? ' fleet-cluster-mixed' : ''}${activeFleetClusterKey === clusterKey ? ' selected' : ''}`;
-    el.style.left = `${cluster.x}px`;
-    el.style.top = `${cluster.y}px`;
-    el.title = `${cluster.fleets.length} Flotten auf ${planetIndex.get(cluster.fleets[0]?.locationPlanetId || cluster.fleets[0]?.planetId || '')?.name || 'diesem Standort'}`;
-    const iconFaction = cluster.source === 'KUS' ? 'KUS' : 'GAR';
-    const img = el.querySelector('img');
-    if (img) img.src = iconFor({ faction: iconFaction });
-    const count = el.querySelector('.fleet-cluster-count');
-    if (count) count.textContent = String(cluster.fleets.length);
-  });
-  if (frag.childNodes.length) fleetLayer.appendChild(frag);
-  for (const [clusterKey, el] of fleetClusterElements.entries()) {
-    if (seen.has(clusterKey)) continue;
-    el.remove();
-    fleetClusterElements.delete(clusterKey);
-  }
-  if (activeFleetClusterKey && !fleetClusterGroups.has(activeFleetClusterKey)) {
-    closeFleetStackPanel();
-  } else if (activeFleetClusterKey) {
-    renderFleetStackPanel();
-  }
-}
-
-function refreshFleetClusterSelectionState() {
-  if (!activeFleetClusterKey) return;
-  renderFleetStackPanel();
 }
 
 function ensurePlanetElements() {
@@ -445,7 +244,6 @@ function ensurePlanetElements() {
 
 function ensureFleetElements() {
   rebuildFleetRenderPositions();
-  rebuildFleetClusterState();
   const seen = new Set();
   const frag = document.createDocumentFragment();
   state.fleets.forEach((fleet) => {
@@ -465,7 +263,6 @@ function ensureFleetElements() {
     updateFleetElement(fleet);
   });
   if (frag.childNodes.length) fleetLayer.appendChild(frag);
-  ensureFleetClusterElements();
   for (const [fleetId, el] of fleetElements.entries()) {
     if (!seen.has(fleetId)) {
       el.remove();

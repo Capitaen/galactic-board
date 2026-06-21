@@ -685,26 +685,12 @@ viewport.addEventListener('pointerdown', (event) => {
   }
   if (event.button !== 0) return;
   closeContextMenu();
-  const directClusterTarget = event.target.closest('.fleet-cluster');
-  if (directClusterTarget?.dataset?.clusterKey) {
-    event.preventDefault();
-    event.stopPropagation();
-    openFleetClusterPanel(directClusterTarget.dataset.clusterKey);
-    return;
-  }
   if (event.target.closest('.planet, .marker, .fleet, #infoPanel, #fleetStackPanel, #legendPanel, #layersPanel, #topbar, .toolstack, #homeBtn, #muteBtn, #contextMenu')) return;
   const worldPos = eventToWorld(event);
   if (isAdminRole() && activeSectorDraft) {
     event.preventDefault();
     event.stopPropagation();
     handleSectorDraftMapClick(worldPos);
-    return;
-  }
-  const clickedCluster = nearestDisplayedFleetCluster(worldPos.x, worldPos.y, 24);
-  if (clickedCluster) {
-    event.preventDefault();
-    event.stopPropagation();
-    openFleetClusterPanel(clickedCluster.key);
     return;
   }
   const clickedPlanet = nearestDisplayedPlanet(worldPos.x, worldPos.y, 22);
@@ -961,7 +947,7 @@ document.addEventListener('pointerdown', (event) => {
   closeFleetJumpResults();
   closeFleetManagementSearchResults(false);
   if (!event.target.closest('#contextMenu')) closeContextMenu();
-  if (!event.target.closest('#fleetStackPanel') && !event.target.closest('.fleet-cluster')) closeFleetStackPanel();
+  if (!event.target.closest('#fleetStackPanel')) closeFleetStackPanel();
 });
 document.addEventListener('click', (event) => {
   const closeTrigger = event.target.closest('[data-close-modal]');

@@ -51,7 +51,6 @@ try {
 }
 window.addEventListener('resize', syncMobileOrientationUi);
 window.addEventListener('orientationchange', syncMobileOrientationUi);
-fleetLayer?.addEventListener('click', handleFleetLayerClusterClick);
 infoPanel?.addEventListener('click', (event) => {
   const savePlanetButton = event.target.closest('[data-save-planet-id]');
   if (savePlanetButton?.dataset?.savePlanetId) {
