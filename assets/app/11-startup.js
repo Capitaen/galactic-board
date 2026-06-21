@@ -51,6 +51,7 @@ try {
 }
 window.addEventListener('resize', syncMobileOrientationUi);
 window.addEventListener('orientationchange', syncMobileOrientationUi);
+fleetLayer?.addEventListener('click', handleFleetLayerClusterClick);
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) {
     syncMobileOrientationUi();

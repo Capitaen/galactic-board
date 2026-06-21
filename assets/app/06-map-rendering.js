@@ -326,6 +326,29 @@ function nearestDisplayedFleetCluster(x, y, radius = 26) {
   return bestCluster;
 }
 
+function resolveWorldPointFromClient(clientX, clientY) {
+  const rect = world?.getBoundingClientRect?.();
+  if (!rect || !rect.width || !rect.height) return null;
+  return {
+    x: clamp(((clientX - rect.left) / rect.width) * WORLD_SIZE, 0, WORLD_SIZE),
+    y: clamp(((clientY - rect.top) / rect.height) * WORLD_SIZE, 0, WORLD_SIZE)
+  };
+}
+
+function handleFleetLayerClusterClick(event) {
+  const clusterTrigger = event.target.closest('[data-cluster-key]');
+  if (clusterTrigger?.dataset?.clusterKey) {
+    openFleetClusterPanel(clusterTrigger.dataset.clusterKey);
+    return;
+  }
+  if (event.target.closest('.fleet') && !event.target.closest('.fleet-cluster')) return;
+  const point = resolveWorldPointFromClient(event.clientX, event.clientY);
+  if (!point) return;
+  const nearestCluster = nearestDisplayedFleetCluster(point.x, point.y, 34);
+  if (!nearestCluster?.key) return;
+  openFleetClusterPanel(nearestCluster.key);
+}
+
 function ensureFleetClusterElements() {
   const seen = new Set();
   const frag = document.createDocumentFragment();
