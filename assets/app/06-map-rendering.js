@@ -338,10 +338,6 @@ function ensureFleetClusterElements() {
       el.dataset.clusterKey = clusterKey;
       el.className = 'fleet fleet-cluster';
       el.innerHTML = '<img src="" alt=""><div class="fleet-cluster-count"></div>';
-      el.addEventListener('pointerdown', (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-      });
       el.addEventListener('click', (event) => {
         event.stopPropagation();
         openFleetClusterPanel(clusterKey);
