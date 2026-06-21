@@ -411,6 +411,22 @@ function createSession(user) {
   return token;
 }
 
+function readUserSessionSnapshot(userId) {
+  if (!userId) return null;
+  return db.prepare(`
+    SELECT
+      id,
+      username,
+      role,
+      can_coordinate_4th_fleet AS canCoordinate4thFleet,
+      must_change_password AS mustChangePassword,
+      senate_position AS senatePosition
+    FROM users
+    WHERE id = ?
+    LIMIT 1
+  `).get(userId) || null;
+}
+
 function refreshUserSessions(userId, user) {
   sessions.forEach((session, token) => {
     if (session.id !== userId) return;
@@ -427,7 +443,24 @@ function refreshUserSessions(userId, user) {
 
 function getSession(req) {
   const token = req.cookies?.[COOKIE_NAME];
-  return token ? sessions.get(token) || null : null;
+  if (!token) return null;
+  const session = sessions.get(token) || null;
+  if (!session?.id) return session;
+  const liveUser = readUserSessionSnapshot(session.id);
+  if (!liveUser) {
+    sessions.delete(token);
+    return null;
+  }
+  const syncedSession = {
+    ...session,
+    username: liveUser.username,
+    role: liveUser.role,
+    canCoordinate4thFleet: Boolean(liveUser.canCoordinate4thFleet),
+    mustChangePassword: Boolean(liveUser.mustChangePassword),
+    senatePosition: liveUser.senatePosition || ''
+  };
+  sessions.set(token, syncedSession);
+  return syncedSession;
 }
 
 function getTutorialSeenKeyHash(req, userId = '') {
@@ -932,7 +965,24 @@ function parseCookieHeader(rawCookieHeader) {
 function getSessionForSocket(socket) {
   const cookies = parseCookieHeader(socket.handshake.headers?.cookie || '');
   const token = cookies[COOKIE_NAME];
-  return token ? sessions.get(token) || null : null;
+  if (!token) return null;
+  const session = sessions.get(token) || null;
+  if (!session?.id) return session;
+  const liveUser = readUserSessionSnapshot(session.id);
+  if (!liveUser) {
+    sessions.delete(token);
+    return null;
+  }
+  const syncedSession = {
+    ...session,
+    username: liveUser.username,
+    role: liveUser.role,
+    canCoordinate4thFleet: Boolean(liveUser.canCoordinate4thFleet),
+    mustChangePassword: Boolean(liveUser.mustChangePassword),
+    senatePosition: liveUser.senatePosition || ''
+  };
+  sessions.set(token, syncedSession);
+  return syncedSession;
 }
 
 function syncSocketSession(socket) {
