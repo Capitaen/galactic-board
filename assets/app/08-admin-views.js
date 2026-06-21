@@ -600,7 +600,7 @@ async function fetchFirstAvailableServerReloadEndpoint(endpoints, options = {}) 
 }
 
 function canManageServerReload() {
-  return LOGIN_ROLE_DEFINITIONS[currentAssignedRole()]?.level === 'super-global';
+  return LOGIN_ROLE_DEFINITIONS[currentAssignedRole()]?.level === 'global';
 }
 
 function clearServerReloadPollTimer() {
@@ -810,7 +810,7 @@ function renderLoginManagerView() {
     void fetchLoginManagerUsers({ silent: true });
   }
   const actorDefinition = LOGIN_ROLE_DEFINITIONS[currentAssignedRole()];
-  const isGlobalManager = actorDefinition.level === 'super-global' || actorDefinition.level === 'global';
+  const isGlobalManager = actorDefinition.level === 'global';
   if (canManageServerReload()) scheduleServerReloadPoll();
   else clearServerReloadPollTimer();
   const visibleFactions = isGlobalManager
@@ -828,7 +828,7 @@ function renderLoginManagerView() {
     serverReloadAdminState.startedAt ? `Start: ${new Date(serverReloadAdminState.startedAt).toLocaleString('de-DE')}` : '',
     serverReloadAdminState.finishedAt ? `Ende: ${new Date(serverReloadAdminState.finishedAt).toLocaleString('de-DE')}` : ''
   ].filter(Boolean).join(' • ');
-  const serverReloadPanel = actorDefinition.level === 'super-global' ? `
+  const serverReloadPanel = actorDefinition.level === 'global' ? `
     <div class="workspace-section">
       <div class="workspace-card">
         <div class="workspace-head compact">
@@ -858,7 +858,7 @@ function renderLoginManagerView() {
   const manageableRoles = getManageableLoginRoles();
   const getLoginManagerSortWeight = (user) => {
     const level = LOGIN_ROLE_DEFINITIONS[user?.role]?.level || '';
-    if (['super-global', 'global', 'faction-admin', 'admin'].includes(level)) return 0;
+    if (['global', 'faction-admin', 'admin'].includes(level)) return 0;
     if (level === 'member') return 1;
     return 2;
   };
@@ -874,11 +874,11 @@ function renderLoginManagerView() {
     const userFaction = LOGIN_FACTIONS.find((faction) => faction.id === userDefinition?.faction);
     const categoryRoles = userFaction
       ? [userFaction.adminRole, userFaction.memberRole]
-      : ['Superadministrator', 'Admin', 'Viewer'];
+      : ['Admin', 'Viewer'];
     const roleOptions = isGlobalManager
       ? categoryRoles.filter((candidateRole) => manageableRoles.includes(candidateRole) || candidateRole === selectedRole)
       : (user.isDraft || manageableRoles.includes(selectedRole) ? manageableRoles : [selectedRole]);
-    const editable = user.isDraft || actorDefinition.level === 'super-global' || manageableRoles.includes(selectedRole);
+    const editable = user.isDraft || manageableRoles.includes(selectedRole);
     const extraField = userDefinition?.faction === 'navy'
       ? `<label class="layer-row" style="border:0;padding:0"><input id="authFleetCoord_${user.id}" type="checkbox" ${userDraft?.canCoordinate4thFleet ? 'checked' : ''} ${editable ? `onchange="setLoginManagerUserExtraPreview('${user.id}','canCoordinate4thFleet', this.checked)"` : 'disabled'}> 4th Flottenkoordination</label>`
       : userDefinition?.faction === 'senate'
@@ -946,7 +946,7 @@ function renderLoginManagerView() {
       ${isGlobalManager ? `
       <div class="workspace-card">
         <div class="login-faction-head">
-          <div><h3>System / Global</h3><p>Superadministratoren, globale Admins und reine Viewer.</p></div>
+          <div><h3>System / Global</h3><p>Globale Admins und reine Viewer.</p></div>
           <button type="button" class="mini-btn primary" onclick="createLoginManagerUser('Viewer')">Login anlegen</button>
         </div>
         <div class="login-manager-grid login-manager-head">
@@ -1170,7 +1170,7 @@ function createRadioPermissionDraft() {
 }
 
 function getDerivedRadioPermissionRole(permission) {
-  return ['Superadministrator', 'Admin', 'Republic Navy Admin'].includes(permission?.linkedUserRole)
+  return ['Admin', 'Republic Navy Admin'].includes(permission?.linkedUserRole)
     ? 'admiralty'
     : 'fleet_officer';
 }

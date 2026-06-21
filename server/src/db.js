@@ -1832,14 +1832,14 @@ export function createDb(projectRoot) {
     );
   }
 
-  const superAdminNames = ['Burnout', 'Shoot'];
-  const promoteSuperAdmin = db.prepare(`
+  const globalAdminNames = ['Burnout', 'Shoot'];
+  const promoteGlobalAdmin = db.prepare(`
     UPDATE users
     SET role = ?, updated_at = ?
     WHERE lower(username) = lower(?)
   `);
-  superAdminNames.forEach((username) => {
-    promoteSuperAdmin.run('Superadministrator', now, username);
+  globalAdminNames.forEach((username) => {
+    promoteGlobalAdmin.run('Admin', now, username);
   });
 
   return db;

@@ -730,7 +730,6 @@ let PLANET_DEMOGRAPHIC_CATALOG = window.PLANET_DEMOGRAPHICS || {};
 const planetInfoCardCache = new Map();
 let activePlanetInfoRequestId = 0;
 const LOGIN_ROLE_DEFINITIONS = {
-  Superadministrator: { label: 'Superadministrator', baseRole: 'Admin', faction: 'system', level: 'super-global' },
   Admin: { label: 'Globaler Admin', baseRole: 'Admin', faction: 'system', level: 'global' },
   'Republic Navy Admin': { label: 'Republic Navy Admin', baseRole: 'Republic Navy / GAR', faction: 'navy', level: 'admin' },
   'Republic Navy / GAR': { label: 'Republic Navy', baseRole: 'Republic Navy / GAR', faction: 'navy', level: 'member' },

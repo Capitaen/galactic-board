@@ -171,8 +171,7 @@ function renderShipyardView() {
 function canBuildMineProjects() {
   const assignedRole = currentAssignedRole();
   const senatePosition = serverSync.session?.senatePosition || '';
-  return assignedRole === 'Superadministrator'
-    || assignedRole === 'Admin'
+  return assignedRole === 'Admin'
     || assignedRole === 'Galaktischer Senats Admin'
     || (assignedRole === 'Senat' && ['Vizekanzler', 'Regierungsdirektor', 'Minister'].includes(senatePosition));
 }
@@ -252,7 +251,7 @@ function renderBuildProjectsView() {
     <div class="workspace-section workspace-columns">
       <div class="workspace-card">
         <h3>Infrastrukturprojekt</h3>
-        <p>${canStartMineProject ? 'Wähle einen republikanischen Planeten, eine Gebäudekategorie und einen freien Slot. Jedes Gebäude belegt genau einen Slot.' : 'Nur Superadministratoren, globale Admins, Senats-Admins sowie Vizekanzler, Regierungsdirektor und Minister können GAR-Infrastrukturprojekte starten.'}</p>
+        <p>${canStartMineProject ? 'Wähle einen republikanischen Planeten, eine Gebäudekategorie und einen freien Slot. Jedes Gebäude belegt genau einen Slot.' : 'Nur globale Admins, Senats-Admins sowie Vizekanzler, Regierungsdirektor und Minister können GAR-Infrastrukturprojekte starten.'}</p>
         <div class="form-row">
           <label>Planet</label>
           <div class="inline-search-wrap">
