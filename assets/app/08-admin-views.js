@@ -554,6 +554,17 @@ let serverReloadPollTimer = 0;
 const SERVER_RELOAD_STATUS_ENDPOINTS = ['/api/admin/server-reload-status', '/api/server-reload-status'];
 const SERVER_RELOAD_TRIGGER_ENDPOINTS = ['/api/admin/server-reload', '/api/server-reload'];
 
+async function fetchLoginManagerUsersFromBootstrap() {
+  const response = await fetch('/api/bootstrap', {
+    credentials: 'include'
+  });
+  const payload = await response.json();
+  if (!response.ok) throw new Error(payload.error || 'Login-Liste konnte nicht geladen werden.');
+  updateServerSession(payload.me || { id: null, username: '', role: 'Viewer' });
+  syncAuthUsersFromCampaign(payload.campaign || {});
+  return Array.isArray(payload?.campaign?.authUsers) ? payload.campaign.authUsers : [];
+}
+
 async function fetchLoginManagerUsers(options = {}) {
   if (!canManageLogins() || loginManagerUsersState.loading) return;
   const { silent = false } = options;
@@ -563,8 +574,12 @@ async function fetchLoginManagerUsers(options = {}) {
       credentials: 'include'
     });
     const payload = await response.json();
-    if (!response.ok) throw new Error(payload.error || 'Login-Liste konnte nicht geladen werden.');
-    state.authUsers = Array.isArray(payload.users) ? payload.users : [];
+    if (response.status === 404) {
+      await fetchLoginManagerUsersFromBootstrap();
+    } else {
+      if (!response.ok) throw new Error(payload.error || 'Login-Liste konnte nicht geladen werden.');
+      state.authUsers = Array.isArray(payload.users) ? payload.users : [];
+    }
     loginManagerUsersState.loaded = true;
     if (activeMainTab === 'loginManager') renderLoginManagerView();
   } catch (error) {

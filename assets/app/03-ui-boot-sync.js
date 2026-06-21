@@ -363,12 +363,38 @@ async function fetchAuditLog(options = {}) {
     if (activeMainTab === 'adminLogs') renderAdminAuditLogView();
   }
   try {
-    const response = await fetch(`/api/admin/audit-log?limit=${encodeURIComponent(auditLogAdminState.limit || 300)}`, {
-      credentials: 'include'
-    });
-    const payload = await response.json();
-    if (!response.ok) throw new Error(payload.error || 'Logs konnten nicht geladen werden.');
-    auditLogAdminState.entries = Array.isArray(payload.entries) ? payload.entries : [];
+    const endpoints = [
+      `/api/admin/audit-log?limit=${encodeURIComponent(auditLogAdminState.limit || 300)}`,
+      `/api/audit-log?limit=${encodeURIComponent(auditLogAdminState.limit || 300)}`
+    ];
+    let resolved = false;
+    let routeMissing = false;
+    for (const endpoint of endpoints) {
+      const response = await fetch(endpoint, {
+        credentials: 'include'
+      });
+      let payload = {};
+      try {
+        payload = await response.json();
+      } catch {
+        payload = {};
+      }
+      if (response.status === 404) {
+        routeMissing = true;
+        continue;
+      }
+      if (!response.ok) throw new Error(payload.error || 'Logs konnten nicht geladen werden.');
+      auditLogAdminState.entries = Array.isArray(payload.entries) ? payload.entries : [];
+      resolved = true;
+      break;
+    }
+    if (!resolved) {
+      auditLogAdminState.entries = [];
+      if (routeMissing) {
+        throw new Error('System-Logs sind auf dem laufenden Serverstand noch nicht verfügbar.');
+      }
+      throw new Error('Logs konnten nicht geladen werden.');
+    }
     auditLogAdminState.loading = false;
     if (auditLogModal?.classList.contains('active')) renderAuditLogModal();
     if (activeMainTab === 'adminLogs') renderAdminAuditLogView();
@@ -1101,7 +1127,7 @@ function applyServerCampaign(campaign, revision = serverRevision, options = {}) 
 function syncAuthUsersFromCampaign(campaign) {
   if (!campaign || typeof campaign !== 'object') return;
   if (!Array.isArray(campaign.authUsers)) return;
-  state.authUsers = campaign.authUsers
+  const nextUsers = campaign.authUsers
     .map((user) => ({
       id: user.id || `auth_${Math.random().toString(36).slice(2, 10)}`,
       username: String(user.username || '').trim(),
@@ -1112,6 +1138,12 @@ function syncAuthUsersFromCampaign(campaign) {
       senatePosition: SENATE_POSITIONS.includes(user.senatePosition) ? user.senatePosition : ''
     }))
     .filter((user) => user.username);
+  if (nextUsers.length || !state.authUsers.length) {
+    state.authUsers = nextUsers;
+  }
+  if (canManageLogins()) {
+    loginManagerUsersState.loaded = loginManagerUsersState.loaded || nextUsers.length > 0;
+  }
   if (activeMainTab === 'loginManager' && canManageLogins()) renderLoginManagerView();
 }
 
