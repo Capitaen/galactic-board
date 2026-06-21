@@ -511,6 +511,33 @@ async function saveLoginManagerCreateDraft() {
   }
 }
 
+function getLoginManagerEditDraft(user) {
+  if (!user) return null;
+  const existingDraft = loginManagerEditDrafts[user.id];
+  if (existingDraft) return existingDraft;
+  const nextDraft = {
+    role: user.role,
+    canCoordinate4thFleet: Boolean(user.canCoordinate4thFleet),
+    senatePosition: user.senatePosition || ''
+  };
+  loginManagerEditDrafts[user.id] = nextDraft;
+  return nextDraft;
+}
+
+function updateLoginManagerUserDraft(id, patch = {}) {
+  const user = state.authUsers.find((entry) => entry.id === id);
+  if (!user) return null;
+  const nextDraft = {
+    ...getLoginManagerEditDraft(user),
+    ...patch
+  };
+  const roleDefinition = LOGIN_ROLE_DEFINITIONS[nextDraft.role];
+  if (roleDefinition?.faction !== 'navy') nextDraft.canCoordinate4thFleet = false;
+  if (roleDefinition?.faction !== 'senate') nextDraft.senatePosition = '';
+  loginManagerEditDrafts[id] = nextDraft;
+  return nextDraft;
+}
+
 let serverReloadAdminState = {
   status: 'idle',
   requestedBy: '',
@@ -672,13 +699,14 @@ async function saveLoginManagerUser(id) {
   if (!canManageLogins()) return;
   const user = state.authUsers.find((entry) => entry.id === id);
   if (!user) return;
+  const draft = getLoginManagerEditDraft(user);
   const username = user.username;
-  const role = document.getElementById(`authRole_${id}`)?.value || 'Viewer';
+  const role = document.getElementById(`authRole_${id}`)?.value || draft?.role || 'Viewer';
   const roleDefinition = LOGIN_ROLE_DEFINITIONS[role];
   const canCoordinate4thFleetValue = roleDefinition?.faction === 'navy'
-    && Boolean(document.getElementById(`authFleetCoord_${id}`)?.checked);
+    && Boolean(document.getElementById(`authFleetCoord_${id}`)?.checked ?? draft?.canCoordinate4thFleet);
   const senatePosition = roleDefinition?.faction === 'senate'
-    ? (document.getElementById(`authSenatePosition_${id}`)?.value || '')
+    ? (document.getElementById(`authSenatePosition_${id}`)?.value || draft?.senatePosition || '')
     : '';
   try {
     const requestBody = {
@@ -696,6 +724,7 @@ async function saveLoginManagerUser(id) {
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.error || 'Login konnte nicht gespeichert werden.');
     state.authUsers = payload.users || [];
+    delete loginManagerEditDrafts[id];
     renderLoginManagerView();
     setStatus(`Login gespeichert: ${username}`);
   } catch (error) {
@@ -704,12 +733,19 @@ async function saveLoginManagerUser(id) {
 }
 
 function setLoginManagerUserRolePreview(id, role) {
-  const user = state.authUsers.find((entry) => entry.id === id);
-  if (!user) return;
-  user.role = LOGIN_ROLES.includes(role) ? role : user.role;
-  if (LOGIN_ROLE_DEFINITIONS[user.role]?.faction !== 'navy') user.canCoordinate4thFleet = false;
-  if (LOGIN_ROLE_DEFINITIONS[user.role]?.faction !== 'senate') user.senatePosition = '';
+  const nextRole = LOGIN_ROLES.includes(role) ? role : 'Viewer';
+  updateLoginManagerUserDraft(id, { role: nextRole });
   renderLoginManagerView();
+}
+
+function setLoginManagerUserExtraPreview(id, field, value) {
+  if (field === 'canCoordinate4thFleet') {
+    updateLoginManagerUserDraft(id, { canCoordinate4thFleet: Boolean(value) });
+    return;
+  }
+  if (field === 'senatePosition') {
+    updateLoginManagerUserDraft(id, { senatePosition: value || '' });
+  }
 }
 
 async function deleteLoginManagerUser(id) {
@@ -801,39 +837,41 @@ function renderLoginManagerView() {
     return String(left?.username || '').localeCompare(String(right?.username || ''), 'de', { sensitivity: 'base' });
   });
   const renderUserRows = (users) => users.length ? users.map((user) => {
-    const userDefinition = LOGIN_ROLE_DEFINITIONS[user.role];
+    const userDraft = getLoginManagerEditDraft(user);
+    const selectedRole = LOGIN_ROLES.includes(userDraft?.role) ? userDraft.role : user.role;
+    const userDefinition = LOGIN_ROLE_DEFINITIONS[selectedRole];
     const userFaction = LOGIN_FACTIONS.find((faction) => faction.id === userDefinition?.faction);
     const categoryRoles = userFaction
       ? [userFaction.adminRole, userFaction.memberRole]
       : ['Superadministrator', 'Admin', 'Viewer'];
     const roleOptions = isGlobalManager
-      ? categoryRoles.filter((candidateRole) => manageableRoles.includes(candidateRole) || candidateRole === user.role)
-      : (user.isDraft || manageableRoles.includes(user.role) ? manageableRoles : [user.role]);
+      ? categoryRoles.filter((candidateRole) => manageableRoles.includes(candidateRole) || candidateRole === selectedRole)
+      : (user.isDraft || manageableRoles.includes(selectedRole) ? manageableRoles : [selectedRole]);
     const editable = user.isDraft || manageableRoles.includes(user.role);
     const extraField = userDefinition?.faction === 'navy'
-      ? `<label class="layer-row" style="border:0;padding:0"><input id="authFleetCoord_${user.id}" type="checkbox" ${user.canCoordinate4thFleet ? 'checked' : ''} ${editable ? '' : 'disabled'}> 4th Flottenkoordination</label>`
+      ? `<label class="layer-row" style="border:0;padding:0"><input id="authFleetCoord_${user.id}" type="checkbox" ${userDraft?.canCoordinate4thFleet ? 'checked' : ''} ${editable ? `onchange="setLoginManagerUserExtraPreview('${user.id}','canCoordinate4thFleet', this.checked)"` : 'disabled'}> 4th Flottenkoordination</label>`
       : userDefinition?.faction === 'senate'
-        ? `<select id="authSenatePosition_${user.id}" ${editable ? '' : 'disabled'}>
+        ? `<select id="authSenatePosition_${user.id}" ${editable ? `onchange="setLoginManagerUserExtraPreview('${user.id}','senatePosition', this.value)"` : 'disabled'}>
             <option value="">Keine Senatsfunktion</option>
-            ${SENATE_POSITIONS.map((position) => `<option value="${position}" ${user.senatePosition === position ? 'selected' : ''}>${position}</option>`).join('')}
+            ${SENATE_POSITIONS.map((position) => `<option value="${position}" ${userDraft?.senatePosition === position ? 'selected' : ''}>${position}</option>`).join('')}
           </select>`
         : '<span class="muted">Keine Zusatzfunktion</span>';
     return `
       <div class="login-manager-grid login-manager-row">
         <div class="login-manager-user">
           <strong>${escapeLoginManagerText(user.username)}</strong>
-          ${user.mustChangePassword ? '<span class="login-badge-pending">Passwortwechsel offen</span>' : `<small>${escapeLoginManagerText(LOGIN_ROLE_DEFINITIONS[user.role]?.label || user.role)}</small>`}
+          ${user.mustChangePassword ? '<span class="login-badge-pending">Passwortwechsel offen</span>' : `<small>${escapeLoginManagerText(LOGIN_ROLE_DEFINITIONS[selectedRole]?.label || selectedRole)}</small>`}
         </div>
         <div>
           <select id="authRole_${user.id}" ${editable ? `onchange="setLoginManagerUserRolePreview('${user.id}', this.value)"` : 'disabled'}>
-            ${roleOptions.map((role) => `<option value="${role}" ${user.role === role ? 'selected' : ''}>${LOGIN_ROLE_DEFINITIONS[role]?.label || role}</option>`).join('')}
+            ${roleOptions.map((role) => `<option value="${role}" ${selectedRole === role ? 'selected' : ''}>${LOGIN_ROLE_DEFINITIONS[role]?.label || role}</option>`).join('')}
           </select>
         </div>
         <div class="login-manager-extra">${extraField}</div>
         <div class="login-manager-actions">
           ${editable ? `
-            <button class="mini-btn primary" onclick="saveLoginManagerUser('${user.id}')">Speichern</button>
-            <button class="mini-btn danger" onclick="deleteLoginManagerUser('${user.id}')">Löschen</button>
+            <button type="button" class="mini-btn primary" onclick="saveLoginManagerUser('${user.id}')">Speichern</button>
+            <button type="button" class="mini-btn danger" onclick="deleteLoginManagerUser('${user.id}')">Löschen</button>
           ` : '<span class="muted">Geschützt</span>'}
         </div>
       </div>
@@ -850,7 +888,7 @@ function renderLoginManagerView() {
             <h3>${faction.label}</h3>
             <p class="login-main-admin">Fraktions-Admins: ${factionAdmins.length ? factionAdmins.map((user) => escapeLoginManagerText(user.username)).join(', ') : 'Noch nicht vergeben'}</p>
           </div>
-          ${createRole ? `<button class="mini-btn primary" onclick="createLoginManagerUser('${createRole}')">Login anlegen</button>` : ''}
+          ${createRole ? `<button type="button" class="mini-btn primary" onclick="createLoginManagerUser('${createRole}')">Login anlegen</button>` : ''}
         </div>
         <div class="login-manager-grid login-manager-head">
           <div>Benutzername</div>
@@ -877,7 +915,7 @@ function renderLoginManagerView() {
       <div class="workspace-card">
         <div class="login-faction-head">
           <div><h3>System / Global</h3><p>Superadministratoren, globale Admins und reine Viewer.</p></div>
-          <button class="mini-btn primary" onclick="createLoginManagerUser('Viewer')">Login anlegen</button>
+          <button type="button" class="mini-btn primary" onclick="createLoginManagerUser('Viewer')">Login anlegen</button>
         </div>
         <div class="login-manager-grid login-manager-head">
           <div>Benutzername</div>

@@ -860,9 +860,11 @@ let auditLogAdminState = {
   loading: false,
   limit: 300,
   query: '',
-  actorFilter: 'all',
-  actionFilter: 'all'
+  actorFilter: '',
+  actionFilter: 'all',
+  entityFilter: 'all'
 };
+let loginManagerEditDrafts = {};
 let currentAuthenticatedUsername = '';
 let viewerModeActive = true;
 let pendingLoginAttempt = null;

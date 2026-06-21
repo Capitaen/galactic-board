@@ -137,6 +137,7 @@ window.setFleetManifestSearchQuery = setFleetManifestSearchQuery;
 window.syncFleetParentSelectState = syncFleetParentSelectState;
 window.createLoginManagerUser = createLoginManagerUser;
 window.saveLoginManagerUser = saveLoginManagerUser;
+window.setLoginManagerUserExtraPreview = setLoginManagerUserExtraPreview;
 window.deleteLoginManagerUser = deleteLoginManagerUser;
 window.fetchRadioCommandCenterData = fetchRadioCommandCenterData;
 window.createRadioPermissionDraft = createRadioPermissionDraft;

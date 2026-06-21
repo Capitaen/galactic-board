@@ -384,18 +384,22 @@ function renderAuditLogModal() {
     .sort((left, right) => left.localeCompare(right, 'de', { sensitivity: 'base' }));
   const actionOptions = [...new Set(auditLogAdminState.entries.map((entry) => String(entry.action || 'audit.entry').trim() || 'audit.entry'))]
     .sort((left, right) => left.localeCompare(right, 'de', { sensitivity: 'base' }));
+  const entityOptions = [...new Set(auditLogAdminState.entries.map((entry) => String(entry.entityType || 'entity').trim() || 'entity'))]
+    .sort((left, right) => left.localeCompare(right, 'de', { sensitivity: 'base' }));
   const filteredEntries = auditLogAdminState.entries.filter((entry) => {
     const actorUsername = String(entry.actorUsername || 'System').trim() || 'System';
     const action = String(entry.action || 'audit.entry').trim() || 'audit.entry';
-    if (auditLogAdminState.actorFilter !== 'all' && actorUsername !== auditLogAdminState.actorFilter) return false;
+    const entityType = String(entry.entityType || 'entity').trim() || 'entity';
+    if (auditLogAdminState.actorFilter && !normalizeAuditSearch(actorUsername).includes(normalizeAuditSearch(auditLogAdminState.actorFilter))) return false;
     if (auditLogAdminState.actionFilter !== 'all' && action !== auditLogAdminState.actionFilter) return false;
+    if (auditLogAdminState.entityFilter !== 'all' && entityType !== auditLogAdminState.entityFilter) return false;
     const query = normalizeAuditSearch(auditLogAdminState.query);
     if (!query) return true;
     const haystack = normalizeAuditSearch([
       actorUsername,
       entry.actorRole || '',
       action,
-      entry.entityType || '',
+      entityType,
       entry.entityId || '',
       JSON.stringify(entry.payload || {})
     ].join(' '));
@@ -403,11 +407,15 @@ function renderAuditLogModal() {
   });
   const logCards = filteredEntries.length
     ? filteredEntries.map((entry) => `
-      <article class="project-card">
-        <h4>${escapeHtml(entry.action || 'audit.entry')}</h4>
-        <p>${escapeHtml(entry.actorUsername || 'System')} • ${escapeHtml(entry.actorRole || 'Unbekannt')} • ${new Date(entry.createdAt || Date.now()).toLocaleString('de-DE')}</p>
-        <p class="project-meta">${escapeHtml(entry.entityType || 'entity')} • ${escapeHtml(entry.entityId || '—')}</p>
-        <pre class="server-reload-console" style="min-height:0;max-height:220px;margin-top:10px">${escapeHtml(JSON.stringify(entry.payload || {}, null, 2))}</pre>
+      <article class="workspace-card compact">
+        <div class="workspace-head compact" style="margin-bottom:10px">
+          <div>
+            <h3>${escapeHtml(entry.action || 'audit.entry')}</h3>
+            <p>${escapeHtml(entry.actorUsername || 'System')} • ${escapeHtml(entry.actorRole || 'Unbekannt')} • ${new Date(entry.createdAt || Date.now()).toLocaleString('de-DE')}</p>
+          </div>
+          <div class="muted">${escapeHtml(entry.entityType || 'entity')} • ${escapeHtml(entry.entityId || '—')}</div>
+        </div>
+        <pre class="server-reload-console" style="min-height:0;max-height:220px;margin-top:0">${escapeHtml(JSON.stringify(entry.payload || {}, null, 2))}</pre>
       </article>
     `).join('')
     : '<div class="muted-box">Noch keine Logs vorhanden.</div>';
@@ -426,13 +434,17 @@ function renderAuditLogModal() {
       <section class="overlay-section">
         <div class="toolbar-row" style="margin-bottom:12px">
           <input id="auditLogSearch" type="search" placeholder="Logs durchsuchen..." value="${escapeHtml(auditLogAdminState.query || '')}" autocomplete="off">
-          <select id="auditLogActorFilter">
-            <option value="all">Alle Personen</option>
-            ${actorOptions.map((actor) => `<option value="${escapeHtml(actor)}" ${auditLogAdminState.actorFilter === actor ? 'selected' : ''}>${escapeHtml(actor)}</option>`).join('')}
-          </select>
+          <input id="auditLogActorFilter" type="search" list="auditLogActorOptions" placeholder="Person suchen..." value="${escapeHtml(auditLogAdminState.actorFilter || '')}" autocomplete="off">
+          <datalist id="auditLogActorOptions">
+            ${actorOptions.map((actor) => `<option value="${escapeHtml(actor)}"></option>`).join('')}
+          </datalist>
           <select id="auditLogActionFilter">
             <option value="all">Alle Aktionen</option>
             ${actionOptions.map((action) => `<option value="${escapeHtml(action)}" ${auditLogAdminState.actionFilter === action ? 'selected' : ''}>${escapeHtml(action)}</option>`).join('')}
+          </select>
+          <select id="auditLogEntityFilter">
+            <option value="all">Alle Bereiche</option>
+            ${entityOptions.map((entity) => `<option value="${escapeHtml(entity)}" ${auditLogAdminState.entityFilter === entity ? 'selected' : ''}>${escapeHtml(entity)}</option>`).join('')}
           </select>
         </div>
         <div class="muted" style="margin-bottom:10px">${filteredEntries.length} von ${auditLogAdminState.entries.length} Logs sichtbar.</div>
@@ -447,12 +459,16 @@ function renderAuditLogModal() {
     auditLogAdminState.query = event.target.value || '';
     renderAuditLogModal();
   });
-  auditLogModalContent.querySelector('#auditLogActorFilter')?.addEventListener('change', (event) => {
-    auditLogAdminState.actorFilter = event.target.value || 'all';
+  auditLogModalContent.querySelector('#auditLogActorFilter')?.addEventListener('input', (event) => {
+    auditLogAdminState.actorFilter = event.target.value || '';
     renderAuditLogModal();
   });
   auditLogModalContent.querySelector('#auditLogActionFilter')?.addEventListener('change', (event) => {
     auditLogAdminState.actionFilter = event.target.value || 'all';
+    renderAuditLogModal();
+  });
+  auditLogModalContent.querySelector('#auditLogEntityFilter')?.addEventListener('change', (event) => {
+    auditLogAdminState.entityFilter = event.target.value || 'all';
     renderAuditLogModal();
   });
 }
