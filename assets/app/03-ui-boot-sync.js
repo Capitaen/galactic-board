@@ -751,8 +751,8 @@ function renderSettingsModal() {
     openOverlayModal('adminControlModal');
   });
   settingsModalContent.querySelector('#openAuditLogCenter')?.addEventListener('click', () => {
-    renderAuditLogModal();
-    openOverlayModal('auditLogModal');
+    closeOverlayModal('settingsModal');
+    setMainTab('adminLogs');
     void fetchAuditLog();
   });
   settingsModalContent.querySelector('#openPasswordChangeFromSettings')?.addEventListener('click', () => {

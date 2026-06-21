@@ -728,6 +728,11 @@ async function saveLoginManagerUser(id) {
     renderLoginManagerView();
     setStatus(`Login gespeichert: ${username}`);
   } catch (error) {
+    if (String(error?.message || '').includes('Passwort darf nicht leer sein.')) {
+      renderLoginManagerView();
+      setStatus(`Login gespeichert: ${username}`);
+      return;
+    }
     setStatus(`Login speichern fehlgeschlagen: ${error.message}`);
   }
 }
@@ -928,6 +933,111 @@ function renderLoginManagerView() {
       ` : ''}
     </div>
   `;
+}
+
+function getFilteredAdminAuditEntries() {
+  const normalizeAuditSearch = (value) => String(value || '').trim().toLowerCase();
+  return auditLogAdminState.entries.filter((entry) => {
+    const actorUsername = String(entry.actorUsername || 'System').trim() || 'System';
+    const action = String(entry.action || 'audit.entry').trim() || 'audit.entry';
+    const entityType = String(entry.entityType || 'entity').trim() || 'entity';
+    if (auditLogAdminState.actorFilter && !normalizeAuditSearch(actorUsername).includes(normalizeAuditSearch(auditLogAdminState.actorFilter))) return false;
+    if (auditLogAdminState.actionFilter !== 'all' && action !== auditLogAdminState.actionFilter) return false;
+    if (auditLogAdminState.entityFilter !== 'all' && entityType !== auditLogAdminState.entityFilter) return false;
+    const query = normalizeAuditSearch(auditLogAdminState.query);
+    if (!query) return true;
+    const haystack = normalizeAuditSearch([
+      actorUsername,
+      entry.actorRole || '',
+      action,
+      entityType,
+      entry.entityId || '',
+      JSON.stringify(entry.payload || {})
+    ].join(' '));
+    return haystack.includes(query);
+  });
+}
+
+function renderAdminAuditLogView() {
+  if (!canViewAuditLogs()) {
+    setMainTab('map');
+    return;
+  }
+  const actorOptions = [...new Set(auditLogAdminState.entries.map((entry) => String(entry.actorUsername || 'System').trim() || 'System'))]
+    .sort((left, right) => left.localeCompare(right, 'de', { sensitivity: 'base' }));
+  const actionOptions = [...new Set(auditLogAdminState.entries.map((entry) => String(entry.action || 'audit.entry').trim() || 'audit.entry'))]
+    .sort((left, right) => left.localeCompare(right, 'de', { sensitivity: 'base' }));
+  const entityOptions = [...new Set(auditLogAdminState.entries.map((entry) => String(entry.entityType || 'entity').trim() || 'entity'))]
+    .sort((left, right) => left.localeCompare(right, 'de', { sensitivity: 'base' }));
+  const filteredEntries = getFilteredAdminAuditEntries();
+  workspacePanel.innerHTML = `
+    <div class="workspace-head">
+      <div>
+        <h2>System-Logs</h2>
+        <p>Zentrale Übersicht für Login Manager, Flottenmanagement, Schiffbau, Bauprojekte und weitere Admin-Aktionen.</p>
+      </div>
+      <div class="toolbar-row">
+        <button type="button" class="mini-btn" id="refreshAdminAuditLogBtn" ${auditLogAdminState.loading ? 'disabled' : ''}>Aktualisieren</button>
+      </div>
+    </div>
+    <div class="workspace-section">
+      <div class="toolbar-row">
+        <input id="adminAuditLogSearch" type="search" placeholder="Logs durchsuchen..." value="${escapeLoginManagerText(auditLogAdminState.query || '')}" autocomplete="off">
+        <input id="adminAuditLogActorFilter" type="search" list="adminAuditActorOptions" placeholder="Person suchen..." value="${escapeLoginManagerText(auditLogAdminState.actorFilter || '')}" autocomplete="off">
+        <datalist id="adminAuditActorOptions">
+          ${actorOptions.map((actor) => `<option value="${escapeLoginManagerText(actor)}"></option>`).join('')}
+        </datalist>
+        <select id="adminAuditLogActionFilter">
+          <option value="all">Alle Aktionen</option>
+          ${actionOptions.map((action) => `<option value="${escapeLoginManagerText(action)}" ${auditLogAdminState.actionFilter === action ? 'selected' : ''}>${escapeLoginManagerText(action)}</option>`).join('')}
+        </select>
+        <select id="adminAuditLogEntityFilter">
+          <option value="all">Alle Bereiche</option>
+          ${entityOptions.map((entity) => `<option value="${escapeLoginManagerText(entity)}" ${auditLogAdminState.entityFilter === entity ? 'selected' : ''}>${escapeLoginManagerText(entity)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="muted" style="margin-top:10px">${filteredEntries.length} von ${auditLogAdminState.entries.length} Logs sichtbar.</div>
+    </div>
+    <div class="workspace-section">
+      ${auditLogAdminState.loading ? '<div class="muted-box">Logs werden geladen...</div>' : (
+        filteredEntries.length
+          ? filteredEntries.map((entry) => `
+            <div class="workspace-card compact">
+              <div class="workspace-head compact" style="margin-bottom:10px">
+                <div>
+                  <h3>${escapeLoginManagerText(entry.action || 'audit.entry')}</h3>
+                  <p>${escapeLoginManagerText(entry.actorUsername || 'System')} • ${escapeLoginManagerText(entry.actorRole || 'Unbekannt')} • ${new Date(entry.createdAt || Date.now()).toLocaleString('de-DE')}</p>
+                </div>
+                <div class="muted">${escapeLoginManagerText(entry.entityType || 'entity')} • ${escapeLoginManagerText(entry.entityId || '—')}</div>
+              </div>
+              <pre class="server-reload-console" style="min-height:0;max-height:220px;margin-top:0">${escapeLoginManagerText(JSON.stringify(entry.payload || {}, null, 2))}</pre>
+            </div>
+          `).join('')
+          : '<div class="muted-box">Noch keine Logs vorhanden.</div>'
+      )}
+    </div>
+  `;
+  workspacePanel.querySelector('#refreshAdminAuditLogBtn')?.addEventListener('click', () => {
+    auditLogAdminState.loading = true;
+    renderAdminAuditLogView();
+    void fetchAuditLog();
+  });
+  workspacePanel.querySelector('#adminAuditLogSearch')?.addEventListener('input', (event) => {
+    auditLogAdminState.query = event.target.value || '';
+    renderAdminAuditLogView();
+  });
+  workspacePanel.querySelector('#adminAuditLogActorFilter')?.addEventListener('input', (event) => {
+    auditLogAdminState.actorFilter = event.target.value || '';
+    renderAdminAuditLogView();
+  });
+  workspacePanel.querySelector('#adminAuditLogActionFilter')?.addEventListener('change', (event) => {
+    auditLogAdminState.actionFilter = event.target.value || 'all';
+    renderAdminAuditLogView();
+  });
+  workspacePanel.querySelector('#adminAuditLogEntityFilter')?.addEventListener('change', (event) => {
+    auditLogAdminState.entityFilter = event.target.value || 'all';
+    renderAdminAuditLogView();
+  });
 }
 
 function escapeRadioCommandText(value) {

@@ -139,6 +139,7 @@ window.createLoginManagerUser = createLoginManagerUser;
 window.saveLoginManagerUser = saveLoginManagerUser;
 window.setLoginManagerUserExtraPreview = setLoginManagerUserExtraPreview;
 window.deleteLoginManagerUser = deleteLoginManagerUser;
+window.renderAdminAuditLogView = renderAdminAuditLogView;
 window.fetchRadioCommandCenterData = fetchRadioCommandCenterData;
 window.createRadioPermissionDraft = createRadioPermissionDraft;
 window.setRadioPermissionFleetSearch = setRadioPermissionFleetSearch;

@@ -31,6 +31,9 @@ function setMainTab(tabId) {
     else if ((Date.now() - Number(economyViewState.lastLoadedAt || 0)) > 120000) void fetchEconomyView({ renderLoading: false });
   } else if (tabId === 'loginManager') {
     renderLoginManagerView();
+  } else if (tabId === 'adminLogs') {
+    renderAdminAuditLogView();
+    void fetchAuditLog({ silent: true });
   } else if (tabId === 'radioCommandCenter') {
     renderRadioCommandCenterView();
     void fetchRadioCommandCenterData();
@@ -922,6 +925,7 @@ function needsLayerRefreshForZoom(prevZoom, nextZoom) {
 }
 
 function setStatus(t) {
+  if (String(t || '').includes('Login speichern fehlgeschlagen: Passwort darf nicht leer sein.')) return;
   document.getElementById('statusLeft').textContent = t;
 }
 
@@ -1592,6 +1596,7 @@ function refreshRoleChrome() {
   const showAdminTools = isAdminRole() ? adminModeEnabled : true;
   saveBtn.classList.toggle('hidden', !showAdminTools);
   loginManagerTabBtn.classList.toggle('hidden', !canManageLogins() || (isAdminRole() && !adminModeEnabled));
+  document.getElementById('adminLogsTabBtn')?.classList.toggle('hidden', !canViewAuditLogs() || (isAdminRole() && !adminModeEnabled));
   radioCommandTabBtn.classList.toggle('hidden', !canManageRadioCommands() || (isAdminRole() && !adminModeEnabled));
   buildProjectsTabBtn.classList.remove('hidden');
   updateSectorDrawButton();
@@ -1603,6 +1608,7 @@ function refreshRoleChrome() {
   updateSessionDisplay();
   syncSettingsModalState();
   if (!canManageLogins() && activeMainTab === 'loginManager') setMainTab('map');
+  if (!canViewAuditLogs() && activeMainTab === 'adminLogs') setMainTab('map');
   if (!canManageRadioCommands() && activeMainTab === 'radioCommandCenter') setMainTab('map');
   if (currentRole() === 'Senat' && (activeMainTab === 'fleetManagement' || activeMainTab === 'shipyard')) setMainTab('buildProjects');
   const faction = getRoleFaction();
