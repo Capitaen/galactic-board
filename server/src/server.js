@@ -144,7 +144,23 @@ const LOGIN_ROLE_DEFINITIONS = {
   Viewer: { faction: 'system', level: 'viewer' }
 };
 const LOGIN_ROLES = Object.keys(LOGIN_ROLE_DEFINITIONS);
+const CONFIGURED_SUPERADMIN_USERNAMES = new Set(['burnout', 'shoot']);
 const RADIO_PERMISSION_ROLES = ['fleet_officer', 'admiralty'];
+
+function isConfiguredSuperAdminUsername(username) {
+  return CONFIGURED_SUPERADMIN_USERNAMES.has(String(username || '').trim().toLowerCase());
+}
+
+function getEffectiveActorRole(actor) {
+  if (isConfiguredSuperAdminUsername(actor?.username) || actor?.role === 'Superadministrator') {
+    return 'Superadministrator';
+  }
+  return String(actor?.role || '').trim();
+}
+
+function getEffectiveActorDefinition(actor) {
+  return LOGIN_ROLE_DEFINITIONS[getEffectiveActorRole(actor)] || null;
+}
 function normalizeOwnershipReferenceName(text) {
   return String(text || '')
     .toLowerCase()
@@ -400,10 +416,11 @@ function readUsersWithSecrets() {
 
 function createSession(user) {
   const token = crypto.randomUUID();
+  const effectiveRole = getEffectiveActorRole(user);
   sessions.set(token, {
     id: user.id,
     username: user.username,
-    role: user.role,
+    role: effectiveRole,
     canCoordinate4thFleet: Boolean(user.canCoordinate4thFleet),
     mustChangePassword: Boolean(user.mustChangePassword),
     senatePosition: user.senatePosition || ''
@@ -413,7 +430,7 @@ function createSession(user) {
 
 function readUserSessionSnapshot(userId) {
   if (!userId) return null;
-  return db.prepare(`
+  const snapshot = db.prepare(`
     SELECT
       id,
       username,
@@ -425,15 +442,21 @@ function readUserSessionSnapshot(userId) {
     WHERE id = ?
     LIMIT 1
   `).get(userId) || null;
+  if (!snapshot) return null;
+  return {
+    ...snapshot,
+    role: getEffectiveActorRole(snapshot)
+  };
 }
 
 function refreshUserSessions(userId, user) {
+  const effectiveRole = getEffectiveActorRole(user);
   sessions.forEach((session, token) => {
     if (session.id !== userId) return;
     sessions.set(token, {
       ...session,
       username: user.username,
-      role: user.role,
+      role: effectiveRole,
       canCoordinate4thFleet: Boolean(user.canCoordinate4thFleet),
       ...(typeof user.mustChangePassword === 'boolean' ? { mustChangePassword: user.mustChangePassword } : {}),
       senatePosition: user.senatePosition || ''
@@ -547,23 +570,26 @@ function completeTutorialForRequest(req, action = 'completed') {
 }
 
 function canManageLogins(role) {
-  return ['super-global', 'global', 'admin', 'faction-admin'].includes(LOGIN_ROLE_DEFINITIONS[role]?.level);
+  const effectiveRole = getEffectiveActorRole({ role });
+  return ['super-global', 'global', 'admin', 'faction-admin'].includes(LOGIN_ROLE_DEFINITIONS[effectiveRole]?.level);
 }
 
 function canManageRadioPermissions(role) {
-  if (role === 'Superadministrator' || role === 'Admin') return true;
-  return role === 'Republic Navy Admin';
+  const effectiveRole = getEffectiveActorRole({ role });
+  if (effectiveRole === 'Superadministrator' || effectiveRole === 'Admin') return true;
+  return effectiveRole === 'Republic Navy Admin';
 }
 
 function canViewAuditLogs(role) {
-  return ['super-global', 'global'].includes(LOGIN_ROLE_DEFINITIONS[role]?.level);
+  const effectiveRole = getEffectiveActorRole({ role });
+  return ['super-global', 'global'].includes(LOGIN_ROLE_DEFINITIONS[effectiveRole]?.level);
 }
 
 function listUsersForActor(actor) {
   const users = listUsers(db);
-  const actorDefinition = LOGIN_ROLE_DEFINITIONS[actor?.role];
+  const actorDefinition = getEffectiveActorDefinition(actor);
   if (actorDefinition?.level === 'super-global' || actorDefinition?.level === 'global') return users;
-  if (!canManageLogins(actor?.role)) return [];
+  if (!canManageLogins(getEffectiveActorRole(actor))) return [];
   return users.filter((user) => LOGIN_ROLE_DEFINITIONS[user.role]?.faction === actorDefinition.faction);
 }
 
@@ -999,21 +1025,22 @@ function requireAuth(req, res, next) {
 }
 
 function requireLoginManager(req, res, next) {
-  if (!req.user || !canManageLogins(req.user.role)) {
+  if (!req.user || !canManageLogins(getEffectiveActorRole(req.user))) {
     return res.status(403).json({ error: 'Forbidden' });
   }
   next();
 }
 
 function requireGlobalAdmin(req, res, next) {
-  if (!req.user || !['Superadministrator', 'Admin'].includes(req.user.role)) {
+  const effectiveRole = getEffectiveActorRole(req.user);
+  if (!req.user || !['Superadministrator', 'Admin'].includes(effectiveRole)) {
     return res.status(403).json({ error: 'Nur globale Admins dürfen den Server-Reload auslösen.' });
   }
   next();
 }
 
 function requireSuperAdmin(req, res, next) {
-  if (!req.user || req.user.role !== 'Superadministrator') {
+  if (!req.user || getEffectiveActorRole(req.user) !== 'Superadministrator') {
     return res.status(403).json({ error: 'Nur Superadministratoren dürfen diese Aktion ausführen.' });
   }
   next();
@@ -1239,7 +1266,7 @@ function sanitizeAdminRole(rawRole) {
 }
 
 function canActorAssignRole(actor, role) {
-  const actorDefinition = LOGIN_ROLE_DEFINITIONS[actor?.role];
+  const actorDefinition = getEffectiveActorDefinition(actor);
   const roleDefinition = LOGIN_ROLE_DEFINITIONS[role];
   if (!actorDefinition || !roleDefinition) return false;
   if (actorDefinition.level === 'super-global') return true;
@@ -1252,7 +1279,7 @@ function canActorAssignRole(actor, role) {
 }
 
 function canActorManageUser(actor, targetUser) {
-  if (LOGIN_ROLE_DEFINITIONS[actor?.role]?.level === 'super-global') return Boolean(targetUser);
+  if (getEffectiveActorDefinition(actor)?.level === 'super-global') return Boolean(targetUser);
   return Boolean(targetUser && canActorAssignRole(actor, targetUser.role));
 }
 
