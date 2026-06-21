@@ -279,21 +279,20 @@ function renderFleetStackPanel() {
   fleetStackPanel.innerHTML = `
     <div class="fleet-stack-panel-head">
       <div>
-        <h3>Flottenstapel</h3>
+        <h3>Flotten am Standort</h3>
         <p>${escapeHtml(planetName)} • ${cluster.fleets.length} Verbände</p>
       </div>
       <button type="button" class="mini-btn" onclick="closeFleetStackPanel()">Schließen</button>
     </div>
     <div class="fleet-stack-list">
       ${cluster.fleets.map((fleet) => `
-        <article class="fleet-stack-entry">
+        <article class="fleet-stack-entry" onclick="openFleetStackEntry('${fleet.id}')">
           <div class="fleet-stack-entry-copy">
             <strong>${escapeHtml(fleet.name || 'Unbenannter Verband')}</strong>
-            <small>${escapeHtml(fleet.faction || '—')} • ${escapeHtml(fleet.assignment || 'ohne Kennung')} • ${escapeHtml(fleet.commander || fleet.leader || 'kein CO')}</small>
+            <small>${escapeHtml(fleet.faction || '—')}${fleet.assignment ? ` • ${escapeHtml(fleet.assignment)}` : ''}${fleet.commander || fleet.leader ? ` • ${escapeHtml(fleet.commander || fleet.leader)}` : ''}</small>
           </div>
           <div class="fleet-stack-entry-actions">
-            <button type="button" class="mini-btn primary" onclick="openFleetStackEntry('${fleet.id}')">Öffnen</button>
-            <button type="button" class="mini-btn" onclick="openFleetInManagement('${fleet.id}')">Management</button>
+            <button type="button" class="mini-btn" onclick="event.stopPropagation(); openFleetInManagement('${fleet.id}')">Management</button>
           </div>
         </article>
       `).join('')}
@@ -334,10 +333,15 @@ function ensureFleetClusterElements() {
     seen.add(clusterKey);
     let el = fleetClusterElements.get(clusterKey);
     if (!el) {
-      el = document.createElement('div');
+      el = document.createElement('button');
+      el.type = 'button';
       el.dataset.clusterKey = clusterKey;
       el.className = 'fleet fleet-cluster';
       el.innerHTML = '<img src="" alt=""><div class="fleet-cluster-count"></div>';
+      el.addEventListener('pointerdown', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+      });
       el.addEventListener('click', (event) => {
         event.stopPropagation();
         openFleetClusterPanel(clusterKey);
@@ -345,7 +349,7 @@ function ensureFleetClusterElements() {
       fleetClusterElements.set(clusterKey, el);
       frag.appendChild(el);
     }
-    el.className = `fleet fleet-cluster${cluster.source === 'mixed' ? ' fleet-cluster-mixed' : ''}`;
+    el.className = `fleet fleet-cluster${cluster.source === 'mixed' ? ' fleet-cluster-mixed' : ''}${activeFleetClusterKey === clusterKey ? ' selected' : ''}`;
     el.style.left = `${cluster.x}px`;
     el.style.top = `${cluster.y}px`;
     el.title = `${cluster.fleets.length} Flotten auf ${planetIndex.get(cluster.fleets[0]?.locationPlanetId || cluster.fleets[0]?.planetId || '')?.name || 'diesem Standort'}`;
