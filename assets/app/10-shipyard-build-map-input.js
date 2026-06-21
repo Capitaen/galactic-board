@@ -685,6 +685,13 @@ viewport.addEventListener('pointerdown', (event) => {
   }
   if (event.button !== 0) return;
   closeContextMenu();
+  const directClusterTarget = event.target.closest('.fleet-cluster');
+  if (directClusterTarget?.dataset?.clusterKey) {
+    event.preventDefault();
+    event.stopPropagation();
+    openFleetClusterPanel(directClusterTarget.dataset.clusterKey);
+    return;
+  }
   if (event.target.closest('.planet, .marker, .fleet, #infoPanel, #fleetStackPanel, #legendPanel, #layersPanel, #topbar, .toolstack, #homeBtn, #muteBtn, #contextMenu')) return;
   const worldPos = eventToWorld(event);
   if (isAdminRole() && activeSectorDraft) {

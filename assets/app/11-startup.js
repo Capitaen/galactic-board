@@ -52,6 +52,14 @@ try {
 window.addEventListener('resize', syncMobileOrientationUi);
 window.addEventListener('orientationchange', syncMobileOrientationUi);
 fleetLayer?.addEventListener('click', handleFleetLayerClusterClick);
+infoPanel?.addEventListener('click', (event) => {
+  const savePlanetButton = event.target.closest('[data-save-planet-id]');
+  if (savePlanetButton?.dataset?.savePlanetId) {
+    event.preventDefault();
+    event.stopPropagation();
+    savePlanet(savePlanetButton.dataset.savePlanetId);
+  }
+});
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) {
     syncMobileOrientationUi();
@@ -176,6 +184,23 @@ window.setMarketRange = setMarketRange;
 window.updateMarketQuantity = updateMarketQuantity;
 window.updateEconomySectorQuery = updateEconomySectorQuery;
 window.saveEconomyPolicy = saveEconomyPolicy;
+
+function buildPlanetCardInfo(planet, info = {}) {
+  const localOverride = PLANET_INFO_LOCAL_OVERRIDES[planet.id] || {};
+  const demographicProfile = buildPlanetDemographicProfile(planet);
+  const routeNames = getPlanetRouteNames(planet.id);
+  const hyperlaneStatus = getPlanetHyperlaneStatus(planet.id);
+  const slotUsage = getPlanetSlotUsage(planet.id);
+  return {
+    climate: sanitizePlanetInfoText(localOverride.climate || (hyperlaneStatus.isLogisticsHub ? 'Logistik-Knoten' : (hyperlaneStatus.isRoutePlanet ? 'Routenanbindung vorhanden' : 'Isolierte Versorgungslage'))),
+    population: demographicProfile.currentPopulationLabel,
+    lorePopulation: sanitizePlanetInfoText(`${slotUsage.used}/10 Infrastruktur-Slots belegt`),
+    strategic: sanitizePlanetInfoText(localOverride.strategic || `${routeNames.length || hyperlaneStatus.degree} Hyperraum-Verbindung${(routeNames.length || hyperlaneStatus.degree) === 1 ? '' : 'en'}` || (planet.isCoreWorld ? 'Hauptplanet' : 'Regulär')),
+    description: sanitizePlanetInfoText(planet.description || localOverride.description || info.description),
+    image: '',
+    demographicProfile
+  };
+}
 
 normalizeCampaignState();
 rebuildIndexes();

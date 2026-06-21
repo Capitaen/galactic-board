@@ -766,7 +766,7 @@ function openPlanet(id) {
         </div>
       </div>
       <div class="toolbar-row">
-        <button class="primary" onclick="savePlanet('${p.id}')" ${(canEditPlanetCore || canEditDescription || isResourceAssignmentEditable(p)) ? '' : 'disabled'}>Planet speichern</button>
+        <button class="primary" type="button" data-save-planet-id="${p.id}" onclick="savePlanet('${p.id}')" ${(canEditPlanetCore || canEditDescription || isResourceAssignmentEditable(p)) ? '' : 'disabled'}>Planet speichern</button>
         <button class="secondary" onclick="beginPlanetMove('${p.id}')" ${canEditPlanetCore ? '' : 'disabled'}>Planet verschieben</button>
         ${p.isUnofficial ? `<button class="secondary danger" onclick="deletePlanet('${p.id}')" ${canEditPlanetCore ? '' : 'disabled'}>Planet löschen</button>` : ''}
       </div>
