@@ -864,6 +864,10 @@ let auditLogAdminState = {
   actionFilter: 'all',
   entityFilter: 'all'
 };
+let loginManagerUsersState = {
+  loading: false,
+  loaded: false
+};
 let loginManagerEditDrafts = {};
 let currentAuthenticatedUsername = '';
 let viewerModeActive = true;

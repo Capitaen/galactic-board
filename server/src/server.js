@@ -2219,6 +2219,13 @@ app.post('/api/auth/logout', (req, res) => {
   res.json({ ok: true });
 });
 
+app.get('/api/admin/users', requireAuth, requireLoginManager, (req, res) => {
+  res.json({
+    ok: true,
+    users: listUsersForActor(req.user)
+  });
+});
+
 app.post('/api/admin/users', requireAuth, requireLoginManager, async (req, res) => {
   try {
     const { username, password, role, canCoordinate4thFleet, senatePosition } = validateAdminUserInput(req.body);

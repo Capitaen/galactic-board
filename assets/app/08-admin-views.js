@@ -502,6 +502,7 @@ async function saveLoginManagerCreateDraft() {
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.error || 'Login konnte nicht gespeichert werden.');
     state.authUsers = payload.users || [];
+    loginManagerUsersState.loaded = true;
     loginManagerCreateDraft = null;
     closeOverlayModal('loginCreateModal');
     renderLoginManagerView();
@@ -552,6 +553,26 @@ let serverReloadAdminState = {
 let serverReloadPollTimer = 0;
 const SERVER_RELOAD_STATUS_ENDPOINTS = ['/api/admin/server-reload-status', '/api/server-reload-status'];
 const SERVER_RELOAD_TRIGGER_ENDPOINTS = ['/api/admin/server-reload', '/api/server-reload'];
+
+async function fetchLoginManagerUsers(options = {}) {
+  if (!canManageLogins() || loginManagerUsersState.loading) return;
+  const { silent = false } = options;
+  loginManagerUsersState.loading = true;
+  try {
+    const response = await fetch('/api/admin/users', {
+      credentials: 'include'
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || 'Login-Liste konnte nicht geladen werden.');
+    state.authUsers = Array.isArray(payload.users) ? payload.users : [];
+    loginManagerUsersState.loaded = true;
+    if (activeMainTab === 'loginManager') renderLoginManagerView();
+  } catch (error) {
+    if (!silent) setStatus(`Login-Liste laden fehlgeschlagen: ${error.message}`);
+  } finally {
+    loginManagerUsersState.loading = false;
+  }
+}
 
 async function readServerReloadResponse(response) {
   const rawText = await response.text();
@@ -724,6 +745,7 @@ async function saveLoginManagerUser(id) {
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.error || 'Login konnte nicht gespeichert werden.');
     state.authUsers = payload.users || [];
+    loginManagerUsersState.loaded = true;
     delete loginManagerEditDrafts[id];
     renderLoginManagerView();
     setStatus(`Login gespeichert: ${username}`);
@@ -770,6 +792,7 @@ async function deleteLoginManagerUser(id) {
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.error || 'Login konnte nicht gelöscht werden.');
     state.authUsers = payload.users || [];
+    loginManagerUsersState.loaded = true;
     renderLoginManagerView();
     setStatus(user ? `Login gelöscht: ${user.username}` : 'Login gelöscht.');
   } catch (error) {
@@ -782,6 +805,9 @@ function renderLoginManagerView() {
     clearServerReloadPollTimer();
     setMainTab('map');
     return;
+  }
+  if ((!loginManagerUsersState.loaded || !state.authUsers.length) && !loginManagerUsersState.loading) {
+    void fetchLoginManagerUsers({ silent: true });
   }
   const actorDefinition = LOGIN_ROLE_DEFINITIONS[currentAssignedRole()];
   const isGlobalManager = actorDefinition.level === 'super-global' || actorDefinition.level === 'global';
@@ -913,6 +939,7 @@ function renderLoginManagerView() {
         <p>Logins sind nach Fraktionen geordnet. Fraktions-Admins verwalten die Admins und Mitglieder ihrer eigenen Fraktion.</p>
       </div>
     </div>
+    ${loginManagerUsersState.loading ? '<div class="workspace-section"><div class="muted-box">Logins werden geladen...</div></div>' : ''}
     ${serverReloadPanel}
     <div class="workspace-section login-faction-grid">
       ${visibleFactions.map(renderFactionSection).join('')}
