@@ -1202,6 +1202,7 @@ function canActorAssignRole(actor, role) {
 }
 
 function canActorManageUser(actor, targetUser) {
+  if (LOGIN_ROLE_DEFINITIONS[actor?.role]?.level === 'super-global') return Boolean(targetUser);
   return Boolean(targetUser && canActorAssignRole(actor, targetUser.role));
 }
 

@@ -852,7 +852,7 @@ function renderLoginManagerView() {
     const roleOptions = isGlobalManager
       ? categoryRoles.filter((candidateRole) => manageableRoles.includes(candidateRole) || candidateRole === selectedRole)
       : (user.isDraft || manageableRoles.includes(selectedRole) ? manageableRoles : [selectedRole]);
-    const editable = user.isDraft || manageableRoles.includes(user.role);
+    const editable = user.isDraft || actorDefinition.level === 'super-global' || manageableRoles.includes(selectedRole);
     const extraField = userDefinition?.faction === 'navy'
       ? `<label class="layer-row" style="border:0;padding:0"><input id="authFleetCoord_${user.id}" type="checkbox" ${userDraft?.canCoordinate4thFleet ? 'checked' : ''} ${editable ? `onchange="setLoginManagerUserExtraPreview('${user.id}','canCoordinate4thFleet', this.checked)"` : 'disabled'}> 4th Flottenkoordination</label>`
       : userDefinition?.faction === 'senate'
@@ -939,8 +939,8 @@ function getFilteredAdminAuditEntries() {
   const normalizeAuditSearch = (value) => String(value || '').trim().toLowerCase();
   return auditLogAdminState.entries.filter((entry) => {
     const actorUsername = String(entry.actorUsername || 'System').trim() || 'System';
-    const action = String(entry.action || 'audit.entry').trim() || 'audit.entry';
-    const entityType = String(entry.entityType || 'entity').trim() || 'entity';
+    const action = getAdminAuditActionLabel(entry);
+    const entityType = getAdminAuditCategory(entry);
     if (auditLogAdminState.actorFilter && !normalizeAuditSearch(actorUsername).includes(normalizeAuditSearch(auditLogAdminState.actorFilter))) return false;
     if (auditLogAdminState.actionFilter !== 'all' && action !== auditLogAdminState.actionFilter) return false;
     if (auditLogAdminState.entityFilter !== 'all' && entityType !== auditLogAdminState.entityFilter) return false;
@@ -958,6 +958,52 @@ function getFilteredAdminAuditEntries() {
   });
 }
 
+function getAdminAuditCategory(entry) {
+  const action = String(entry?.action || '').trim();
+  if (action.startsWith('login_manager.')) return 'Accountverwaltung';
+  if (action.startsWith('auth.')) return 'Authentifizierung';
+  if (action.startsWith('fleet.')) return 'Flottenmanagement';
+  if (action.startsWith('ship.')) return 'Schiffbau';
+  if (action.startsWith('build_job.')) return 'Bauprojekte';
+  if (action.startsWith('admin.server_reload')) return 'Serververwaltung';
+  if (action.startsWith('campaign.state.')) return 'Kampagnenstatus';
+  return 'Sonstiges';
+}
+
+function getAdminAuditActionLabel(entry) {
+  const action = String(entry?.action || '').trim();
+  const labels = {
+    'login_manager.user_created': 'Account angelegt',
+    'login_manager.user_updated': 'Account verändert',
+    'login_manager.user_deleted': 'Account gelöscht',
+    'auth.login': 'Login',
+    'auth.logout': 'Logout',
+    'auth.password_changed': 'Passwort geändert',
+    'fleet.created': 'Flotte angelegt',
+    'fleet.updated': 'Flotte verändert',
+    'fleet.deleted': 'Flotte gelöscht',
+    'fleet.jump.started': 'Flottensprung gestartet',
+    'fleet.moved': 'Flotte bewegt',
+    'ship.created': 'Schiff angelegt',
+    'ship.updated': 'Schiff verändert',
+    'ship.deleted': 'Schiff gelöscht',
+    'build_job.created': 'Bauprojekt angelegt',
+    'build_job.updated': 'Bauprojekt verändert',
+    'build_job.deleted': 'Bauprojekt gelöscht',
+    'campaign.state.updated': 'Kampagnenstatus verändert',
+    'admin.server_reload': 'Server-Reload'
+  };
+  return labels[action] || action || 'Systemaktion';
+}
+
+function applyAdminAuditLogFilters() {
+  auditLogAdminState.query = workspacePanel.querySelector('#adminAuditLogSearch')?.value || auditLogAdminState.query || '';
+  auditLogAdminState.actorFilter = workspacePanel.querySelector('#adminAuditLogActorFilter')?.value || '';
+  auditLogAdminState.actionFilter = workspacePanel.querySelector('#adminAuditLogActionFilter')?.value || 'all';
+  auditLogAdminState.entityFilter = workspacePanel.querySelector('#adminAuditLogEntityFilter')?.value || 'all';
+  renderAdminAuditLogView();
+}
+
 function renderAdminAuditLogView() {
   if (!canViewAuditLogs()) {
     setMainTab('map');
@@ -965,9 +1011,9 @@ function renderAdminAuditLogView() {
   }
   const actorOptions = [...new Set(auditLogAdminState.entries.map((entry) => String(entry.actorUsername || 'System').trim() || 'System'))]
     .sort((left, right) => left.localeCompare(right, 'de', { sensitivity: 'base' }));
-  const actionOptions = [...new Set(auditLogAdminState.entries.map((entry) => String(entry.action || 'audit.entry').trim() || 'audit.entry'))]
+  const actionOptions = [...new Set(auditLogAdminState.entries.map((entry) => getAdminAuditActionLabel(entry)))]
     .sort((left, right) => left.localeCompare(right, 'de', { sensitivity: 'base' }));
-  const entityOptions = [...new Set(auditLogAdminState.entries.map((entry) => String(entry.entityType || 'entity').trim() || 'entity'))]
+  const entityOptions = [...new Set(auditLogAdminState.entries.map((entry) => getAdminAuditCategory(entry)))]
     .sort((left, right) => left.localeCompare(right, 'de', { sensitivity: 'base' }));
   const filteredEntries = getFilteredAdminAuditEntries();
   workspacePanel.innerHTML = `
@@ -995,6 +1041,7 @@ function renderAdminAuditLogView() {
           <option value="all">Alle Bereiche</option>
           ${entityOptions.map((entity) => `<option value="${escapeLoginManagerText(entity)}" ${auditLogAdminState.entityFilter === entity ? 'selected' : ''}>${escapeLoginManagerText(entity)}</option>`).join('')}
         </select>
+        <button type="button" class="mini-btn primary" id="applyAdminAuditLogFiltersBtn">Filter anwenden</button>
       </div>
       <div class="muted" style="margin-top:10px">${filteredEntries.length} von ${auditLogAdminState.entries.length} Logs sichtbar.</div>
     </div>
@@ -1005,10 +1052,10 @@ function renderAdminAuditLogView() {
             <div class="workspace-card compact">
               <div class="workspace-head compact" style="margin-bottom:10px">
                 <div>
-                  <h3>${escapeLoginManagerText(entry.action || 'audit.entry')}</h3>
+                  <h3>${escapeLoginManagerText(getAdminAuditActionLabel(entry))}</h3>
                   <p>${escapeLoginManagerText(entry.actorUsername || 'System')} • ${escapeLoginManagerText(entry.actorRole || 'Unbekannt')} • ${new Date(entry.createdAt || Date.now()).toLocaleString('de-DE')}</p>
                 </div>
-                <div class="muted">${escapeLoginManagerText(entry.entityType || 'entity')} • ${escapeLoginManagerText(entry.entityId || '—')}</div>
+                <div class="muted">${escapeLoginManagerText(getAdminAuditCategory(entry))} • ${escapeLoginManagerText(entry.entityId || '—')}</div>
               </div>
               <pre class="server-reload-console" style="min-height:0;max-height:220px;margin-top:0">${escapeLoginManagerText(JSON.stringify(entry.payload || {}, null, 2))}</pre>
             </div>
@@ -1022,13 +1069,23 @@ function renderAdminAuditLogView() {
     renderAdminAuditLogView();
     void fetchAuditLog();
   });
-  workspacePanel.querySelector('#adminAuditLogSearch')?.addEventListener('input', (event) => {
-    auditLogAdminState.query = event.target.value || '';
-    renderAdminAuditLogView();
+  workspacePanel.querySelector('#applyAdminAuditLogFiltersBtn')?.addEventListener('click', () => {
+    applyAdminAuditLogFilters();
   });
-  workspacePanel.querySelector('#adminAuditLogActorFilter')?.addEventListener('input', (event) => {
-    auditLogAdminState.actorFilter = event.target.value || '';
-    renderAdminAuditLogView();
+  workspacePanel.querySelector('#adminAuditLogSearch')?.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      applyAdminAuditLogFilters();
+    }
+  });
+  workspacePanel.querySelector('#adminAuditLogActorFilter')?.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      applyAdminAuditLogFilters();
+    }
+  });
+  workspacePanel.querySelector('#adminAuditLogActorFilter')?.addEventListener('change', () => {
+    applyAdminAuditLogFilters();
   });
   workspacePanel.querySelector('#adminAuditLogActionFilter')?.addEventListener('change', (event) => {
     auditLogAdminState.actionFilter = event.target.value || 'all';

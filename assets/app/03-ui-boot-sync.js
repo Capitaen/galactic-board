@@ -360,6 +360,7 @@ async function fetchAuditLog(options = {}) {
   if (!silent) {
     auditLogAdminState.loading = true;
     if (auditLogModal?.classList.contains('active')) renderAuditLogModal();
+    if (activeMainTab === 'adminLogs') renderAdminAuditLogView();
   }
   try {
     const response = await fetch(`/api/admin/audit-log?limit=${encodeURIComponent(auditLogAdminState.limit || 300)}`, {
@@ -370,10 +371,12 @@ async function fetchAuditLog(options = {}) {
     auditLogAdminState.entries = Array.isArray(payload.entries) ? payload.entries : [];
     auditLogAdminState.loading = false;
     if (auditLogModal?.classList.contains('active')) renderAuditLogModal();
+    if (activeMainTab === 'adminLogs') renderAdminAuditLogView();
   } catch (error) {
     auditLogAdminState.loading = false;
     setStatus(`Logs laden fehlgeschlagen: ${error.message}`);
     if (auditLogModal?.classList.contains('active')) renderAuditLogModal();
+    if (activeMainTab === 'adminLogs') renderAdminAuditLogView();
   }
 }
 
