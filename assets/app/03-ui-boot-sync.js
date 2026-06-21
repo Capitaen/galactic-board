@@ -249,8 +249,7 @@ function getSettingsToggleDefinitions() {
     { id: 'hyperlanes', label: 'Hyperraumrouten', description: 'Zeigt Hyperraumrouten und manuelle Verbindungen.' },
     { id: 'majorTradeRoutes', label: 'Große Handelsrouten', description: 'Nutzen aktuell dieselbe Darstellung wie die Haupt-Hyperraumrouten.', checked: () => Boolean(layers.hyperlanes), onToggle: (next) => setLayerPreference('hyperlanes', next) },
     { id: 'conflictPulse', label: 'Konfliktanzeige', description: 'Zeigt sektorale Konfliktfarben an. Ausgeschaltet bleiben Sektoren sichtbar, aber neutral grau.', checked: () => Boolean(layers.conflictPulse), onToggle: (next) => setLayerPreference('conflictPulse', next) },
-    { id: 'republicSectors', label: 'Republik-Sektoren', description: 'Zeigt die sektorale Kontrollfärbung und Beschriftung an.', checked: () => Boolean(layers.sectorLabels), onToggle: (next) => setLayerPreference('sectorLabels', next) },
-    { id: 'neutralSectors', label: 'Neutrale Sektoren', description: 'Nutzen dieselbe Sektorebene wie die übrige Kontrollfärbung.', checked: () => Boolean(layers.sectorLabels), onToggle: (next) => setLayerPreference('sectorLabels', next) },
+    { id: 'sectors', label: 'Sektoren', description: 'Blendet alle Sektoren samt Beschriftung gesammelt ein oder aus.', checked: () => Boolean(layers.sectorLabels), onToggle: (next) => setLayerPreference('sectorLabels', next) },
     { id: 'grid', label: 'Raster', description: 'Galaktisches Raster und Ringsegmente ein- oder ausblenden.' },
     { id: 'fleetMarkers', label: 'Flottenmarker', description: 'Zeigt GAR- und KUS-Flottenmarker gesammelt an.', checked: () => Boolean(layers.garFleets && layers.kusFleets), onToggle: (next) => {
       setLayerPreference('garFleets', next, false);

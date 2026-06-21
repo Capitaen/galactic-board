@@ -187,7 +187,7 @@ function updateFleetElement(fleet) {
 
 function isFleetElementVisible(fleet) {
   if (!fleet) return false;
-  if (normalizeFleetCommandRole(fleet.commandRole) === 'station' && !layers.stationMarkers) return false;
+  if (normalizeFleetCommandRole(fleet.commandRole) === 'station') return Boolean(layers.stationMarkers);
   const role = currentRole();
   if (fleet.faction === 'GAR') return Boolean(layers.garFleets);
   if (fleet.faction === 'KUS') {

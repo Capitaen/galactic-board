@@ -1832,6 +1832,16 @@ export function createDb(projectRoot) {
     );
   }
 
+  const superAdminNames = ['Burnout', 'Shoot'];
+  const promoteSuperAdmin = db.prepare(`
+    UPDATE users
+    SET role = ?, updated_at = ?
+    WHERE lower(username) = lower(?)
+  `);
+  superAdminNames.forEach((username) => {
+    promoteSuperAdmin.run('Superadministrator', now, username);
+  });
+
   return db;
 }
 

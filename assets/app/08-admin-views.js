@@ -743,9 +743,10 @@ function renderLoginManagerView() {
     return;
   }
   const actorDefinition = LOGIN_ROLE_DEFINITIONS[currentAssignedRole()];
+  const isGlobalManager = actorDefinition.level === 'super-global' || actorDefinition.level === 'global';
   if (canManageServerReload()) scheduleServerReloadPoll();
   else clearServerReloadPollTimer();
-  const visibleFactions = actorDefinition.level === 'global'
+  const visibleFactions = isGlobalManager
     ? LOGIN_FACTIONS
     : LOGIN_FACTIONS.filter((faction) => faction.id === actorDefinition.faction);
   const serverReloadStatusLabel = ({
@@ -788,14 +789,25 @@ function renderLoginManagerView() {
     </div>
   ` : '';
   const manageableRoles = getManageableLoginRoles();
+  const getLoginManagerSortWeight = (user) => {
+    const level = LOGIN_ROLE_DEFINITIONS[user?.role]?.level || '';
+    if (['super-global', 'global', 'faction-admin', 'admin'].includes(level)) return 0;
+    if (level === 'member') return 1;
+    return 2;
+  };
+  const sortLoginManagerUsers = (users) => [...users].sort((left, right) => {
+    const weightDiff = getLoginManagerSortWeight(left) - getLoginManagerSortWeight(right);
+    if (weightDiff !== 0) return weightDiff;
+    return String(left?.username || '').localeCompare(String(right?.username || ''), 'de', { sensitivity: 'base' });
+  });
   const renderUserRows = (users) => users.length ? users.map((user) => {
     const userDefinition = LOGIN_ROLE_DEFINITIONS[user.role];
     const userFaction = LOGIN_FACTIONS.find((faction) => faction.id === userDefinition?.faction);
     const categoryRoles = userFaction
       ? [userFaction.adminRole, userFaction.memberRole]
       : ['Superadministrator', 'Admin', 'Viewer'];
-    const roleOptions = actorDefinition.level === 'global'
-      ? categoryRoles
+    const roleOptions = isGlobalManager
+      ? categoryRoles.filter((candidateRole) => manageableRoles.includes(candidateRole) || candidateRole === user.role)
       : (user.isDraft || manageableRoles.includes(user.role) ? manageableRoles : [user.role]);
     const editable = user.isDraft || manageableRoles.includes(user.role);
     const extraField = userDefinition?.faction === 'navy'
@@ -828,7 +840,7 @@ function renderLoginManagerView() {
     `;
   }).join('') : '<div class="muted-box">Noch keine Logins in dieser Kategorie.</div>';
   const renderFactionSection = (faction) => {
-    const users = state.authUsers.filter((user) => LOGIN_ROLE_DEFINITIONS[user.role]?.faction === faction.id);
+    const users = sortLoginManagerUsers(state.authUsers.filter((user) => LOGIN_ROLE_DEFINITIONS[user.role]?.faction === faction.id));
     const factionAdmins = users.filter((user) => user.role === faction.adminRole && !user.isDraft);
     const createRole = manageableRoles.includes(faction.memberRole) ? faction.memberRole : manageableRoles[0];
     return `
@@ -850,7 +862,7 @@ function renderLoginManagerView() {
       </div>
     `;
   };
-  const systemUsers = state.authUsers.filter((user) => LOGIN_ROLE_DEFINITIONS[user.role]?.faction === 'system');
+  const systemUsers = sortLoginManagerUsers(state.authUsers.filter((user) => LOGIN_ROLE_DEFINITIONS[user.role]?.faction === 'system'));
   workspacePanel.innerHTML = `
     <div class="workspace-head">
       <div>
@@ -861,7 +873,7 @@ function renderLoginManagerView() {
     ${serverReloadPanel}
     <div class="workspace-section login-faction-grid">
       ${visibleFactions.map(renderFactionSection).join('')}
-      ${actorDefinition.level === 'global' ? `
+      ${isGlobalManager ? `
       <div class="workspace-card">
         <div class="login-faction-head">
           <div><h3>System / Global</h3><p>Superadministratoren, globale Admins und reine Viewer.</p></div>

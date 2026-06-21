@@ -2263,7 +2263,7 @@ app.patch('/api/admin/users/:id', requireAuth, requireLoginManager, async (req, 
     const { username, password, role, canCoordinate4thFleet, senatePosition } = validateAdminUserInput(req.body, { requirePassword: false });
     const targetUser = listUsers(db).find((user) => user.id === userId);
     if (!canActorManageUser(req.user, targetUser) || !canActorAssignRole(req.user, role)) {
-      return res.status(403).json({ error: 'Diesen Login darfst du nicht bearbeiten.', users: listUsersForActor(req.user) });
+      return res.status(403).json({ error: 'Fehlende Berechtigung.', users: listUsersForActor(req.user) });
     }
     const existing = findUserByNormalizedUsername(db, username);
     if (existing && existing.id !== userId) {
@@ -2312,7 +2312,7 @@ app.delete('/api/admin/users/:id', requireAuth, requireLoginManager, (req, res) 
   }
 
   if (!canActorManageUser(req.user, targetUser)) {
-    return res.status(403).json({ error: 'Diesen Login darfst du nicht lÃ¶schen.', users: listUsersForActor(req.user) });
+    return res.status(403).json({ error: 'Fehlende Berechtigung.', users: listUsersForActor(req.user) });
   }
 
   if (String(targetUser.username || '').trim().toLowerCase() === 'admin') {
