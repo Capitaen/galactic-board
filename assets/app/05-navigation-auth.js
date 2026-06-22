@@ -685,14 +685,8 @@ function hoveredZoneKey(info) {
 }
 
 function isPlanetInsideHoveredSector(planet) {
-  const hoveredSectorName = String(hoveredZoneInfo?.sector?.name || '').trim();
   const sectorArea = hoveredZoneInfo?.sectorArea;
-  if (!planet) return false;
-  const planetSectorName = String(planet.sector || '').trim();
-  if (hoveredSectorName && planetSectorName && hoveredSectorName.localeCompare(planetSectorName, 'de', { sensitivity: 'base' }) === 0) {
-    return true;
-  }
-  if (!sectorArea?.rings?.length) return false;
+  if (!planet || !sectorArea?.rings?.length) return false;
   const basePosition = viewMode === 'schematic'
     ? getSchematicPlanetPosition(planet)
     : getImagePlanetPosition(planet);

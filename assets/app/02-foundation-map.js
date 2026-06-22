@@ -510,7 +510,7 @@ function shouldRevealPlanetTemporarily(planet) {
 
 function shouldDisplayPlanetByDefault(planet) {
   if (!planet) return false;
-  return false;
+  return isPriorityWorld(planet) || Boolean(planet.isCoreWorld);
 }
 
 function shouldRenderPlanetOnMap(planet) {
