@@ -256,7 +256,7 @@ function getSettingsToggleDefinitions() {
       setLayerPreference('garFleets', next, false);
       setLayerPreference('kusFleets', next, true);
     }},
-    { id: 'stationMarkers', label: 'Raumstationen', description: 'Blendet Golan-1 und andere Raumstationen separat ein oder aus.' },
+    { id: 'stationMarkers', label: 'Raumstationen', description: 'Blendet Golan-1 und andere Raumstationen separat ein oder aus.', visible: () => currentRole() !== 'Viewer' },
     { id: 'tacticalOverlay', label: 'Taktische / schematische Karte', description: 'Wechselt zwischen Bildkarte und schematischer Einsatzdarstellung.', checked: () => viewMode === 'schematic', onToggle: (next) => setViewModePreference(next ? 'schematic' : 'image') }
   ];
 }
@@ -697,7 +697,7 @@ function renderAdminControlModal() {
 
 function renderSettingsModal() {
   if (!settingsModalContent) return;
-  const toggleRows = getSettingsToggleDefinitions().map((entry) => {
+  const toggleRows = getSettingsToggleDefinitions().filter((entry) => !entry.visible || entry.visible()).map((entry) => {
     const checked = entry.checked ? entry.checked() : Boolean(layers[entry.id]);
     return `
       <div class="overlay-toggle-row">

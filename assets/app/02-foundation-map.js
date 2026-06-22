@@ -432,6 +432,13 @@ function normalizeSearchText(text) {
     .replace(/[\u0300-\u036f]/g, '');
 }
 
+function normalizeSectorNameForMatch(value) {
+  return normalizeSearchText(value)
+    .replace(/\bsektor\b|\bsector\b/g, ' ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
 function escapeRegExp(text) {
   return String(text || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

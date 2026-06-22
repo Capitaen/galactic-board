@@ -181,8 +181,11 @@ function updateFleetElement(fleet) {
 
 function isFleetElementVisible(fleet) {
   if (!fleet) return false;
-  if (normalizeFleetCommandRole(fleet.commandRole) === 'station') return Boolean(layers.stationMarkers);
   const role = currentRole();
+  if (normalizeFleetCommandRole(fleet.commandRole) === 'station') {
+    if (role === 'Viewer') return false;
+    return Boolean(layers.stationMarkers);
+  }
   if (fleet.faction === 'GAR') {
     if (!(role === 'Admin' || role === 'Republic Navy / GAR')) return false;
     return Boolean(layers.garFleets);
@@ -949,6 +952,25 @@ function buildGroupedHoverAreas(mode = viewMode) {
   };
 }
 
+function buildArcgisHoverAreas(data, projectionMode) {
+  if (!data) return { regions: [], sectors: [] };
+  const toArea = (type, entry) => {
+    const rings = projectArcgisRingsToWorld(entry?.rings || [], projectionMode)
+      .filter((ring) => Array.isArray(ring) && ring.length >= 3);
+    if (!rings.length) return null;
+    const centroid = averagePoints(rings.flat());
+    const area = createHoverArea(type, entry.name, centroid, rings);
+    if (!area || type !== 'sector') return area;
+    const sectorKey = normalizeSectorNameForMatch(entry.name);
+    const matchingPlanet = data.planets?.find((planet) => normalizeSectorNameForMatch(planet.sector) === sectorKey);
+    return { ...area, regionName: matchingPlanet?.region || null };
+  };
+  return {
+    regions: (data.regions || []).map((entry) => toArea('region', entry)).filter(Boolean),
+    sectors: (data.sectors || []).map((entry) => toArea('sector', entry)).filter(Boolean)
+  };
+}
+
 function findNearestSectorAreaInRegion(regionName, x, y, maxDistance = 260) {
   const normalizedRegionName = String(regionName || '').trim();
   if (!normalizedRegionName) return null;
@@ -971,16 +993,24 @@ function findNearestSectorAreaInRegion(regionName, x, y, maxDistance = 260) {
 
 function buildTacticalHoverAreas(data, projectionMode, mode = viewMode) {
   const manualSectors = buildManualSectorHoverAreas();
+  const arcgisAreas = buildArcgisHoverAreas(data, projectionMode);
   const groupedAreas = buildGroupedHoverAreas(mode);
-  const manualSectorNames = new Set(
-    manualSectors
-      .map((sector) => String(sector?.name || '').trim())
-      .filter(Boolean)
-  );
-  const fallbackSectors = groupedAreas.sectors.filter((sector) => !manualSectorNames.has(String(sector?.name || '').trim()));
+  const occupiedSectorNames = new Set();
+  const arcgisSectors = arcgisAreas.sectors.filter((sector) => {
+    const key = normalizeSectorNameForMatch(sector?.name);
+    if (!key || occupiedSectorNames.has(key)) return false;
+    occupiedSectorNames.add(key);
+    return true;
+  });
+  const fallbackSectors = groupedAreas.sectors.filter((sector) => {
+    const key = normalizeSectorNameForMatch(sector?.name);
+    if (!key || occupiedSectorNames.has(key)) return false;
+    occupiedSectorNames.add(key);
+    return true;
+  });
   return {
-    regions: groupedAreas.regions,
-    sectors: [...manualSectors, ...fallbackSectors]
+    regions: arcgisAreas.regions.length ? arcgisAreas.regions : groupedAreas.regions,
+    sectors: [...manualSectors, ...arcgisSectors, ...fallbackSectors]
   };
 }
 

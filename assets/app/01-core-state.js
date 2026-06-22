@@ -1,7 +1,7 @@
 ﻿// Generated from app-shell.js: core constants, DOM refs, runtime state
 
 const WORLD_SIZE = 2048;
-const ASSET_VERSION_TAG = '20260618e';
+const ASSET_VERSION_TAG = '20260622a';
 const MIN_ZOOM = 0.3;
 const MAX_ZOOM = 3.3;
 const CLUSTER_MAX_ZOOM = 10.5;
@@ -456,6 +456,11 @@ function ensureArcgisCompactLoaded() {
   return loadDeferredScriptOnce('arcgis-compact', `assets/arcgis-compact.js?v=${ASSET_VERSION_TAG}`)
     .then(() => {
       arcgisData = null;
+      tacticalSectionCanvasCache.clear();
+      tacticalHoverAreas = { regions: [], sectors: [] };
+      tacticalBaseReady = false;
+      tacticalBuildQueued = false;
+      tacticalBuildVersion += 1;
       if (typeof renderBaseThenDeferHeavy === 'function' && Array.isArray(state?.planets) && state.planets.length) {
         renderBaseThenDeferHeavy();
       }

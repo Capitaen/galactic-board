@@ -650,11 +650,24 @@ function sanitizeCampaignMeta(meta) {
 
 function buildBootstrapCampaignPayload(state, actor) {
   const source = state && typeof state === 'object' ? state : {};
+  const isViewer = !actor?.id || actor.role === 'Viewer';
+  const viewerHiddenStationClassIds = new Set([
+    'golan_1',
+    'haven_medistation',
+    'cardan_station',
+    'galactic_orbital_station',
+    'valor_station',
+    'nis_black_site'
+  ]);
   return {
     planets: Array.isArray(source.planets) ? source.planets : [],
-    fleets: Array.isArray(source.fleets) ? source.fleets : [],
-    ships: Array.isArray(source.ships) ? source.ships : [],
-    buildJobs: Array.isArray(source.buildJobs) ? source.buildJobs : [],
+    fleets: Array.isArray(source.fleets)
+      ? source.fleets.filter((fleet) => !isViewer || String(fleet?.commandRole || '').toLowerCase() !== 'station')
+      : [],
+    ships: Array.isArray(source.ships)
+      ? source.ships.filter((ship) => !isViewer || !viewerHiddenStationClassIds.has(ship?.classId))
+      : [],
+    buildJobs: isViewer ? [] : (Array.isArray(source.buildJobs) ? source.buildJobs : []),
     fleetMotions: Array.isArray(source.fleetMotions) ? source.fleetMotions : [],
     resources: source.resources && typeof source.resources === 'object' ? source.resources : {},
     planetResources: source.planetResources && typeof source.planetResources === 'object' ? source.planetResources : {},

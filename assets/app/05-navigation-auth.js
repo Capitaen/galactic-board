@@ -1,6 +1,9 @@
 ﻿// Generated from app-shell.js: navigation, auth, role gating, search, app entry actions
 
 function setMainTab(tabId) {
+  if (currentRole() === 'Viewer' && (tabId === 'shipyard' || tabId === 'buildProjects')) {
+    tabId = 'map';
+  }
   runCampaignMaintenance();
   playAudioCue(datapadClickAudio);
   activeMainTab = tabId;
@@ -687,7 +690,11 @@ function hoveredZoneKey(info) {
 function isPlanetInsideHoveredSector(planet) {
   const hoveredSectorName = String(hoveredZoneInfo?.sector?.name || '').trim();
   const planetSectorName = String(planet?.sector || '').trim();
-  if (planet && hoveredSectorName && planetSectorName && hoveredSectorName.localeCompare(planetSectorName, 'de', { sensitivity: 'base' }) === 0) {
+  if (
+    planet
+    && normalizeSectorNameForMatch(hoveredSectorName)
+    && normalizeSectorNameForMatch(hoveredSectorName) === normalizeSectorNameForMatch(planetSectorName)
+  ) {
     return true;
   }
   const sectorArea = hoveredZoneInfo?.sectorArea;
@@ -1610,15 +1617,21 @@ function getRoleFaction(role = currentRole()) {
 
 function refreshRoleChrome() {
   const showAdminTools = isAdminRole() ? adminModeEnabled : true;
+  const isViewer = currentRole() === 'Viewer';
   saveBtn.classList.toggle('hidden', !showAdminTools);
   loginManagerTabBtn.classList.toggle('hidden', !canManageLogins() || (isAdminRole() && !adminModeEnabled));
   document.getElementById('adminLogsTabBtn')?.classList.toggle('hidden', !canViewAuditLogs() || (isAdminRole() && !adminModeEnabled));
   radioCommandTabBtn.classList.toggle('hidden', !canManageRadioCommands() || (isAdminRole() && !adminModeEnabled));
-  buildProjectsTabBtn.classList.remove('hidden');
+  buildProjectsTabBtn.classList.toggle('hidden', isViewer);
   updateSectorDrawButton();
   const canSeeGarFleets = currentRole() === 'Admin' || currentRole() === 'Republic Navy / GAR';
   document.querySelector('[data-main-tab="fleetManagement"]')?.classList.toggle('hidden', !canSeeGarFleets);
-  document.querySelector('[data-main-tab="shipyard"]')?.classList.toggle('hidden', currentRole() === 'Senat');
+  document.querySelector('[data-main-tab="shipyard"]')?.classList.toggle('hidden', isViewer || currentRole() === 'Senat');
+  const stationLayerRow = document.querySelector('[data-layer="stationMarkers"]')?.closest('.layer-row');
+  if (stationLayerRow) stationLayerRow.classList.toggle('hidden', isViewer);
+  state.fleets?.forEach((fleet) => {
+    if (fleetElements.has(fleet.id)) updateFleetElement(fleet);
+  });
   const kusFleetLayerRow = document.querySelector('[data-layer="kusFleets"]')?.closest('.layer-row');
   if (kusFleetLayerRow) kusFleetLayerRow.classList.toggle('hidden', !(currentRole() === 'Admin' || currentRole() === 'Eventleiter / KUS'));
   roleSelect.disabled = true;
@@ -1628,6 +1641,7 @@ function refreshRoleChrome() {
   if (!canViewAuditLogs() && activeMainTab === 'adminLogs') setMainTab('map');
   if (!canManageRadioCommands() && activeMainTab === 'radioCommandCenter') setMainTab('map');
   if (!canSeeGarFleets && activeMainTab === 'fleetManagement') setMainTab('map');
+  if (isViewer && (activeMainTab === 'shipyard' || activeMainTab === 'buildProjects')) setMainTab('map');
   if (currentRole() === 'Senat' && activeMainTab === 'shipyard') setMainTab('buildProjects');
   const faction = getRoleFaction();
   if (!faction) {
