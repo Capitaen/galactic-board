@@ -293,7 +293,7 @@ function setViewModePreference(nextMode) {
 }
 
 function getCurrentSessionLabel() {
-  return currentAuthenticatedUsername ? `${currentAuthenticatedUsername} (${currentRole()})` : 'Gast / Viewer';
+  return currentAuthenticatedUsername ? `${currentAuthenticatedUsername} (${currentRoleLabel()})` : 'Gast / Viewer';
 }
 
 function getAdminControlFilteredPlanets() {
@@ -515,8 +515,8 @@ function renderAdminControlModal() {
     <div class="overlay-panel admin-control-panel">
       <div class="overlay-panel-head">
         <div class="overlay-panel-title">
-          <h2 id="adminControlModalTitle">Globales Kontrollzentrum</h2>
-          <p>Manuelle Eingriffe fuer globale Admins: Fraktionspools, Planeteneigentuemer, Infrastruktur-Slots und lokale Lager.</p>
+      <h2 id="adminControlModalTitle">Globales Kontrollzentrum</h2>
+      <p>Manuelle Eingriffe fuer Administratoren und Superadministratoren: Fraktionspools, Planeteneigentuemer, Infrastruktur-Slots und lokale Lager.</p>
         </div>
         <button type="button" class="secondary overlay-panel-close" data-close-modal="adminControlModal" aria-label="Kontrollzentrum schliessen">×</button>
       </div>

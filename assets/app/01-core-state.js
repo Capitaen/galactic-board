@@ -730,7 +730,10 @@ let PLANET_DEMOGRAPHIC_CATALOG = window.PLANET_DEMOGRAPHICS || {};
 const planetInfoCardCache = new Map();
 let activePlanetInfoRequestId = 0;
 const LOGIN_ROLE_DEFINITIONS = {
-  Admin: { label: 'Globaler Admin', baseRole: 'Admin', faction: 'system', level: 'global' },
+  Superadministrator: { label: 'Superadministrator', baseRole: 'Admin', faction: 'system', level: 'global' },
+  Admin: { label: 'Superadministrator (Legacy)', baseRole: 'Admin', faction: 'system', level: 'global' },
+  Administrator: { label: 'Administrator', baseRole: 'Admin', faction: 'system', level: 'system-admin' },
+  Moderator: { label: 'Moderator', baseRole: 'Moderator', faction: 'system', level: 'moderator' },
   'Republic Navy Admin': { label: 'Republic Navy Admin', baseRole: 'Republic Navy / GAR', faction: 'navy', level: 'admin' },
   'Republic Navy / GAR': { label: 'Republic Navy', baseRole: 'Republic Navy / GAR', faction: 'navy', level: 'member' },
   'Galaktischer Senats Admin': { label: 'Galaktischer Senats Admin', baseRole: 'Senat', faction: 'senate', level: 'admin' },

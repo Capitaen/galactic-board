@@ -1,7 +1,7 @@
 ﻿// Generated from app-shell.js: economy, market, holdings, sector economy views
 
 function canManageEconomyPolicy() {
-  return currentAssignedRole() === 'Admin' || currentAssignedRole() === 'Galaktischer Senats Admin';
+  return isAdminRole() || currentAssignedRole() === 'Galaktischer Senats Admin';
 }
 
 function formatCredits(value) {
@@ -1108,7 +1108,7 @@ function renderSectorEconomySection() {
             ${economyViewState.canManageSectorEmbargo ? `<div class="toolbar-row">
               <button class="mini-btn danger" onclick="setEconomySectorEmbargo(true)" ${selected.economy?.isEmbargoed ? 'disabled' : ''}>Embargo setzen</button>
               <button class="mini-btn" onclick="setEconomySectorEmbargo(false)" ${!selected.economy?.isEmbargoed ? 'disabled' : ''}>Embargo aufheben</button>
-            </div>` : '<div class="muted-box">Nur globale Admins können Embargos setzen oder aufheben.</div>'}
+            </div>` : '<div class="muted-box">Nur Superadministratoren können Embargos setzen oder aufheben.</div>'}
           </div>
         </div>
         <div class="workspace-section">
@@ -1524,4 +1524,5 @@ function renderEconomyView() {
     </div>
   `;
 }
+
 

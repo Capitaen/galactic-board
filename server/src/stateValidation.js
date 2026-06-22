@@ -95,6 +95,8 @@ function normalizePlanetSectorsFromManualSectors(state) {
 }
 
 const ROLE_BASE_ROLES = {
+  Superadministrator: 'Admin',
+  Administrator: 'Admin',
   'Republic Navy Admin': 'Republic Navy / GAR',
   'Galaktischer Senats Admin': 'Senat',
   'Eventleiter / KUS Admin': 'Eventleiter / KUS',
@@ -147,7 +149,7 @@ function isBluforSenateMineTarget(state, planetId) {
 
 function canManageLogins(role) {
   const normalizedRole = String(role || '');
-  return normalizedRole === 'Admin' || normalizedRole.endsWith(' Admin');
+  return normalizedRole === 'Admin' || normalizedRole === 'Superadministrator' || normalizedRole.endsWith(' Admin');
 }
 
 function validatePlanetChanges(role, previousState, nextState) {

@@ -1203,6 +1203,18 @@ function currentRole() {
   return LOGIN_ROLE_DEFINITIONS[currentAssignedRole()]?.baseRole || 'Viewer';
 }
 
+function currentRoleLabel() {
+  return LOGIN_ROLE_DEFINITIONS[currentAssignedRole()]?.label || currentRole();
+}
+
+function hasAssignedRoleLevel(...levels) {
+  return levels.includes(LOGIN_ROLE_DEFINITIONS[currentAssignedRole()]?.level);
+}
+
+function isSuperAdminRole() {
+  return hasAssignedRoleLevel('global');
+}
+
 function canCoordinate4thFleet() {
   return isAdminRole() || (
     currentRole() === 'Republic Navy / GAR'
@@ -1211,7 +1223,7 @@ function canCoordinate4thFleet() {
 }
 
 function isAdminRole() {
-  return currentRole() === 'Admin';
+  return currentRole() === 'Admin' || hasAssignedRoleLevel('system-admin');
 }
 
 function isUnderworldRole(role = currentRole()) {
@@ -1219,15 +1231,15 @@ function isUnderworldRole(role = currentRole()) {
 }
 
 function canManageLogins() {
-  return ['global', 'admin', 'faction-admin'].includes(LOGIN_ROLE_DEFINITIONS[currentAssignedRole()]?.level);
+  return hasAssignedRoleLevel('global', 'admin', 'faction-admin');
 }
 
 function canManageRadioCommands() {
-  return ['Admin', 'Republic Navy Admin'].includes(currentAssignedRole());
+  return isSuperAdminRole() || currentAssignedRole() === 'Republic Navy Admin';
 }
 
 function canViewAuditLogs() {
-  return ['global'].includes(LOGIN_ROLE_DEFINITIONS[currentAssignedRole()]?.level);
+  return hasAssignedRoleLevel('global', 'moderator');
 }
 
 function getManageableLoginRoles() {

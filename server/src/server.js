@@ -127,7 +127,10 @@ const RESOURCE_PRODUCTION_TICK_MS = 60 * 60 * 1000;
 const RESOURCE_RESET_VERSION = 'resource_reset_2026_05_01';
 const OWNER_FRONTLINE_PASS_VERSION = 'excel_owner_visibility_v2';
 const LOGIN_ROLE_DEFINITIONS = {
+  Superadministrator: { faction: 'system', level: 'global' },
   Admin: { faction: 'system', level: 'global' },
+  Administrator: { faction: 'system', level: 'system-admin' },
+  Moderator: { faction: 'system', level: 'moderator' },
   'Republic Navy Admin': { faction: 'navy', level: 'admin' },
   'Republic Navy / GAR': { faction: 'navy', level: 'member' },
   'Galaktischer Senats Admin': { faction: 'senate', level: 'admin' },
@@ -549,13 +552,21 @@ function canManageLogins(role) {
   return ['global', 'admin', 'faction-admin'].includes(LOGIN_ROLE_DEFINITIONS[role]?.level);
 }
 
+function isGlobalAdminRole(role) {
+  return LOGIN_ROLE_DEFINITIONS[role]?.level === 'global';
+}
+
+function isSystemAdminRole(role) {
+  return isGlobalAdminRole(role) || LOGIN_ROLE_DEFINITIONS[role]?.level === 'system-admin';
+}
+
 function canManageRadioPermissions(role) {
-  if (role === 'Admin') return true;
+  if (isGlobalAdminRole(role)) return true;
   return role === 'Republic Navy Admin';
 }
 
 function canViewAuditLogs(role) {
-  return ['global'].includes(LOGIN_ROLE_DEFINITIONS[role]?.level);
+  return ['global', 'moderator'].includes(LOGIN_ROLE_DEFINITIONS[role]?.level);
 }
 
 function listUsersForActor(actor) {
@@ -1005,8 +1016,8 @@ function requireLoginManager(req, res, next) {
 }
 
 function requireGlobalAdmin(req, res, next) {
-  if (!req.user || req.user.role !== 'Admin') {
-    return res.status(403).json({ error: 'Nur globale Admins dürfen den Server-Reload auslösen.' });
+  if (!req.user || !isGlobalAdminRole(req.user.role)) {
+    return res.status(403).json({ error: 'Nur Superadministratoren dürfen den Server-Reload auslösen.' });
   }
   next();
 }
@@ -1026,15 +1037,15 @@ function requireRadioPermissionManager(req, res, next) {
 }
 
 function requireSenateEconomyManager(req, res, next) {
-  if (!req.user || !['Admin', 'Galaktischer Senats Admin'].includes(req.user.role)) {
-    return res.status(403).json({ error: 'Nur Senats-Admins oder globale Admins dürfen den GAR-Haushalt verwalten.' });
+  if (!req.user || !(isSystemAdminRole(req.user.role) || req.user.role === 'Galaktischer Senats Admin')) {
+    return res.status(403).json({ error: 'Nur Senats-Admins sowie Administratoren und Superadministratoren dürfen den GAR-Haushalt verwalten.' });
   }
   next();
 }
 
 function canBuySectorCivilianResources(user) {
   if (!user?.id) return false;
-  return ['Admin', 'Republic Navy Admin', 'Galaktischer Senats Admin', 'Senat'].includes(user.role);
+  return ['Admin', 'Superadministrator', 'Administrator', 'Republic Navy Admin', 'Galaktischer Senats Admin', 'Senat'].includes(user.role);
 }
 
 function requireSectorCivilianBuyer(req, res, next) {
@@ -1045,8 +1056,8 @@ function requireSectorCivilianBuyer(req, res, next) {
 }
 
 function requireSectorEmbargoManager(req, res, next) {
-  if (!req.user || !['Admin'].includes(req.user.role)) {
-    return res.status(403).json({ error: 'Nur globale Admins dürfen Sektor-Embargos setzen.' });
+  if (!req.user || !isGlobalAdminRole(req.user.role)) {
+    return res.status(403).json({ error: 'Nur Superadministratoren dürfen Sektor-Embargos setzen.' });
   }
   next();
 }
@@ -1235,7 +1246,7 @@ function canActorAssignRole(actor, role) {
   const roleDefinition = LOGIN_ROLE_DEFINITIONS[role];
   if (!actorDefinition || !roleDefinition) return false;
   if (actorDefinition.level === 'global') {
-    return roleDefinition.level !== 'global';
+    return role !== 'Admin';
   }
   if (actorDefinition.faction !== roleDefinition.faction) return false;
   return ['admin', 'faction-admin'].includes(actorDefinition.level)
@@ -1303,7 +1314,7 @@ function validateRadioPermissionInput(body) {
     throw error;
   }
 
-  const permissionRole = ['Admin', 'Republic Navy Admin'].includes(linkedUser?.role)
+  const permissionRole = ['Admin', 'Superadministrator', 'Republic Navy Admin'].includes(linkedUser?.role)
     ? 'admiralty'
     : 'fleet_officer';
 
@@ -1774,7 +1785,7 @@ app.get('/api/economy/sectors', (req, res) => {
     res.json({
       sectors: listEconomySectors(db, state),
       canBuyResources: canBuySectorCivilianResources(getSession(req)),
-      canManageEmbargo: ['Admin'].includes(getSession(req)?.role)
+      canManageEmbargo: isGlobalAdminRole(getSession(req)?.role)
     });
   } catch (error) {
     console.error('Sector economy list endpoint failed', error);
@@ -1788,7 +1799,7 @@ app.get('/api/economy/sectors/:sectorId', (req, res) => {
     res.json({
       sector: readEconomySector(db, state, req.params.sectorId),
       canBuyResources: canBuySectorCivilianResources(getSession(req)),
-      canManageEmbargo: ['Admin'].includes(getSession(req)?.role)
+      canManageEmbargo: isGlobalAdminRole(getSession(req)?.role)
     });
   } catch (error) {
     res.status(error.status || 500).json({ error: error.message || 'Sektor-Wirtschaft konnte nicht geladen werden.' });

@@ -449,7 +449,7 @@ function canEditPlanetDescription(planet) {
 }
 
 function canBuildMineProjects() {
-  return currentAssignedRole() === 'Admin' || currentAssignedRole() === 'Galaktischer Senats Admin';
+  return isAdminRole() || currentAssignedRole() === 'Galaktischer Senats Admin';
 }
 
 function canBuildWarehouses() {
@@ -458,7 +458,7 @@ function canBuildWarehouses() {
 
 function canManageWarehouseLogistics() {
   const assignedRole = currentAssignedRole();
-  return assignedRole === 'Admin'
+  return isAdminRole()
     || assignedRole === 'Galaktischer Senats Admin'
     || assignedRole === 'Republic Navy Admin'
     || currentRole() === 'Republic Navy / GAR';
@@ -1693,7 +1693,7 @@ function getBuildJobProgressBar(job) {
 
 function startMineBuildProject() {
   if (!canBuildMineProjects()) {
-    setStatus('Nur Senats-Admins oder globale Admins können Infrastrukturprojekte starten.');
+    setStatus('Nur Senats-Admins sowie Administratoren und Superadministratoren können Infrastrukturprojekte starten.');
     return;
   }
   const planetId = document.getElementById('mineBuildPlanet')?.value || '';
@@ -1791,7 +1791,7 @@ function saveShipyardLogEntry() {
 
 function startWarehouseBuildProject() {
   if (!canBuildWarehouses()) {
-    setStatus('Nur Senats-Admins oder globale Admins können Lager bauen.');
+    setStatus('Nur Senats-Admins sowie Administratoren und Superadministratoren können Lager bauen.');
     return;
   }
   const planetId = document.getElementById('warehouseBuildPlanet')?.value || '';
@@ -1846,7 +1846,7 @@ function upgradeWarehouse(warehouseId) {
     return;
   }
   if (!canBuildWarehouses()) {
-    setStatus('Nur Senats-Admins oder globale Admins können Lager upgraden.');
+    setStatus('Nur Senats-Admins sowie Administratoren und Superadministratoren können Lager upgraden.');
     return;
   }
   if (warehouse.level >= WAREHOUSE_MAX_LEVEL) {
@@ -1877,7 +1877,7 @@ function isShipyardProjectUnderConstruction(planetId) {
 
 function startShipyardProject(planetId = '') {
   if (!canManageShipyards()) {
-    setStatus('Nur Navy oder globale Admins können Werften bauen und ausbauen.');
+    setStatus('Nur Navy sowie Administratoren und Superadministratoren können Werften bauen und ausbauen.');
     return;
   }
   const resolvedPlanetId = planetId || document.getElementById('shipyardProjectPlanet')?.value || '';

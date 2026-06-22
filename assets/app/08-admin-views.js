@@ -614,7 +614,7 @@ async function fetchFirstAvailableServerReloadEndpoint(endpoints, options = {}) 
 }
 
 function canManageServerReload() {
-  return LOGIN_ROLE_DEFINITIONS[currentAssignedRole()]?.level === 'global';
+  return isSuperAdminRole();
 }
 
 function clearServerReloadPollTimer() {
@@ -872,8 +872,8 @@ function renderLoginManagerView() {
   const manageableRoles = getManageableLoginRoles();
   const getLoginManagerSortWeight = (user) => {
     const level = LOGIN_ROLE_DEFINITIONS[user?.role]?.level || '';
-    if (['global', 'faction-admin', 'admin'].includes(level)) return 0;
-    if (level === 'member') return 1;
+    if (['global', 'system-admin', 'faction-admin', 'admin'].includes(level)) return 0;
+    if (['moderator', 'member'].includes(level)) return 1;
     return 2;
   };
   const sortLoginManagerUsers = (users) => [...users].sort((left, right) => {
@@ -888,7 +888,7 @@ function renderLoginManagerView() {
     const userFaction = LOGIN_FACTIONS.find((faction) => faction.id === userDefinition?.faction);
     const categoryRoles = userFaction
       ? [userFaction.adminRole, userFaction.memberRole]
-      : ['Admin', 'Viewer'];
+      : ['Superadministrator', 'Administrator', 'Moderator', 'Viewer'];
     const roleOptions = isGlobalManager
       ? categoryRoles.filter((candidateRole) => manageableRoles.includes(candidateRole) || candidateRole === selectedRole)
       : (user.isDraft || manageableRoles.includes(selectedRole) ? manageableRoles : [selectedRole]);
@@ -960,7 +960,7 @@ function renderLoginManagerView() {
       ${isGlobalManager ? `
       <div class="workspace-card">
         <div class="login-faction-head">
-          <div><h3>System / Global</h3><p>Globale Admins und reine Viewer.</p></div>
+          <div><h3>System / Global</h3><p>Superadministratoren, Administratoren, Moderatoren und Viewer.</p></div>
           <button type="button" class="mini-btn primary" onclick="createLoginManagerUser('Viewer')">Login anlegen</button>
         </div>
         <div class="login-manager-grid login-manager-head">
@@ -1184,7 +1184,7 @@ function createRadioPermissionDraft() {
 }
 
 function getDerivedRadioPermissionRole(permission) {
-  return ['Admin', 'Republic Navy Admin'].includes(permission?.linkedUserRole)
+  return ['Admin', 'Superadministrator', 'Republic Navy Admin'].includes(permission?.linkedUserRole)
     ? 'admiralty'
     : 'fleet_officer';
 }
@@ -1408,7 +1408,7 @@ function renderRadioCommandCenterView() {
     <div class="workspace-section">
       <div class="workspace-card">
         <h3>Berechtigungen</h3>
-        <p class="muted">${radioCommandAdminState.loading ? 'Lade Daten...' : 'Der FunkRelay-Webhook spiegelt nur Nachrichten. Berechtigungen werden über Ingame-Name + Website-Login geprüft. Republic Navy Admin und Admin werden automatisch als Admiralität behandelt, alle anderen als Flottenoffizier mit zugewiesenen GAR-Verbänden.'}</p>
+<p class="muted">${radioCommandAdminState.loading ? 'Lade Daten...' : 'Der FunkRelay-Webhook spiegelt nur Nachrichten. Berechtigungen werden über Ingame-Name + Website-Login geprüft. Republic Navy Admin sowie Superadministratoren werden automatisch als Admiralität behandelt, alle anderen als Flottenoffizier mit zugewiesenen GAR-Verbänden.'}</p>
         <table class="data-table">
           <thead><tr><th>Ingame-Name</th><th>Website-Login</th><th>Rolle</th><th>Verknüpfte Verbände</th><th>Aktionen</th></tr></thead>
           <tbody>${permissionRows}</tbody>

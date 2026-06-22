@@ -171,7 +171,7 @@ function renderShipyardView() {
 function canBuildMineProjects() {
   const assignedRole = currentAssignedRole();
   const senatePosition = serverSync.session?.senatePosition || '';
-  return assignedRole === 'Admin'
+  return isAdminRole()
     || assignedRole === 'Galaktischer Senats Admin'
     || (assignedRole === 'Senat' && ['Vizekanzler', 'Regierungsdirektor', 'Minister'].includes(senatePosition));
 }
@@ -251,7 +251,7 @@ function renderBuildProjectsView() {
     <div class="workspace-section workspace-columns">
       <div class="workspace-card">
         <h3>Infrastrukturprojekt</h3>
-        <p>${canStartMineProject ? 'Wähle einen republikanischen Planeten, eine Gebäudekategorie und einen freien Slot. Jedes Gebäude belegt genau einen Slot.' : 'Nur globale Admins, Senats-Admins sowie Vizekanzler, Regierungsdirektor und Minister können GAR-Infrastrukturprojekte starten.'}</p>
+      <p>${canStartMineProject ? 'Wähle einen republikanischen Planeten, eine Gebäudekategorie und einen freien Slot. Jedes Gebäude belegt genau einen Slot.' : 'Nur Administratoren, Superadministratoren, Senats-Admins sowie Vizekanzler, Regierungsdirektor und Minister können GAR-Infrastrukturprojekte starten.'}</p>
         <div class="form-row">
           <label>Planet</label>
           <div class="inline-search-wrap">
@@ -347,7 +347,7 @@ function renderBuildProjectsView() {
     <div class="workspace-section workspace-columns">
       <div class="workspace-card">
         <h3>Werftbau & Upgrade</h3>
-        <p>${canManageShipyards() ? 'Die Navy kann auf hinterlegten Lore-Werftwelten neue Werften errichten oder bestehende Werften hochziehen.' : 'Nur Navy und globale Admins dürfen GAR-Werften bauen oder ausbauen.'}</p>
+      <p>${canManageShipyards() ? 'Die Navy kann auf hinterlegten Lore-Werftwelten neue Werften errichten oder bestehende Werften hochziehen.' : 'Nur Navy sowie Administratoren und Superadministratoren dürfen GAR-Werften bauen oder ausbauen.'}</p>
         <div class="form-row">
           <label>Werftwelt</label>
           <select id="shipyardProjectPlanet" ${canManageShipyards() ? '' : 'disabled'} onchange="renderBuildProjectsView()">
