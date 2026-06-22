@@ -899,7 +899,18 @@ function buildGroupedHoverAreas(mode = viewMode) {
 }
 
 function buildTacticalHoverAreas(data, projectionMode, mode = viewMode) {
-  return { regions: [], sectors: buildManualSectorHoverAreas() };
+  const manualSectors = buildManualSectorHoverAreas();
+  const groupedAreas = buildGroupedHoverAreas(mode);
+  const manualSectorNames = new Set(
+    manualSectors
+      .map((sector) => String(sector?.name || '').trim())
+      .filter(Boolean)
+  );
+  const fallbackSectors = groupedAreas.sectors.filter((sector) => !manualSectorNames.has(String(sector?.name || '').trim()));
+  return {
+    regions: groupedAreas.regions,
+    sectors: [...manualSectors, ...fallbackSectors]
+  };
 }
 
 function findHoveredArea(areas, x, y) {
