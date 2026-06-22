@@ -1498,7 +1498,7 @@ function renderTacticalBase() {
   }
 
   const frag = document.createDocumentFragment();
-  tacticalHoverAreas = buildTacticalHoverAreas(null, 'image', 'schematic');
+  tacticalHoverAreas = buildTacticalHoverAreas(null, projectionMode, viewMode);
 
   const columnCount = 24;
   const rowCount = 22;
