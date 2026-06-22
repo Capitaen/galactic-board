@@ -1302,14 +1302,14 @@ function validateRadioPermissionInput(body) {
   }
 
   if (!RADIO_PERMISSION_ROLES.includes(permissionRole)) {
-    const error = new Error('UngÃ¼ltige Befehlsrolle.');
+    const error = new Error('Ungültige Befehlsrolle.');
     error.status = 400;
     throw error;
   }
 
   const linkedUser = linkedUserId ? listUsers(db).find((user) => user.id === linkedUserId) : null;
   if (linkedUserId && !linkedUser) {
-    const error = new Error('VerknÃ¼pfter Website-Login wurde nicht gefunden.');
+    const error = new Error('Verknüpfter Website-Login wurde nicht gefunden.');
     error.status = 400;
     throw error;
   }
@@ -2315,7 +2315,7 @@ app.post('/api/admin/users', requireAuth, requireLoginManager, async (req, res) 
 app.patch('/api/admin/users/:id', requireAuth, requireLoginManager, async (req, res) => {
   const userId = String(req.params.id || '').trim();
   if (!userId) {
-    return res.status(400).json({ error: 'UngÃ¼ltige Benutzer-ID.', users: listUsersForActor(req.user) });
+    return res.status(400).json({ error: 'Ungültige Benutzer-ID.', users: listUsersForActor(req.user) });
   }
 
   try {
@@ -2361,7 +2361,7 @@ app.patch('/api/admin/users/:id', requireAuth, requireLoginManager, async (req, 
 app.delete('/api/admin/users/:id', requireAuth, requireLoginManager, (req, res) => {
   const userId = String(req.params.id || '').trim();
   if (!userId) {
-    return res.status(400).json({ error: 'UngÃ¼ltige Benutzer-ID.', users: listUsersForActor(req.user) });
+    return res.status(400).json({ error: 'Ungültige Benutzer-ID.', users: listUsersForActor(req.user) });
   }
 
   const existingUsers = listUsers(db);
@@ -2375,7 +2375,7 @@ app.delete('/api/admin/users/:id', requireAuth, requireLoginManager, (req, res) 
   }
 
   if (String(targetUser.username || '').trim().toLowerCase() === 'admin') {
-    return res.status(403).json({ error: 'Der Standard-Admin darf nicht gelÃ¶scht werden.', users: existingUsers });
+    return res.status(403).json({ error: 'Der Standard-Admin darf nicht gelöscht werden.', users: existingUsers });
   }
 
   deleteUser(db, userId);
@@ -2501,7 +2501,7 @@ app.post('/api/admin/radio-command-permissions', requireAuth, requireRadioPermis
 app.patch('/api/admin/radio-command-permissions/:id', requireAuth, requireRadioPermissionManager, (req, res) => {
   const id = String(req.params.id || '').trim();
   if (!id) {
-    return res.status(400).json({ error: 'UngÃ¼ltige Berechtigungs-ID.', ...buildRadioCommandAdminPayload(req.user) });
+    return res.status(400).json({ error: 'Ungültige Berechtigungs-ID.', ...buildRadioCommandAdminPayload(req.user) });
   }
   try {
     const input = validateRadioPermissionInput(req.body);
@@ -2518,7 +2518,7 @@ app.patch('/api/admin/radio-command-permissions/:id', requireAuth, requireRadioP
 app.delete('/api/admin/radio-command-permissions/:id', requireAuth, requireRadioPermissionManager, (req, res) => {
   const id = String(req.params.id || '').trim();
   if (!id) {
-    return res.status(400).json({ error: 'UngÃ¼ltige Berechtigungs-ID.', ...buildRadioCommandAdminPayload(req.user) });
+    return res.status(400).json({ error: 'Ungültige Berechtigungs-ID.', ...buildRadioCommandAdminPayload(req.user) });
   }
   deleteRadioCommandPermission(db, id);
   res.json({ ok: true, ...buildRadioCommandAdminPayload(req.user) });

@@ -685,6 +685,11 @@ function hoveredZoneKey(info) {
 }
 
 function isPlanetInsideHoveredSector(planet) {
+  const hoveredSectorName = String(hoveredZoneInfo?.sector?.name || '').trim();
+  const planetSectorName = String(planet?.sector || '').trim();
+  if (planet && hoveredSectorName && planetSectorName && hoveredSectorName.localeCompare(planetSectorName, 'de', { sensitivity: 'base' }) === 0) {
+    return true;
+  }
   const sectorArea = hoveredZoneInfo?.sectorArea;
   if (!planet || !sectorArea?.rings?.length) return false;
   const basePosition = viewMode === 'schematic'

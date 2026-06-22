@@ -937,15 +937,36 @@ function buildGroupedHoverAreas(mode = viewMode) {
     if (hull.length < 3) return;
     regions.push(createHoverArea('region', regionName, averagePoints(points), [hull]));
   });
-  sectorGroups.forEach(({ sectorName, points }) => {
+  sectorGroups.forEach(({ regionName, sectorName, points }) => {
     const hull = buildHoverRingFromPoints(points, 1.03, 20);
     if (hull.length < 3) return;
-    sectors.push(createHoverArea('sector', sectorName, averagePoints(points), [hull]));
+    const area = createHoverArea('sector', sectorName, averagePoints(points), [hull]);
+    if (area) sectors.push({ ...area, regionName: regionName || null });
   });
   return {
     regions: regions.filter(Boolean),
     sectors: sectors.filter(Boolean)
   };
+}
+
+function findNearestSectorAreaInRegion(regionName, x, y, maxDistance = 260) {
+  const normalizedRegionName = String(regionName || '').trim();
+  if (!normalizedRegionName) return null;
+  const maxDistanceSq = maxDistance * maxDistance;
+  let best = null;
+  let bestDistanceSq = maxDistanceSq;
+  tacticalHoverAreas.sectors.forEach((area) => {
+    if (String(area?.regionName || '').trim() !== normalizedRegionName) return;
+    const centroid = area?.centroid;
+    if (!centroid) return;
+    const dx = (Number(centroid.x) || 0) - x;
+    const dy = (Number(centroid.y) || 0) - y;
+    const distanceSq = (dx * dx) + (dy * dy);
+    if (distanceSq > bestDistanceSq) return;
+    bestDistanceSq = distanceSq;
+    best = area;
+  });
+  return best;
 }
 
 function buildTacticalHoverAreas(data, projectionMode, mode = viewMode) {
@@ -981,13 +1002,17 @@ function nearestDisplayedZone(x, y) {
   }
   const sectorArea = findHoveredArea(tacticalHoverAreas.sectors, x, y);
   const regionArea = findHoveredArea(tacticalHoverAreas.regions, x, y);
-  const sector = sectorArea;
+  const fallbackSectorArea = !sectorArea && regionArea?.name
+    ? findNearestSectorAreaInRegion(regionArea.name, x, y)
+    : null;
+  const resolvedSectorArea = sectorArea || fallbackSectorArea;
+  const sector = resolvedSectorArea;
   const region = regionArea;
   if (!sector && !region) return null;
   return {
     sector: sector ? { name: sector.name, centroid: sector.centroid } : null,
     region: region ? { name: region.name, centroid: region.centroid } : null,
-    sectorArea: sectorArea || null,
+    sectorArea: resolvedSectorArea || null,
     regionArea: regionArea || null
   };
 }
