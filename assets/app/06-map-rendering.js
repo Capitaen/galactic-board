@@ -854,6 +854,56 @@ function createHoverArea(type, name, centroid, rings) {
   return { type, name, centroid, rings, bounds };
 }
 
+function createCircularHoverRing(center, radius = 34, segments = 18) {
+  const safeRadius = Math.max(12, Number(radius) || 34);
+  const safeSegments = Math.max(10, Number(segments) || 18);
+  return Array.from({ length: safeSegments }, (_, index) => {
+    const angle = ((Math.PI * 2) * index) / safeSegments;
+    return {
+      x: clamp(center.x + Math.cos(angle) * safeRadius, 0, WORLD_SIZE),
+      y: clamp(center.y + Math.sin(angle) * safeRadius, 0, WORLD_SIZE)
+    };
+  });
+}
+
+function createBufferedSegmentHoverRing(start, end, radius = 28) {
+  const dx = (Number(end?.x) || 0) - (Number(start?.x) || 0);
+  const dy = (Number(end?.y) || 0) - (Number(start?.y) || 0);
+  const length = Math.hypot(dx, dy);
+  if (length <= 1e-6) return createCircularHoverRing(start, radius);
+  const nx = dx / length;
+  const ny = dy / length;
+  const px = -ny;
+  const py = nx;
+  const extension = Math.max(10, radius * 0.7);
+  const startCap = { x: start.x - (nx * extension), y: start.y - (ny * extension) };
+  const endCap = { x: end.x + (nx * extension), y: end.y + (ny * extension) };
+  return [
+    { x: clamp(startCap.x + (px * radius), 0, WORLD_SIZE), y: clamp(startCap.y + (py * radius), 0, WORLD_SIZE) },
+    { x: clamp(endCap.x + (px * radius), 0, WORLD_SIZE), y: clamp(endCap.y + (py * radius), 0, WORLD_SIZE) },
+    { x: clamp(endCap.x - (px * radius), 0, WORLD_SIZE), y: clamp(endCap.y - (py * radius), 0, WORLD_SIZE) },
+    { x: clamp(startCap.x - (px * radius), 0, WORLD_SIZE), y: clamp(startCap.y - (py * radius), 0, WORLD_SIZE) }
+  ];
+}
+
+function buildHoverRingFromPoints(points, scale = 1.03, minRadius = 20) {
+  const validPoints = (Array.isArray(points) ? points : [])
+    .map((point) => ({ x: Number(point?.x) || 0, y: Number(point?.y) || 0 }))
+    .filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y));
+  if (!validPoints.length) return [];
+  const uniquePoints = [];
+  validPoints.forEach((point) => {
+    if (uniquePoints.some((entry) => Math.abs(entry.x - point.x) < 0.5 && Math.abs(entry.y - point.y) < 0.5)) return;
+    uniquePoints.push(point);
+  });
+  if (uniquePoints.length === 1) return createCircularHoverRing(uniquePoints[0], Math.max(24, minRadius + 10));
+  if (uniquePoints.length === 2) return createBufferedSegmentHoverRing(uniquePoints[0], uniquePoints[1], Math.max(20, minRadius + 6));
+  const hull = convexHull(uniquePoints);
+  if (hull.length >= 3) return expandHull(hull, scale, minRadius);
+  if (hull.length === 2) return createBufferedSegmentHoverRing(hull[0], hull[1], Math.max(20, minRadius + 6));
+  return createCircularHoverRing(hull[0] || uniquePoints[0], Math.max(24, minRadius + 10));
+}
+
 function buildManualSectorHoverAreas() {
   return ensureSectorStore()
     .map((sector) => {
@@ -883,13 +933,13 @@ function buildGroupedHoverAreas(mode = viewMode) {
   const regions = [];
   const sectors = [];
   regionGroups.forEach((points, regionName) => {
-    if (points.length < 3) return;
-    const hull = expandHull(convexHull(points), 1.06, 40);
+    const hull = buildHoverRingFromPoints(points, 1.06, 40);
+    if (hull.length < 3) return;
     regions.push(createHoverArea('region', regionName, averagePoints(points), [hull]));
   });
   sectorGroups.forEach(({ sectorName, points }) => {
-    if (points.length < 3) return;
-    const hull = expandHull(convexHull(points), 1.03, 20);
+    const hull = buildHoverRingFromPoints(points, 1.03, 20);
+    if (hull.length < 3) return;
     sectors.push(createHoverArea('sector', sectorName, averagePoints(points), [hull]));
   });
   return {

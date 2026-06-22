@@ -245,6 +245,7 @@ function openOverlayModal(modalId) {
 
 function getSettingsToggleDefinitions() {
   return [
+    { id: 'showAllPlanets', label: 'Alle Planeten anzeigen', description: 'Zeigt dauerhaft alle Planeten. Ist es aus, erscheinen zusätzliche Planeten nur beim Überfahren eines Sektors.', checked: () => Boolean(showAllPlanetsOnMap), onToggle: (next) => setShowAllPlanetsPreference(next) },
     { id: 'planetLabels', label: 'Planetennamen', description: 'Blendet Planetennamen direkt auf der Karte ein.' },
     { id: 'hyperlanes', label: 'Hyperraumrouten', description: 'Zeigt Hyperraumrouten und manuelle Verbindungen.' },
     { id: 'majorTradeRoutes', label: 'Große Handelsrouten', description: 'Nutzen aktuell dieselbe Darstellung wie die Haupt-Hyperraumrouten.', checked: () => Boolean(layers.hyperlanes), onToggle: (next) => setLayerPreference('hyperlanes', next) },
@@ -258,6 +259,13 @@ function getSettingsToggleDefinitions() {
     { id: 'stationMarkers', label: 'Raumstationen', description: 'Blendet Golan-1 und andere Raumstationen separat ein oder aus.' },
     { id: 'tacticalOverlay', label: 'Taktische / schematische Karte', description: 'Wechselt zwischen Bildkarte und schematischer Einsatzdarstellung.', checked: () => viewMode === 'schematic', onToggle: (next) => setViewModePreference(next ? 'schematic' : 'image') }
   ];
+}
+
+function setShowAllPlanetsPreference(enabled) {
+  showAllPlanetsOnMap = Boolean(enabled);
+  saveUiSettingsPrefs();
+  markDirty({ positions: true, layers: true });
+  syncSettingsModalState();
 }
 
 function setLayerPreference(layerId, enabled, renderAfter = true) {

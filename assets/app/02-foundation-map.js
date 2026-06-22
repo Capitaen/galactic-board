@@ -510,6 +510,7 @@ function shouldRevealPlanetTemporarily(planet) {
 
 function shouldDisplayPlanetByDefault(planet) {
   if (!planet) return false;
+  if (showAllPlanetsOnMap) return true;
   return isPriorityWorld(planet) || Boolean(planet.isCoreWorld);
 }
 
@@ -543,6 +544,7 @@ function saveUiSettingsPrefs() {
   try {
     localStorage.setItem(SETTINGS_SOUND_VOLUME_KEY, String(clampUiSoundVolume(uiSoundVolume)));
     localStorage.setItem(SETTINGS_ADMIN_MODE_KEY, adminModeEnabled ? '1' : '0');
+    localStorage.setItem(SETTINGS_SHOW_ALL_PLANETS_KEY, showAllPlanetsOnMap ? '1' : '0');
   } catch (error) {
     console.warn('UI settings prefs could not be stored', error);
   }
@@ -554,6 +556,8 @@ function loadUiSettingsPrefs() {
     if (storedVolume != null) uiSoundVolume = clampUiSoundVolume(storedVolume);
     const storedAdminMode = localStorage.getItem(SETTINGS_ADMIN_MODE_KEY);
     if (storedAdminMode != null) adminModeEnabled = storedAdminMode !== '0';
+    const storedShowAllPlanets = localStorage.getItem(SETTINGS_SHOW_ALL_PLANETS_KEY);
+    if (storedShowAllPlanets != null) showAllPlanetsOnMap = storedShowAllPlanets === '1';
   } catch (error) {
     console.warn('UI settings prefs could not be restored', error);
   }
