@@ -509,7 +509,8 @@ function shouldRevealPlanetTemporarily(planet) {
 }
 
 function shouldDisplayPlanetByDefault(planet) {
-  return Boolean(planet);
+  if (!planet) return false;
+  return false;
 }
 
 function shouldRenderPlanetOnMap(planet) {
