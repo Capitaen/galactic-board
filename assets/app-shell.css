@@ -350,7 +350,7 @@ body {
 .layer-row input { transform:scale(1.1); }
 .layer-row .handle { color:#7a8291; font-size:19px; }
 #addPanel { top:75px; left:75px; width:330px; display:none; padding:14px; }
-#infoPanel { top:85px; right:20px; width:360px; max-height:calc(100vh - 120px); overflow:auto; display:none; padding:16px; }
+#infoPanel { top:85px; right:20px; bottom:98px; width:360px; max-height:none; overflow:auto; display:none; padding:16px; }
 #legendPanel {
   left:22px;
   bottom:98px;
@@ -1353,10 +1353,10 @@ body.nav-collapsed .main-nav {
   filter:saturate(.8);
 }
 body.nav-collapsed .main-nav-shell {
-  transform:translateX(-50%) translateY(10px);
+  transform:translateX(-50%) translateY(28px);
 }
 body.nav-collapsed #mainNavToggle {
-  transform:translateY(8px);
+  transform:translateY(14px);
 }
 .main-tab-btn {
   position:relative;
@@ -1416,7 +1416,7 @@ body.nav-collapsed #mainNavToggle {
   left:82px;
   right:20px;
   top:85px;
-  bottom:56px;
+  bottom:108px;
   z-index:34;
   display:none;
   overflow:hidden;
