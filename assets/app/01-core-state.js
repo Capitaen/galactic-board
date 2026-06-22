@@ -731,7 +731,7 @@ const planetInfoCardCache = new Map();
 let activePlanetInfoRequestId = 0;
 const LOGIN_ROLE_DEFINITIONS = {
   Superadministrator: { label: 'Superadministrator', baseRole: 'Admin', faction: 'system', level: 'global' },
-  Admin: { label: 'Superadministrator (Legacy)', baseRole: 'Admin', faction: 'system', level: 'global' },
+  Admin: { label: 'Superadministrator', baseRole: 'Admin', faction: 'system', level: 'global' },
   Administrator: { label: 'Administrator', baseRole: 'Admin', faction: 'system', level: 'system-admin' },
   Moderator: { label: 'Moderator', baseRole: 'Moderator', faction: 'system', level: 'moderator' },
   'Republic Navy Admin': { label: 'Republic Navy Admin', baseRole: 'Republic Navy / GAR', faction: 'navy', level: 'admin' },

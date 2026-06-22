@@ -1815,7 +1815,7 @@ export function createDb(projectRoot) {
       crypto.randomUUID(),
       'admin',
       bcrypt.hashSync('admin', 10),
-      'Admin',
+      'Administrator',
       now,
       now
     );
@@ -1826,11 +1826,18 @@ export function createDb(projectRoot) {
       WHERE id = ?
     `).run(
       bcrypt.hashSync('admin', 10),
-      'Admin',
+      'Administrator',
       now,
       defaultAdmin.id
     );
   }
+
+  db.prepare(`
+    UPDATE users
+    SET role = 'Administrator', updated_at = ?
+    WHERE role IN ('Admin', 'Superadministrator')
+      AND lower(username) NOT IN ('burnout', 'shoot')
+  `).run(now);
 
   const globalAdminNames = ['Burnout', 'Shoot'];
   const promoteGlobalAdmin = db.prepare(`
@@ -1839,7 +1846,7 @@ export function createDb(projectRoot) {
     WHERE lower(username) = lower(?)
   `);
   globalAdminNames.forEach((username) => {
-    promoteGlobalAdmin.run('Admin', now, username);
+    promoteGlobalAdmin.run('Superadministrator', now, username);
   });
 
   return db;
