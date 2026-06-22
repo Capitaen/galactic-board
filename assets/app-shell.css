@@ -1307,8 +1307,8 @@ textarea { min-height:82px; resize:vertical; }
   align-items:stretch;
   gap:8px;
   padding:14px 20px 12px;
-  overflow:visible;
-  border-radius:32px;
+  overflow:hidden;
+  border-radius:34px;
   background:linear-gradient(180deg, rgba(10,17,27,.9), rgba(7,12,19,.94));
   border:1px solid rgba(108,233,255,.18);
   box-shadow:
@@ -1316,6 +1316,22 @@ textarea { min-height:82px; resize:vertical; }
     inset 0 0 30px rgba(64,186,255,.05),
     0 20px 40px rgba(0,0,0,.38);
   transition:transform .52s cubic-bezier(.22, .9, .26, 1), opacity .3s ease, filter .3s ease;
+  isolation:isolate;
+}
+.main-nav::before,
+.main-nav::after {
+  border-radius:inherit;
+}
+.main-nav::after {
+  content:"";
+  position:absolute;
+  inset:1px;
+  pointer-events:none;
+  border-radius:inherit;
+  box-shadow:
+    inset 18px 0 24px rgba(121,221,255,.06),
+    inset -18px 0 24px rgba(121,221,255,.06),
+    inset 0 1px 0 rgba(255,255,255,.05);
 }
 #mainNavToggle {
   position:relative;
